@@ -21,6 +21,14 @@ Docs/                 PRD, blueprint e checkpoints
 
 ## Como rodar
 
+### Início rápido (arquivo único)
+
+```powershell
+.\start.ps1            # tudo: .env, build do Go, Docker (postgres+api) e webadmin
+.\start.ps1 -Full      # + redis, rabbitmq, prometheus e grafana
+.\start.ps1 -NoWeb     # só infraestrutura e API
+```
+
 ### 1. Infra + API em Docker
 
 ```bash
