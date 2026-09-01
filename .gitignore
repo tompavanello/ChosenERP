@@ -1,0 +1,44 @@
+# Dependências / build
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# Go
+bin/
+*.exe
+*.test
+*.out
+vendor/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Ambiente / segredos (NUNCA versionar)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+secrets/
+apps/webadmin/.env*
+
+# Banco / notas
+*.sqlite
+*.db
+
+# IDE / SO
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/

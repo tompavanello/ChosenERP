@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+:root {
+  --chosen-ink: #0b1020;
+  --chosen-paper: #f7f8fb;
+  --chosen-brand: #6d28d9;
+  --chosen-brand-soft: #ede9fe;
+  --chosen-line: #e4e7ee;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  color: var(--chosen-ink);
+  background: var(--chosen-paper);
+}
+
+.btn-base {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.btn-primary {
+  background: var(--chosen-brand);
+  color: #fff;
+}
+.btn-primary:hover {
+  background: #5b21b6;
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+}
+
+.btn-ghost {
+  color: #52525b;
+}
+.btn-ghost:hover {
+  background: #f4f4f5;
+}
+
+.input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid #d4d4d8;
+  background: #fff;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  outline: none;
+}
+.input:focus {
+  border-color: var(--chosen-brand);
+  box-shadow: 0 0 0 2px rgba(109, 40, 217, 0.15);
+}
+
+.card {
+  border-radius: 0.75rem;
+  border: 1px solid #e4e4e7;
+  background: #fff;
+  padding: 1.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #3f3f46;
+}

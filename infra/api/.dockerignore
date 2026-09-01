@@ -1,0 +1,2 @@
+# Somente o binário Linux pré-compilado precisa entrar na imagem
+bin/api-linux-amd64

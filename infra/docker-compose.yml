@@ -1,0 +1,109 @@
+# Chosen ERP — Infraestrutura local (Docker Compose)
+# Sobe: PostgreSQL 17, Redis, RabbitMQ + Observabilidade (Prometheus/Grafana)
+
+name: chosen-erp
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: chosen-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sinc}
+      POSTGRES_DB: chosenerp
+    ports:
+      - "${POSTGRES_PORT:-35432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d chosenerp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ### Chosen ERP API (Go) — monolito modular
+  api:
+    build:
+      context: ..
+      dockerfile: infra/api/Dockerfile
+    image: chosenerp/api:local
+    container_name: chosen-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://chosenerp_app:chosenapp@postgres:5432/chosenerp?sslmode=disable
+      MIGRATE_DATABASE_URL: postgres://postgres:sinc@postgres:5432/chosenerp?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-dev-insecure-secret-change-me}
+      API_HTTP_PORT: "8080"
+    ports:
+      - "${API_HTTP_PORT:-38080}:8080"
+
+  redis:
+    image: redis:7-alpine
+    container_name: chosen-redis
+    restart: unless-stopped
+    profiles: ["full"]
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-36379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: chosen-rabbitmq
+    restart: unless-stopped
+    profiles: ["full"]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-chosen}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-chosen}
+    ports:
+      - "${RABBITMQ_PORT:-35672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-31572}:15672"
+    volumes:
+      - rabbitdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: chosen-prometheus
+    restart: unless-stopped
+    profiles: ["full"]
+    ports:
+      - "${PROMETHEUS_PORT:-39090}:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: chosen-grafana
+    restart: unless-stopped
+    profiles: ["full"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASS:-admin}
+    ports:
+      - "${GRAFANA_PORT:-33001}:3000"
+    volumes:
+      - grafanadata:/var/lib/grafana
+
+volumes:
+  pgdata:
+  redisdata:
+  rabbitdata:
+  promdata:
+  grafanadata:
