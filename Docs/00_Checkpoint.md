@@ -88,11 +88,19 @@
 - `GET /reports/balance?from&to` → balancete **por mês**.
 - `GET /reports/dre?from&to` → **DRE por categoria** + **comparativo** (delta %).
 
-### Webadmin ✅
-- Navegação: Visão Geral, Membros, Visitantes, Benfeitores, Financeiro, Relatórios.
-- Membros: perfil detalhado (edição), árvore de vínculos, vincular, carteirinha QR.
-- Financeiro: lançar, listar, **ver recibo** e **enviar** (Zap/Mail).
-- Relatórios: filtro de período, cards comparativos, gráfico mensal, tabela DRE.
+### Webadmin — UI rica (Etapa A + B) ✅
+- **Design system** próprio em `components/ui/*` (Button, Card, Badge, Table, Modal/Drawer,
+  Tabs, Toast, Skeleton, EmptyState, Pagination, Avatar, StatCard, PageHeader).
+- **Tema dark** (toggle) + layout responsivo (sidebar colapsável, topbar, breadcrumbs).
+- **Sessão/RBAC**: `AuthProvider` + `useAuth` — carrega `/me`, **auto-refresh do JWT em 401**,
+  logout automático; **menu filtrado por permissão**.
+- Membros: busca/filtro/paginação + tabela rica; nova página **Perfil 360º** (`/members/[id]`)
+  com abas (Dados, Contato, Vínculos, Espiritual, Documentos) e edição completa.
+- Famílias: página nova (criar, vincular, listar).
+- Financeiro: KPIs, **gráfico Recharts**, filtros, **detalhe do lançamento** (drawer),
+  tela de **Plano de Contas**.
+- Relatórios: **gráficos Recharts** (área/barras), seletor de período, **exportação CSV**.
+- Visitantes/Benfeitores/Visão Geral: colunas completas, busca, KPIs e gráfico de saldo.
 
 ## 5. Validação acumulada
 

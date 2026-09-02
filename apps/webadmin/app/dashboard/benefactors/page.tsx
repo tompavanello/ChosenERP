@@ -1,80 +1,99 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { HeartHandshake, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, HeartHandshake, Search } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import { Input, Field } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
+import { SkeletonRows, EmptyState } from "@/components/ui/skeleton";
+import { Modal } from "@/components/ui/modal";
+import { useToast } from "@/components/ui/toast";
 import { listBenefactors, createBenefactor, type Benefactor } from "@/lib/api";
+import { datePt } from "@/lib/format";
 
 export default function BenefactorsPage() {
-  const router = useRouter();
-  const [token, setToken] = useState<string | null>(null);
-  const [benefactors, setBenefactors] = useState<Benefactor[]>([]);
+  const { toast } = useToast();
+  const [items, setItems] = useState<Benefactor[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", notes: "" });
-  const [showForm, setShowForm] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  const load = useCallback(async (t: string) => {
-    const r = await listBenefactors(t);
-    setBenefactors(r.benefactors);
-  }, []);
 
   useEffect(() => {
-    const t = localStorage.getItem("chosen_token");
-    if (!t) { router.replace("/"); return; }
-    setToken(t);
-    load(t).catch(() => {});
-  }, [router, load]);
+    listBenefactors().then((r) => setItems(r.benefactors)).catch((e) => toast(e.message, "error"));
+  }, [toast]);
+
+  const filtered = (items ?? []).filter((b) => {
+    const q = query.trim().toLowerCase();
+    return !q || b.name.toLowerCase().includes(q) || (b.email?.toLowerCase().includes(q) ?? false);
+  });
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
-    if (!token) return;
-    await createBenefactor(token, form);
-    setForm({ name: "", email: "", phone: "", notes: "" });
-    setShowForm(false);
-    await load(token);
-    setMsg("Benfeitor cadastrado.");
-    setTimeout(() => setMsg(null), 3000);
+    try {
+      await createBenefactor(form);
+      toast("Benfeitor cadastrado.");
+      setOpen(false);
+      setItems(await listBenefactors().then((r) => r.benefactors));
+      setForm({ name: "", email: "", phone: "", notes: "" });
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro", "error");
+    }
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">Benfeitores</h2>
-        <button onClick={() => setShowForm((v) => !v)} className="btn-base btn-primary"><Plus className="h-4 w-4" /> Novo Benfeitor</button>
-      </div>
-      {msg && <p className="mb-4 text-sm text-emerald-600">{msg}</p>}
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        title="Benfeitores"
+        description="Apoiadores sem vínculo de membresia"
+        actions={<Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Novo Benfeitor</Button>}
+      />
 
-      {showForm && (
-        <form onSubmit={add} className="card mb-6 grid grid-cols-2 gap-3">
-          <div><label className="label">Nome</label><input className="input" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-          <div><label className="label">E-mail</label><input className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-          <div><label className="label">Telefone</label><input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-          <div><label className="label">Observações</label><input className="input" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
-          <button className="btn-base btn-primary" type="submit">Salvar</button>
+      <div className="mb-4 relative max-w-sm">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+        <Input className="pl-9" placeholder="Buscar por nome ou e-mail" value={query} onChange={(e) => setQuery(e.target.value)} />
+      </div>
+
+      <Card className="overflow-hidden p-0">
+        {items === null ? (
+          <SkeletonRows />
+        ) : filtered.length === 0 ? (
+          <EmptyState icon={<HeartHandshake className="h-10 w-10" />} title="Nenhum benfeitor" description="Cadastre apoiadores e registre contato." />
+        ) : (
+          <Table>
+            <THead>
+              <TRow><TH>Nome</TH><TH>Contato</TH><TH>Observações</TH><TH>Cadastrado</TH></TRow>
+            </THead>
+            <TBody>
+              {filtered.map((b) => (
+                <TRow key={b.id}>
+                  <TD className="font-medium">{b.name}</TD>
+                  <TD>
+                    <p>{b.email ?? "—"}</p>
+                    <p className="text-xs text-zinc-400">{b.phone ?? ""}</p>
+                  </TD>
+                  <TD className="text-zinc-500">{b.notes ?? "—"}</TD>
+                  <TD className="text-zinc-500">{datePt(b.created_at)}</TD>
+                </TRow>
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </Card>
+
+      <Modal open={open} onClose={() => setOpen(false)} title="Novo Benfeitor">
+        <form onSubmit={add} className="grid grid-cols-2 gap-3">
+          <Field label="Nome *"><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+          <Field label="E-mail"><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+          <Field label="Telefone"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+          <Field label="Observações"><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+          <div className="col-span-2 flex justify-end gap-2 pt-2">
+            <Button variant="ghost" type="button" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button type="submit">Salvar</Button>
+          </div>
         </form>
-      )}
-
-      <div className="card overflow-hidden p-0">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-200 text-left text-zinc-500">
-              <th className="px-4 py-3 font-medium">Nome</th>
-              <th className="px-4 py-3 font-medium">Contato</th>
-              <th className="px-4 py-3 font-medium">Observações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {benefactors.map((b) => (
-              <tr key={b.id} className="border-b border-zinc-100 last:border-0">
-                <td className="px-4 py-3 font-medium">{b.name}</td>
-                <td className="px-4 py-3 text-zinc-500">{b.email ?? "—"} {b.phone ? `· ${b.phone}` : ""}</td>
-                <td className="px-4 py-3 text-zinc-500">{b.notes ?? "—"}</td>
-              </tr>
-            ))}
-            {benefactors.length === 0 && <tr><td colSpan={3} className="px-4 py-8 text-center text-zinc-400"><HeartHandshake className="mx-auto mb-2 h-6 w-6" />Nenhum benfeitor cadastrado.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+      </Modal>
     </div>
   );
 }

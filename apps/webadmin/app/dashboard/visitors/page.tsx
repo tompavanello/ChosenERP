@@ -1,103 +1,137 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { UserPlus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Search, UserPlus, DoorOpen, ArrowRight } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import { Input, Field } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/ui/pagination";
+import { SkeletonRows, EmptyState } from "@/components/ui/skeleton";
+import { Modal } from "@/components/ui/modal";
+import { useToast } from "@/components/ui/toast";
 import { listVisitors, createVisitor, updateVisitorStage, type Visitor } from "@/lib/api";
+import { JOURNEY_STAGES } from "@/lib/constants";
+import { datePt } from "@/lib/format";
 
-const STAGES: Record<string, string> = {
-  welcome: "Boas-vindas",
-  coffee_pastor: "Café com o Pastor",
-  course: "Curso de princípios",
-  cell: "Integrado em célula",
-  converted: "Convertido",
-};
+const PER_PAGE = 12;
 
 export default function VisitorsPage() {
-  const router = useRouter();
-  const [token, setToken] = useState<string | null>(null);
-  const [visitors, setVisitors] = useState<Visitor[]>([]);
+  const { toast } = useToast();
+  const [visitors, setVisitors] = useState<Visitor[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ first_name: "", last_name: "", phone: "", source: "" });
-  const [showForm, setShowForm] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  const load = useCallback(async (t: string) => {
-    const r = await listVisitors(t);
-    setVisitors(r.visitors);
-  }, []);
 
   useEffect(() => {
-    const t = localStorage.getItem("chosen_token");
-    if (!t) { router.replace("/"); return; }
-    setToken(t);
-    load(t).catch(() => {});
-  }, [router, load]);
+    listVisitors().then((r) => setVisitors(r.visitors)).catch((e) => toast(e.message, "error"));
+  }, [toast]);
 
-  async function addVisitor(e: React.FormEvent) {
+  const filtered = useMemo(() => {
+    if (!visitors) return [];
+    const q = query.trim().toLowerCase();
+    return visitors.filter((v) => !q || v.full_name.toLowerCase().includes(q));
+  }, [visitors, query]);
+
+  const pageItems = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  useEffect(() => setPage(1), [query]);
+
+  async function add(e: React.FormEvent) {
     e.preventDefault();
-    if (!token) return;
-    await createVisitor(token, form);
-    setForm({ first_name: "", last_name: "", phone: "", source: "" });
-    setShowForm(false);
-    await load(token);
-    setMsg("Visitante registrado.");
-    setTimeout(() => setMsg(null), 3000);
+    try {
+      await createVisitor(form);
+      toast("Visitante registrado.");
+      setOpen(false);
+      setVisitors(await listVisitors().then((r) => r.visitors));
+      setForm({ first_name: "", last_name: "", phone: "", source: "" });
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro", "error");
+    }
   }
 
   async function advance(v: Visitor) {
-    if (!token) return;
     const order = ["welcome", "coffee_pastor", "course", "cell", "converted"];
     const idx = order.indexOf(v.journey_stage);
     const next = order[Math.min(idx + 1, order.length - 1)];
-    await updateVisitorStage(token, v.id, next);
-    await load(token);
+    if (next === v.journey_stage) return;
+    try {
+      await updateVisitorStage(v.id, next);
+      setVisitors(await listVisitors().then((r) => r.visitors));
+      toast(`Trilha avançada para "${JOURNEY_STAGES[next]?.label}".`);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro", "error");
+    }
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">Visitantes</h2>
-        <button onClick={() => setShowForm((v) => !v)} className="btn-base btn-primary"><UserPlus className="h-4 w-4" /> Novo Visitante</button>
-      </div>
-      {msg && <p className="mb-4 text-sm text-emerald-600">{msg}</p>}
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        title="Visitantes"
+        description="Trilha de acolhimento e onboarding"
+        actions={<Button onClick={() => setOpen(true)}><UserPlus className="h-4 w-4" /> Novo Visitante</Button>}
+      />
 
-      {showForm && (
-        <form onSubmit={addVisitor} className="card mb-6 grid grid-cols-2 gap-3">
-          <div><label className="label">Nome</label><input className="input" required value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} /></div>
-          <div><label className="label">Sobrenome</label><input className="input" required value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} /></div>
-          <div><label className="label">Telefone</label><input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-          <div><label className="label">Origem</label><input className="input" placeholder="evento, indicação..." value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} /></div>
-          <button className="btn-base btn-primary" type="submit">Salvar</button>
+      <div className="mb-4 relative max-w-sm">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+        <Input className="pl-9" placeholder="Buscar por nome" value={query} onChange={(e) => setQuery(e.target.value)} />
+      </div>
+
+      <Card className="overflow-hidden p-0">
+        {visitors === null ? (
+          <SkeletonRows />
+        ) : pageItems.length === 0 ? (
+          <EmptyState icon={<DoorOpen className="h-10 w-10" />} title="Nenhum visitante" description="Registre e acompanhe a jornada de acolhimento." />
+        ) : (
+          <>
+            <Table>
+              <THead>
+                <TRow><TH>Nome</TH><TH>Contato</TH><TH>Origem</TH><TH>Etapa</TH><TH>Entrada</TH><TH className="text-right">Ação</TH></TRow>
+              </THead>
+              <TBody>
+                {pageItems.map((v) => {
+                  const st = JOURNEY_STAGES[v.journey_stage] ?? { label: v.journey_stage, tone: "zinc" as const };
+                  return (
+                    <TRow key={v.id}>
+                      <TD className="font-medium">{v.full_name}</TD>
+                      <TD>
+                        <p>{v.phone ?? "—"}</p>
+                        <p className="text-xs text-zinc-400">{v.email ?? ""}</p>
+                      </TD>
+                      <TD className="text-zinc-500">{v.source ?? "—"}</TD>
+                      <TD><Badge tone={st.tone as "zinc"}>{st.label}</Badge></TD>
+                      <TD className="text-zinc-500">{datePt(v.created_at)}</TD>
+                      <TD className="text-right">
+                        <Button variant="ghost" size="sm" onClick={() => advance(v)}>
+                          Avançar <ArrowRight className="h-3.5 w-3.5" />
+                        </Button>
+                      </TD>
+                    </TRow>
+                  );
+                })}
+              </TBody>
+            </Table>
+            <div className="border-t border-zinc-100 dark:border-zinc-800">
+              <Pagination page={page} total={filtered.length} perPage={PER_PAGE} onChange={setPage} />
+            </div>
+          </>
+        )}
+      </Card>
+
+      <Modal open={open} onClose={() => setOpen(false)} title="Novo Visitante">
+        <form onSubmit={add} className="grid grid-cols-2 gap-3">
+          <Field label="Nome *"><Input required value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} /></Field>
+          <Field label="Sobrenome *"><Input required value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} /></Field>
+          <Field label="Telefone"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+          <Field label="Origem"><Input placeholder="evento, indicação..." value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} /></Field>
+          <div className="col-span-2 flex justify-end gap-2 pt-2">
+            <Button variant="ghost" type="button" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button type="submit">Salvar</Button>
+          </div>
         </form>
-      )}
-
-      <div className="card overflow-hidden p-0">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-200 text-left text-zinc-500">
-              <th className="px-4 py-3 font-medium">Nome</th>
-              <th className="px-4 py-3 font-medium">Trilha</th>
-              <th className="px-4 py-3 font-medium">Origem</th>
-              <th className="px-4 py-3 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {visitors.map((v) => (
-              <tr key={v.id} className="border-b border-zinc-100 last:border-0">
-                <td className="px-4 py-3 font-medium">{v.full_name}</td>
-                <td className="px-4 py-3">
-                  <span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs text-violet-700">{STAGES[v.journey_stage] ?? v.journey_stage}</span>
-                </td>
-                <td className="px-4 py-3 text-zinc-500">{v.source ?? "—"}</td>
-                <td className="px-4 py-3 text-right">
-                  <button onClick={() => advance(v)} className="btn-base btn-ghost">Avançar trilha</button>
-                </td>
-              </tr>
-            ))}
-            {visitors.length === 0 && <tr><td colSpan={4} className="px-4 py-8 text-center text-zinc-400">Nenhum visitante.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+      </Modal>
     </div>
   );
 }

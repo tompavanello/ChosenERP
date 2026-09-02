@@ -49,6 +49,19 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
+### Webadmin — boas práticas de frontend
+
+- **Design system** em `apps/webadmin/components/ui/*` (Button, Card, Badge, Table,
+  Modal/Drawer, Tabs, Toast, Skeleton, EmptyState, Pagination, Avatar, StatCard,
+  PageHeader). Reutilize em vez de criar classes avulsas.
+- **Sessão/RBAC:** usar `useAuth()` (`components/providers/auth-provider.tsx`).
+  O cliente `lib/api.ts` faz login, guarda tokens e **auto-refresca em 401**.
+  Nunca passar token como argumento — as funções já usam a sessão.
+- Menu lateral é **filtrado por permissão** (`hasPerm`); nav definida no `layout.tsx`.
+- Tema dark (toggle em `components/theme-toggle.tsx`). Helpers em `lib/format.ts`
+  (`currency`, `datePt`, `relativePt`) e `lib/constants.ts` (rótulos de status).
+- **Dependências:** `tailwind-merge`+`clsx` para classes e `recharts` para gráficos.
+
 ### 3. Serviço Go localmente (para depurar)
 
 ```bash
