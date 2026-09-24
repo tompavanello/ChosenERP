@@ -77,6 +77,23 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - uploads:/uploads
 
+  ### Cloudflare Tunnel EXCLUSIVO do dominio erpchosen.com.br (white-label).
+  ### Sobe com o profile `erpchosen`. Usa o config/credenciais gerados por
+  ### `cloudflared tunnel create` (ver infra/cloudflare/). Roteia para o nginx,
+  ### que faz o split /api e repassa X-Tenant-Slug conforme o subdominio.
+  cloudflared-erpchosen:
+    image: cloudflare/cloudflared:latest
+    container_name: chosen-cloudflared-erpchosen
+    restart: unless-stopped
+    profiles: ["erpchosen"]
+    depends_on:
+      nginx:
+        condition: service_started
+    volumes:
+      - ./cloudflare/config-erpchosen.yml:/etc/cloudflared/config.yml:ro
+      - ./cloudflare/erpchosen-creds.json:/etc/cloudflared/creds.json:ro
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+
   ### Chosen ERP API (Go) - monolito modular
   api:
     build:
@@ -132,6 +149,8 @@ services:
         # Lido pelo rewrites() do next.config.ts em tempo de build. Na rede do
         # Compose a API e "api:8080" (nao localhost:38080).
         API_ORIGIN: http://api:8080
+        # Dominio base para o subdominio por igreja (white-label).
+        NEXT_PUBLIC_BASE_DOMAIN: ${PUBLIC_BASE_DOMAIN:-erpchosen.com.br}
     image: chosenerp/webadmin:local
     container_name: chosen-webadmin
     restart: unless-stopped

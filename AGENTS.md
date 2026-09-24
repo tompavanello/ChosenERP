@@ -174,10 +174,43 @@ As senhas **nao sao versionadas**: ficam no `.env` (gitignorado), em
   `logo_url/brand_color/favicon_url/custom_domain`; `public_tenant(slug)`
   (SECURITY DEFINER) alimenta a tela de login do subdominio. O nginx
   (`infra/nginx/conf.d/default.conf`) tem `server_name` wildcard
-  (`*.chosenerp.mgmconsultoria.com`) e repassa `X-Tenant-Slug`; a Cloudflare
-  precisa do DNS wildcard + TLS `*.dominio`. No webadmin, o slug e detectado via
+  (`*.erpchosen.com.br`, com o dominio antigo como alias) e repassa
+  `X-Tenant-Slug`; a Cloudflare precisa do DNS wildcard + TLS `*.dominio`. O
+  dominio base do webadmin vem de `PUBLIC_BASE_DOMAIN` (build arg
+  `NEXT_PUBLIC_BASE_DOMAIN`). No webadmin, o slug e detectado via
   `tenantSlugFromHost()` (`lib/api.ts`) e ha seletor de igreja na topbar quando a
   identidade tem mais de um vinculo.
+
+### Cloudflare Tunnel (dominio `erpchosen.com.br`)
+
+O `cloudflared` roda apontando para o nginx do stack (`http://localhost:80` se
+roda no host, ou `http://nginx:80` se roda como servico no Compose). Na
+Cloudflare (dashboard do tunnel) cadastre os public hostnames:
+
+- `erpchosen.com.br` -> `http://localhost:80` (ou `http://nginx:80`)
+- `www.erpchosen.com.br` -> idem
+- `*.erpchosen.com.br` -> idem (wildcard, cobre as igrejas)
+
+O subdominio de cada igreja e `{tenant.slug}.erpchosen.com.br` (ex.: o tenant
+`demo` responde em `demo.erpchosen.com.br`). Para o wildcard funcionar:
+
+1. Zona `erpchosen.com.br` com os nameservers da Cloudflare.
+2. Um CNAME `*` -> `<tunnel-id>.cfargotunnel.com` (Proxy laranja ligado). O
+   proprio dashboard cria os CNAMEs dos hostnames exatos; o wildcard precisa ser
+   adicionado a mao (ou via `cloudflared` com a regra wildcard no `config.yml`).
+3. TLS: o certificado Universal da Cloudflare cobre `erpchosen.com.br` e
+   `*.erpchosen.com.br` (um nivel). O trafego Cloudflare<->origem vai em HTTP
+   pela tunnel; o nginx pode continuar so na 80.
+4. No webadmin, o login do subdominio envia `tenant_slug=<slug>`; se a
+   identidade nao tiver vinculo ativo com aquela igreja, o login responde 403
+   (`tenant_forbidden`).
+
+> `erpchosen.com.br` esta em uma **conta Cloudflare separada** da do dominio
+> `mgmconsultoria.com`, entao tem um **tunnel exclusivo** (`cloudflared-erpchosen`,
+> profile `erpchosen` do Compose). O config/credenciais ficam em
+> `infra/cloudflare/` (o JSON de credenciais e gitignored). Detalhes em
+> `infra/cloudflare/README.md`. Suba com
+> `docker compose --profile erpchosen up -d cloudflared-erpchosen`.
 - O isolamento e verificado por **testes automatizados** em
   `internal/store/rls_test.go` e `internal/store/memberships_test.go` (varredura
   de todas as tabelas, alem de casos dedicados de identidade/membership).

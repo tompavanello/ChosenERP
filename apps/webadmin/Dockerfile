@@ -18,6 +18,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Compose é o nome do serviço da API na rede interna ("http://api:8080").
 ARG API_ORIGIN=http://api:8080
 ENV API_ORIGIN=$API_ORIGIN
+# Dominio base do white-label (subdominio por igreja). Vai para o bundle do
+# browser (NEXT_PUBLIC_*), por isso e ARG de build.
+ARG NEXT_PUBLIC_BASE_DOMAIN=erpchosen.com.br
+ENV NEXT_PUBLIC_BASE_DOMAIN=$NEXT_PUBLIC_BASE_DOMAIN
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build

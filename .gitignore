@@ -25,6 +25,10 @@ venv/
 .env.*.local
 # Backups do .env feitos antes de editá-lo (contêm os mesmos segredos)
 .env.bak-*
+# Token da Cloudflare usado pelo script de setup do tunnel (erpchosen).
+.cloudflare.env
+# Credenciais do tunnel do erpchosen (segredo).
+infra/cloudflare/*.json
 *.pem
 *.key
 *.p12

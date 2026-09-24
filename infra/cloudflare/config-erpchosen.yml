@@ -1,0 +1,15 @@
+# Config do tunnel EXCLUSIVO do dominio erpchosen.com.br (locally-managed).
+# Montado no container `cloudflared-erpchosen` do Compose. O credentials-file e
+# o caminho DENTRO do container (o JSON fica em infra/cloudflare/erpchosen-creds.json,
+# ignorado pelo git).
+tunnel: 641194f2-25eb-4815-9a6d-47050f0814a7
+credentials-file: /etc/cloudflared/creds.json
+
+ingress:
+  - hostname: erpchosen.com.br
+    service: http://nginx:80
+  - hostname: www.erpchosen.com.br
+    service: http://nginx:80
+  - hostname: "*.erpchosen.com.br"
+    service: http://nginx:80
+  - service: http_status:404
