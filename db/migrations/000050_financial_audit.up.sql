@@ -1,8 +1,8 @@
 -- 000050_financial_audit.up.sql
--- Relatório de AUDITORIA ANALÍTICA do financeiro: um "run" de auditoria por
--- período que lista os lançamentos, permite marcar cada um como auditado
--- (individual ou geral) e, ao FECHAR, grava a assinatura do responsável. Depois
--- de fechada a auditoria é imutável (não aceita manutenção) e vira documento.
+-- Relatorio de AUDITORIA ANALITICA do financeiro: um "run" de auditoria por
+-- periodo que lista os lancamentos, permite marcar cada um como auditado
+-- (individual ou geral) e, ao FECHAR, grava a assinatura do responsavel. Depois
+-- de fechada a auditoria e imutavel (nao aceita manutencao) e vira documento.
 CREATE TABLE IF NOT EXISTS financial_audits (
     id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id      uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS financial_audits (
     closed_by      uuid REFERENCES users(id) ON DELETE SET NULL,
     signer_name    text,
     signer_role    text,
-    -- Hash do conteúdo (itens + período) selado no fechamento.
+    -- Hash do conteudo (itens + periodo) selado no fechamento.
     signature_hash text,
     created_by     uuid REFERENCES users(id) ON DELETE SET NULL,
     created_at     timestamptz NOT NULL DEFAULT now(),
@@ -27,8 +27,8 @@ CREATE TABLE IF NOT EXISTS financial_audits (
 CREATE INDEX IF NOT EXISTS idx_fin_audit_tenant
     ON financial_audits(tenant_id, branch_id, period_start DESC);
 
--- Marcação por lançamento. As linhas são sincronizadas a partir dos
--- lançamentos do período enquanto a auditoria está aberta.
+-- Marcacao por lancamento. As linhas sao sincronizadas a partir dos
+-- lancamentos do periodo enquanto a auditoria esta aberta.
 CREATE TABLE IF NOT EXISTS financial_audit_items (
     id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     audit_id       uuid NOT NULL REFERENCES financial_audits(id) ON DELETE CASCADE,
@@ -43,13 +43,13 @@ CREATE TABLE IF NOT EXISTS financial_audit_items (
 CREATE INDEX IF NOT EXISTS idx_fin_audit_items_audit ON financial_audit_items(audit_id);
 CREATE INDEX IF NOT EXISTS idx_fin_audit_items_tx ON financial_audit_items(transaction_id);
 
--- Imutabilidade: auditoria fechada não aceita mais marcasse; a própria auditoria
--- não pode ser alterada depois de fechada.
+-- Imutabilidade: auditoria fechada nao aceita mais marcasse; a propria auditoria
+-- nao pode ser alterada depois de fechada.
 CREATE OR REPLACE FUNCTION fin_audits_guard() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
     IF OLD.status = 'fechada' THEN
-        RAISE EXCEPTION 'auditoria fechada: documento imutável';
+        RAISE EXCEPTION 'auditoria fechada: documento imutavel';
     END IF;
     RETURN NEW;
 END;
@@ -69,7 +69,7 @@ BEGIN
     aid := COALESCE(NEW.audit_id, OLD.audit_id);
     SELECT status INTO st FROM financial_audits WHERE id = aid;
     IF st = 'fechada' THEN
-        RAISE EXCEPTION 'auditoria fechada: sem manutenção nos itens';
+        RAISE EXCEPTION 'auditoria fechada: sem manutencao nos itens';
     END IF;
     RETURN COALESCE(NEW, OLD);
 END;

@@ -1,13 +1,13 @@
 -- 000031_fin_tx_void.up.sql
--- Permite o ESTORNO de um lançamento sem quebrar o append-only.
+-- Permite o ESTORNO de um lancamento sem quebrar o append-only.
 --
--- financial_transactions é imutável (trilha de auditoria/hash-chain). Em vez de
--- DELETE, o lançamento é ANULADO: permanece no histórico, marcado como estornado,
--- e os relatórios passam a ignorá-lo. A correção (alteração) é feita estornando o
--- original e lançando um novo.
+-- financial_transactions e imutavel (trilha de auditoria/hash-chain). Em vez de
+-- DELETE, o lancamento e ANULADO: permanece no historico, marcado como estornado,
+-- e os relatorios passam a ignora-lo. A correcao (alteracao) e feita estornando o
+-- original e lancando um novo.
 --
--- O guardista passa a permitir UPDATE SOMENTE dos campos de anulação; qualquer
--- mudança em valor, tipo, data, conta, descrição etc. continua bloqueada.
+-- O guardista passa a permitir UPDATE SOMENTE dos campos de anulacao; qualquer
+-- mudanca em valor, tipo, data, conta, descricao etc. continua bloqueada.
 
 ALTER TABLE financial_transactions
     ADD COLUMN voided_at    timestamptz,
@@ -38,7 +38,7 @@ BEGIN
        OR NEW.hash            IS DISTINCT FROM OLD.hash
        OR NEW.prev_hash       IS DISTINCT FROM OLD.prev_hash
     THEN
-        RAISE EXCEPTION 'financial_transactions is append-only (somente estorno é permitido)';
+        RAISE EXCEPTION 'financial_transactions is append-only (somente estorno e permitido)';
     END IF;
     RETURN NEW;
 END;

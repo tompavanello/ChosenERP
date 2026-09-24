@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Delivery é um envio de documento (outbox) por e-mail/WhatsApp.
+// Delivery e um envio de documento (outbox) por e-mail/WhatsApp.
 type Delivery struct {
 	ID         string  `json:"id"`
 	DocumentID string  `json:"document_id"`
@@ -21,7 +21,7 @@ type Delivery struct {
 	CreatedAt  string  `json:"created_at"`
 }
 
-// QueueDelivery registra um pedido de envio na outbox (entrega real é feita pelo worker).
+// QueueDelivery registra um pedido de envio na outbox (entrega real e feita pelo worker).
 func (r *Repo) QueueDelivery(ctx context.Context, tx pgx.Tx, tenantID, branchID, documentID, channel, recipient string) (*Delivery, error) {
 	if channel != "email" && channel != "whatsapp" {
 		return nil, errors.New("channel must be email or whatsapp")
@@ -60,7 +60,7 @@ func (r *Repo) ListDeliveries(ctx context.Context, tx pgx.Tx, documentID string)
 	return out, rows.Err()
 }
 
-// PendingDelivery é um item da outbox aguardando envio (usado pelo worker).
+// PendingDelivery e um item da outbox aguardando envio (usado pelo worker).
 type PendingDelivery struct {
 	ID         string
 	TenantID   string
@@ -70,7 +70,7 @@ type PendingDelivery struct {
 	Recipient  string
 }
 
-// ListPending devolve os itens da outbox pendentes ou com falha elegível a
+// ListPending devolve os itens da outbox pendentes ou com falha elegivel a
 // retry (attempts < maxAttempts). Deve ser chamado em escopo "Sede" (system)
 // para enxergar todas as filiais.
 func (r *Repo) ListPending(ctx context.Context, tx pgx.Tx, limit, maxAttempts int) ([]PendingDelivery, error) {
@@ -104,7 +104,7 @@ func (r *Repo) MarkSent(ctx context.Context, tx pgx.Tx, id string) error {
 	return err
 }
 
-// MarkFailed registra a falha de entrega, tornando o item elegível a retry.
+// MarkFailed registra a falha de entrega, tornando o item elegivel a retry.
 func (r *Repo) MarkFailed(ctx context.Context, tx pgx.Tx, id, errMessage string) error {
 	_, err := tx.Exec(ctx, `
 		UPDATE document_deliveries

@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// SmallGroup é uma célula/EBD/grupo familiar.
+// SmallGroup e uma celula/EBD/grupo familiar.
 type SmallGroup struct {
 	ID          string    `json:"id"`
 	BranchID    string    `json:"branch_id"`
@@ -25,7 +25,7 @@ type SmallGroup struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// AttendanceCheckin agrega os dados de check-in infantil/frequência.
+// AttendanceCheckin agrega os dados de check-in infantil/frequencia.
 type AttendanceCheckin struct {
 	GroupID    string  `json:"group_id"`
 	GroupName  string  `json:"group_name"`
@@ -58,7 +58,7 @@ type UpdateInput struct {
 	IsActive    *bool   `json:"is_active"`
 }
 
-// AttendanceInput registra a frequência de um membro num grupo.
+// AttendanceInput registra a frequencia de um membro num grupo.
 type AttendanceInput struct {
 	MemberID   *string `json:"member_id"`
 	MemberName string  `json:"member_name"`
@@ -84,7 +84,7 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx) ([]SmallGroup, error) {
 	out := []SmallGroup{}
 	for rows.Next() {
 		var g SmallGroup
-		// LEFT JOIN: lm.full_name é NULL quando o grupo não tem líder.
+		// LEFT JOIN: lm.full_name e NULL quando o grupo nao tem lider.
 		var leader *string
 		if err := rows.Scan(&g.ID, &g.BranchID, &g.MinistryID, &g.Name, &g.Kind,
 			&g.LeaderID, &leader, &g.Address, &g.MaxMembers, &g.Weekday, &g.MeetingTime, &g.IsActive, &g.CreatedAt); err != nil {
@@ -98,7 +98,7 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx) ([]SmallGroup, error) {
 	return out, rows.Err()
 }
 
-// Create insere um grupo no escopo RLS da sessão.
+// Create insere um grupo no escopo RLS da sessao.
 func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string, in CreateInput) (*SmallGroup, error) {
 	var g SmallGroup
 	var addrJSON []byte
@@ -119,7 +119,7 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 	return &g, err
 }
 
-// Update edita os dados do grupo/célula.
+// Update edita os dados do grupo/celula.
 func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput) (*SmallGroup, error) {
 	var addrJSON []byte
 	if in.Address != nil && *in.Address != "" {
@@ -148,7 +148,7 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput)
 	return &g, err
 }
 
-// Delete remove um grupo/célula (frequência cai por FK).
+// Delete remove um grupo/celula (frequencia cai por FK).
 func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
 	tag, err := tx.Exec(ctx, `DELETE FROM small_groups WHERE id = $1::uuid`, id)
 	if err != nil {
@@ -160,7 +160,7 @@ func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
 	return nil
 }
 
-// CheckIn registra a presença (apenas com member_id; anônimos são ignorados no agregado).
+// CheckIn registra a presenca (apenas com member_id; anonimos sao ignorados no agregado).
 func (r *Repo) CheckIn(ctx context.Context, tx pgx.Tx, tenantID, branchID, groupID string, in AttendanceInput) (*AttendanceCheckin, error) {
 	when := time.Now()
 	if in.AttendedAt != nil && *in.AttendedAt != "" {
@@ -182,11 +182,11 @@ func (r *Repo) CheckIn(ctx context.Context, tx pgx.Tx, tenantID, branchID, group
 	return &a, nil
 }
 
-// ListAttendance retorna a frequência de um grupo (para relatório/quadro).
+// ListAttendance retorna a frequencia de um grupo (para relatorio/quadro).
 func (r *Repo) ListAttendance(ctx context.Context, tx pgx.Tx, groupID string) ([]AttendanceCheckin, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT ga.small_group_id::text, s.name, ga.member_id::text,
-		       COALESCE(m.full_name,'Visitante/Anônimo'), ga.attended_at::text, ga.present
+		       COALESCE(m.full_name,'Visitante/Anonimo'), ga.attended_at::text, ga.present
 		FROM group_attendance ga
 		JOIN small_groups s ON s.id = ga.small_group_id
 		LEFT JOIN members m ON m.id = ga.member_id

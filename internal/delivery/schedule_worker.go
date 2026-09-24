@@ -13,8 +13,8 @@ import (
 	"chosenerp/internal/store"
 )
 
-// ScheduleWorker dispara os comunicados agendados (#41): uma vez, diário ou
-// relativo a um evento (N minutos antes/depois). Só enfileira na outbox; o
+// ScheduleWorker dispara os comunicados agendados (#41): uma vez, diario ou
+// relativo a um evento (N minutos antes/depois). So enfileira na outbox; o
 // AnnouncementWorker envia de fato.
 type ScheduleWorker struct {
 	Store         *store.Store
@@ -22,11 +22,11 @@ type ScheduleWorker struct {
 	Dispatcher    *Dispatcher
 	Interval      time.Duration
 
-	// Now permite fixar o relógio nos testes; nil = time.Now.
+	// Now permite fixar o relogio nos testes; nil = time.Now.
 	Now func() time.Time
 }
 
-// eventGraceWindow é por quanto tempo depois do horário marcado um agendamento
+// eventGraceWindow e por quanto tempo depois do horario marcado um agendamento
 // por evento ainda dispara (tolera worker parado por algumas horas).
 const eventGraceWindow = 6 * time.Hour
 
@@ -94,8 +94,8 @@ func (w *ScheduleWorker) ProcessOnce(ctx context.Context) (int, error) {
 	return total, nil
 }
 
-// enqueue resolve os destinatários e cria as entregas do disparo. Sempre marca
-// o comunicado como executado para não repetir a cada tick.
+// enqueue resolve os destinatarios e cria as entregas do disparo. Sempre marca
+// o comunicado como executado para nao repetir a cada tick.
 func (w *ScheduleWorker) enqueue(ctx context.Context, s *announcements.ScheduledAnnouncement, period string) (int, error) {
 	channel := s.Channel
 	if channel != ChannelEmail && channel != ChannelWhatsApp {
@@ -129,9 +129,9 @@ func (w *ScheduleWorker) enqueue(ctx context.Context, s *announcements.Scheduled
 	return count, err
 }
 
-// scheduleDue diz se o agendamento venceu e qual a chave de período (dia/evento)
-// usada na deduplicação. Vencido = chegou a hora, não rodou ainda e (no caso de
-// evento) ainda está dentro da janela de tolerância.
+// scheduleDue diz se o agendamento venceu e qual a chave de periodo (dia/evento)
+// usada na deduplicacao. Vencido = chegou a hora, nao rodou ainda e (no caso de
+// evento) ainda esta dentro da janela de tolerancia.
 func scheduleDue(s announcements.ScheduledAnnouncement, now time.Time) (bool, string) {
 	loc := loadLocation(s.Timezone)
 	switch s.ScheduleType {

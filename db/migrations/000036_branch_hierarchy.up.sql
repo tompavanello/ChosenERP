@@ -1,21 +1,21 @@
 -- 000036_branch_hierarchy.up.sql
--- Hierarquia de filiais (Fase 2 / item #10): Sede > Filial/Congregação >
--- Sub-congregação. As colunas `branches.parent_id` e `kind` já existiam desde a
--- 000002; o que faltava era o RLS respeitá-las.
+-- Hierarquia de filiais (Fase 2 / item #10): Sede > Filial/Congregacao >
+-- Sub-congregacao. As colunas `branches.parent_id` e `kind` ja existiam desde a
+-- 000002; o que faltava era o RLS respeita-las.
 --
--- Regra nova: a LEITURA de um usuário de filial passa a incluir os descendentes
--- (a congregação enxerga as próprias sub-congregações), sem abrir as filiais
--- irmãs. A GRAVAÇÃO continua exata (branch do contexto) — exceto Sede/sistema —
--- para não permitir que uma congregação escreva no cadastro da sub-congregação
--- sem um fluxo próprio.
+-- Regra nova: a LEITURA de um usuario de filial passa a incluir os descendentes
+-- (a congregacao enxerga as proprias sub-congregacoes), sem abrir as filiais
+-- irmas. A GRAVACAO continua exata (branch do contexto) - exceto Sede/sistema -
+-- para nao permitir que uma congregacao escreva no cadastro da sub-congregacao
+-- sem um fluxo proprio.
 --
--- Implementação: o gateway grava em `app.branch_scope` (GUC de transação) a
+-- Implementacao: o gateway grava em `app.branch_scope` (GUC de transacao) a
 -- lista de ids da filial do contexto + descendentes (ver store.WithTenant). A
--- política de leitura consulta essa lista — barato por linha, sem recursão no
+-- politica de leitura consulta essa lista - barato por linha, sem recursao no
 -- caminho quente.
 
 -- ---------------------------------------------------------------------------
--- Escopo de leitura hierárquico
+-- Escopo de leitura hierarquico
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION rls_read_scope(p_branch uuid, p_allow_global boolean)
 RETURNS boolean LANGUAGE sql STABLE AS $$

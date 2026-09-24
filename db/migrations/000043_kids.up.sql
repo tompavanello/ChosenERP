@@ -1,21 +1,21 @@
 -- 000043_kids.up.sql
--- Ministério Infantil (Kids): trilha de conteúdo, turmas, participantes,
--- check-in com responsável/código de segurança e relatórios de evolução.
+-- Ministerio Infantil (Kids): trilha de conteudo, turmas, participantes,
+-- check-in com responsavel/codigo de seguranca e relatorios de evolucao.
 --
 -- Modelo:
---   kids_tracks      currículo (ex.: "Fundamentos da Fé") — pode ser global do tenant
---   kids_lessons     lições ordenadas da trilha (objetivo, versículo, conteúdo, material)
---   kids_classes     turmas por faixa etária, opcionalmente ligadas a uma trilha
---   kids_enrollments matrícula de um MEMBRO criança em uma turma
---   kids_guardians   responsáveis da matrícula (membros adultos)
---   kids_sessions    encontros da turma (ministram uma lição)
---   kids_checkins    presença por encontro: check-in/check-out, responsável, código
+--   kids_tracks      curriculo (ex.: "Fundamentos da Fe") - pode ser global do tenant
+--   kids_lessons     licoes ordenadas da trilha (objetivo, versiculo, conteudo, material)
+--   kids_classes     turmas por faixa etaria, opcionalmente ligadas a uma trilha
+--   kids_enrollments matricula de um MEMBRO crianca em uma turma
+--   kids_guardians   responsaveis da matricula (membros adultos)
+--   kids_sessions    encontros da turma (ministram uma licao)
+--   kids_checkins    presenca por encontro: check-in/check-out, responsavel, codigo
 --
--- Isolamento: tudo usa rls_read/rls_write; trilhas/lições têm branch NULL = global
--- do tenant, o resto é por filial (branch NOT NULL).
+-- Isolamento: tudo usa rls_read/rls_write; trilhas/licoes tem branch NULL = global
+-- do tenant, o resto e por filial (branch NOT NULL).
 
 -- ---------------------------------------------------------------------------
--- Trilha / conteúdo
+-- Trilha / conteudo
 -- ---------------------------------------------------------------------------
 CREATE TABLE kids_tracks (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -95,7 +95,7 @@ CREATE POLICY kids_classes_all ON kids_classes
   WITH CHECK (rls_write(tenant_id, branch_id, false));
 
 -- ---------------------------------------------------------------------------
--- Participantes (matrículas de membros crianças) e responsáveis
+-- Participantes (matriculas de membros criancas) e responsaveis
 -- ---------------------------------------------------------------------------
 CREATE TABLE kids_enrollments (
     id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),

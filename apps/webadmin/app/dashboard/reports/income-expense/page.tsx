@@ -49,14 +49,14 @@ export default function IncomeExpensePage() {
 
   const incomePie = (dre?.lines ?? []).filter((l) => l.type === "income").map((l) => ({ name: l.category, value: l.total }));
   const expensePie = (dre?.lines ?? []).filter((l) => l.type === "expense").map((l) => ({ name: l.category, value: l.total }));
-  const monthly = series.map((p) => ({ name: monthLabel(p.month), Entradas: p.income, Saídas: p.expense }));
+  const monthly = series.map((p) => ({ name: monthLabel(p.month), Entradas: p.income, Saidas: p.expense }));
   const cmp = dre?.comparison;
 
   return (
     <div className="page">
       <PageHeader
-        title="Entradas × Saídas de Recursos"
-        description="Composição das receitas/despesas e comparativo por período"
+        title="Entradas x Saidas de Recursos"
+        description="Composicao das receitas/despesas e comparativo por periodo"
         actions={
           <ExportButtons
             path="/api/v1/reports/dre/export"
@@ -68,7 +68,7 @@ export default function IncomeExpensePage() {
 
       <Card className="mb-6 flex flex-wrap items-end gap-3">
         <div><label className="label">De</label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-        <div><label className="label">Até</label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+        <div><label className="label">Ate</label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
         <Button variant="ghost" onClick={() => { setFrom(`${ano}-01-01`); setTo(`${ano}-12-31`); }}>Ano atual</Button>
       </Card>
 
@@ -91,7 +91,7 @@ export default function IncomeExpensePage() {
               </div>
             </Card>
             <Card>
-              <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Saídas de Recursos</h3>
+              <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Saidas de Recursos</h3>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -106,7 +106,7 @@ export default function IncomeExpensePage() {
           </div>
 
           <Card className="mb-6">
-            <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Entradas × Saídas por mês</h3>
+            <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Entradas x Saidas por mes</h3>
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={monthly}>
@@ -116,20 +116,20 @@ export default function IncomeExpensePage() {
                   <Tooltip formatter={(v: unknown) => currency(Number(v))} />
                   <Legend />
                   <Bar dataKey="Entradas" fill="#10b981" />
-                  <Bar dataKey="Saídas" fill="#ef4444" />
+                  <Bar dataKey="Saidas" fill="#ef4444" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </Card>
 
           <Card>
-            <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Comparativo com o período anterior</h3>
+            <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Comparativo com o periodo anterior</h3>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Comparativo label="Entradas" atual={dre.income} anterior={cmp?.prev_income ?? 0} positivo />
-              <Comparativo label="Saídas" atual={dre.expense} anterior={cmp?.prev_expense ?? 0} />
+              <Comparativo label="Saidas" atual={dre.expense} anterior={cmp?.prev_expense ?? 0} />
               <Comparativo label="Resultado" atual={dre.net} anterior={cmp?.prev_net ?? 0} positivo />
               <Card>
-                <p className="text-sm text-zinc-500">Variação do resultado</p>
+                <p className="text-sm text-zinc-500">Variacao do resultado</p>
                 <p className={`mt-1 text-2xl font-semibold ${(cmp?.delta_pct ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                   {(cmp?.delta_pct ?? 0) >= 0 ? "+" : ""}{(cmp?.delta_pct ?? 0).toFixed(1)}%
                 </p>

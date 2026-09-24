@@ -1,9 +1,9 @@
 -- 000007_rls_policies.up.sql
 -- Row-Level Security: isolamento multi-tenant por branch_id / tenant_id
--- Sessão do gateway seta: app.tenant_id, app.branch_id, app.role
+-- Sessao do gateway seta: app.tenant_id, app.branch_id, app.role
 
 -- ---------------------------------------------------------------
--- Helper de policy: usuário tem acesso ao branch ou é escopo "Sede"
+-- Helper de policy: usuario tem acesso ao branch ou e escopo "Sede"
 -- Sede => app.branch_id = '00000000-0000-0000-0000-000000000000' ou NULL
 -- ---------------------------------------------------------------
 CREATE OR REPLACE FUNCTION current_branch() RETURNS uuid
@@ -44,7 +44,7 @@ ALTER TABLE documents              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_log              ENABLE ROW LEVEL SECURITY;
 
 -- ---------------------------------------------------------------
--- POLÍTICAS (SELECT / INSERT para escopo; tabelas don't need UPDATE/DELETE policies except none)
+-- POLITICAS (SELECT / INSERT para escopo; tabelas don't need UPDATE/DELETE policies except none)
 -- ---------------------------------------------------------------
 
 -- tenants: sede global ou "sistema"
@@ -112,6 +112,6 @@ CREATE POLICY transfers_sel ON transfers USING (from_branch_id = current_branch(
 CREATE POLICY docs_sel ON documents USING (branch_id = current_branch() OR branch_id IS NULL OR is_headquarters());
 CREATE POLICY docs_all ON documents FOR ALL USING (branch_id = current_branch() OR branch_id IS NULL) WITH CHECK (branch_id = current_branch() OR branch_id IS NULL);
 
--- Audit log: sistema escreve (service role), Sede/sistema lê
+-- Audit log: sistema escreve (service role), Sede/sistema le
 CREATE POLICY audit_sel ON audit_log FOR SELECT USING (is_headquarters());
 CREATE POLICY audit_ins ON audit_log FOR INSERT WITH CHECK (true);

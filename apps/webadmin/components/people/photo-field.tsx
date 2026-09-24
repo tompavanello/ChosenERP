@@ -8,10 +8,10 @@ import { useToast } from "@/components/ui/toast";
 import { uploadMemberPhoto, deleteMemberPhoto, assetURL } from "@/lib/api";
 
 /**
- * PhotoField faz o upload real da foto do membro (não um campo de texto com URL).
+ * PhotoField faz o upload real da foto do membro (nao um campo de texto com URL).
  *
- * Só aparece quando o membro já existe: o endpoint é POST /members/{id}/photo e
- * não haveria id na criação. A URL é montada pelo servidor — o cliente nunca
+ * So aparece quando o membro ja existe: o endpoint e POST /members/{id}/photo e
+ * nao haveria id na criacao. A URL e montada pelo servidor - o cliente nunca
  * escolhe o caminho do arquivo, o que evita apontar a foto para outro host ou
  * para arquivo de outro tenant.
  */

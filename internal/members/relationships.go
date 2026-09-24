@@ -6,7 +6,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Relationship é um vínculo entre dois membros (família ou discipulado).
+// Relationship e um vinculo entre dois membros (familia ou discipulado).
 type Relationship struct {
 	ID        string `json:"id"`
 	OtherID   string `json:"related_id"`
@@ -15,16 +15,16 @@ type Relationship struct {
 	Relation  string `json:"relation"`
 }
 
-// FamilyMember é um membro pertencente a uma família.
+// FamilyMember e um membro pertencente a uma familia.
 //
-// A projeção é relativa ao CHEFE da família (não a quem consulta): "Relation"
-// descreve o parentesco do membro com o chefe. É o que a planilha do cliente
-// mostra — o cabeça da família e as pessoas listadas abaixo dele.
+// A projecao e relativa ao CHEFE da familia (nao a quem consulta): "Relation"
+// descreve o parentesco do membro com o chefe. E o que a planilha do cliente
+// mostra - o cabeca da familia e as pessoas listadas abaixo dele.
 type FamilyMember struct {
 	ID               string  `json:"id"`
 	FullName         string  `json:"full_name"`
-	Relation         string  `json:"relation"`       // ex.: Cônjuge, Filho(a), Parente
-	Kind             string  `json:"kind,omitempty"` // chave crua do vínculo
+	Relation         string  `json:"relation"`       // ex.: Conjuge, Filho(a), Parente
+	Kind             string  `json:"kind,omitempty"` // chave crua do vinculo
 	IsHead           bool    `json:"is_head"`
 	MembershipStatus string  `json:"membership_status"`
 	Phone            *string `json:"phone,omitempty"`
@@ -37,12 +37,12 @@ type FamilyMember struct {
 const relQuery = `
 SELECT DISTINCT ON (other_id) id::text, other_id, other_name, kind
 FROM (
-    -- vínculo direto: o kind já é a relação do OUTRO com este membro
+    -- vinculo direto: o kind ja e a relacao do OUTRO com este membro
     SELECT r.id, r.related_id::text AS other_id, m.full_name AS other_name, r.kind, 0 AS pref
     FROM member_relationships r JOIN members m ON m.id = r.related_id
     WHERE r.member_id = $1 AND r.member_id <> r.related_id
     UNION ALL
-    -- vínculo reverso: inverte o kind para obter a relação do outro com este membro
+    -- vinculo reverso: inverte o kind para obter a relacao do outro com este membro
     SELECT r.id, r.member_id::text AS other_id, m.full_name AS other_name,
            CASE r.kind
                WHEN 'parent' THEN 'child'
@@ -60,27 +60,27 @@ ORDER BY other_id, pref`
 func relationLabel(kind string, isFrom bool) string {
 	switch kind {
 	case "spouse":
-		return "Cônjuge"
+		return "Conjuge"
 	case "parent":
 		if isFrom {
-			return "Pai/Mãe"
+			return "Pai/Mae"
 		}
 		return "Filho(a)"
 	case "child":
 		if isFrom {
 			return "Filho(a)"
 		}
-		return "Pai/Mãe"
+		return "Pai/Mae"
 	case "disciple":
 		if isFrom {
-			return "Discípulo(a)"
+			return "Discipulo(a)"
 		}
 		return "Discipulador(a)"
 	case "discipler":
 		if isFrom {
 			return "Discipulador(a)"
 		}
-		return "Discípulo(a)"
+		return "Discipulo(a)"
 	case "dependent":
 		return "Dependente"
 	default:
@@ -88,7 +88,7 @@ func relationLabel(kind string, isFrom bool) string {
 	}
 }
 
-// GetTree retorna o membro e seus vínculos (família + discipulado).
+// GetTree retorna o membro e seus vinculos (familia + discipulado).
 func (r *Repo) GetTree(ctx context.Context, tx pgx.Tx, id string) (*Member, []Relationship, error) {
 	m, err := r.Get(ctx, tx, id)
 	if err != nil {
@@ -110,8 +110,8 @@ func (r *Repo) GetTree(ctx context.Context, tx pgx.Tx, id string) (*Member, []Re
 	return m, rels, rows.Err()
 }
 
-// inverseKind devolve o vínculo recíproco: se o OUTRO é meu "parent"
-// (pai/mãe), então eu sou o "child" dele, e assim por diante. Pares simétricos
+// inverseKind devolve o vinculo reciproco: se o OUTRO e meu "parent"
+// (pai/mae), entao eu sou o "child" dele, e assim por diante. Pares simetricos
 // (spouse, dependent, relative) permanecem iguais.
 func inverseKind(kind string) string {
 	switch kind {
@@ -128,9 +128,9 @@ func inverseKind(kind string) string {
 	}
 }
 
-// AddRelationship cria o vínculo nos DOIS sentidos: member_id -> related_id com
-// `kind`, e related_id -> member_id com o vínculo inverso. Assim a referência
-// fica correta também na ficha do outro membro (o destino). Idempotente.
+// AddRelationship cria o vinculo nos DOIS sentidos: member_id -> related_id com
+// `kind`, e related_id -> member_id com o vinculo inverso. Assim a referencia
+// fica correta tambem na ficha do outro membro (o destino). Idempotente.
 func (r *Repo) AddRelationship(ctx context.Context, tx pgx.Tx, memberID, relatedID, kind string) error {
 	if memberID == relatedID {
 		return nil
@@ -146,13 +146,13 @@ func (r *Repo) AddRelationship(ctx context.Context, tx pgx.Tx, memberID, related
 	return err
 }
 
-// FamilyMembers retorna os membros de uma família, o chefe primeiro.
+// FamilyMembers retorna os membros de uma familia, o chefe primeiro.
 //
-// A versão anterior fazia `JOIN members m ON m.id IN (r.member_id, r.related_id)`,
-// que devolvia as DUAS pontas de cada vínculo e rotulava ambas com o mesmo
-// `r.kind` — ou seja, o pai aparecia como "Filho(a)" e o cônjuge do cônjuge
-// entrava na lista. Agora cada pessoa é resolvida uma única vez e o parentesco
-// é o dela com o chefe da família.
+// A versao anterior fazia `JOIN members m ON m.id IN (r.member_id, r.related_id)`,
+// que devolvia as DUAS pontas de cada vinculo e rotulava ambas com o mesmo
+// `r.kind` - ou seja, o pai aparecia como "Filho(a)" e o conjuge do conjuge
+// entrava na lista. Agora cada pessoa e resolvida uma unica vez e o parentesco
+// e o dela com o chefe da familia.
 func (r *Repo) FamilyMembers(ctx context.Context, tx pgx.Tx, familyID string) ([]FamilyMember, error) {
 	rows, err := tx.Query(ctx, `
 		WITH fam AS (
@@ -196,7 +196,7 @@ func (r *Repo) FamilyMembers(ctx context.Context, tx pgx.Tx, familyID string) ([
 		}
 		fm.Kind = kind
 		if fm.IsHead {
-			fm.Relation = "Chefe da família"
+			fm.Relation = "Chefe da familia"
 		} else if kind == "" {
 			fm.Relation = "Parente"
 		} else {

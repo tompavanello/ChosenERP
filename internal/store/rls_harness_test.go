@@ -15,33 +15,33 @@ import (
 // ---------------------------------------------------------------------------
 // Harness dos testes de RLS.
 //
-// Os testes precisam de um PostgreSQL real (as políticas de Row-Level Security
-// só existem no banco). Para não tocar no banco de desenvolvimento, o harness
-// cria um banco descartável `chosenerp_test` a partir do DSN do migrador,
-// aplica as mesmas migrações do binário e semeia fixtures próprias.
+// Os testes precisam de um PostgreSQL real (as politicas de Row-Level Security
+// so existem no banco). Para nao tocar no banco de desenvolvimento, o harness
+// cria um banco descartavel `chosenerp_test` a partir do DSN do migrador,
+// aplica as mesmas migracoes do binario e semeia fixtures proprias.
 //
-// Configuração (tudo opcional, com fallback):
+// Configuracao (tudo opcional, com fallback):
 //   CHOSEN_TEST_MIGRATE_URL  -> fallback: MIGRATE_DATABASE_URL  (papel dono/superuser)
-//   CHOSEN_TEST_APP_URL      -> fallback: DATABASE_URL          (papel da aplicação, sujeito a RLS)
-//   CHOSEN_TESTS_REQUIRED=1  -> falha em vez de pular, quando não há DSN (use no CI)
+//   CHOSEN_TEST_APP_URL      -> fallback: DATABASE_URL          (papel da aplicacao, sujeito a RLS)
+//   CHOSEN_TESTS_REQUIRED=1  -> falha em vez de pular, quando nao ha DSN (use no CI)
 // ---------------------------------------------------------------------------
 
 const rlsTestDBName = "chosenerp_test"
 
-// errRollback encerra a transação de teste sem commitar, para que os testes
-// (mesmo os de escrita) sejam idempotentes e não deixem resíduo no banco.
-var errRollback = errors.New("rls: rollback intencional da transação de teste")
+// errRollback encerra a transacao de teste sem commitar, para que os testes
+// (mesmo os de escrita) sejam idempotentes e nao deixem residuo no banco.
+var errRollback = errors.New("rls: rollback intencional da transacao de teste")
 
-// IDs fixos das fixtures (UUIDs válidos, estáveis entre execuções).
+// IDs fixos das fixtures (UUIDs validos, estaveis entre execucoes).
 const (
 	fixTenantX = "aaaaaaaa-0000-4000-8000-000000000001"
 	fixTenantY = "aaaaaaaa-0000-4000-8000-000000000002"
 
 	fixBranchA = "bbbbbbbb-0000-4000-8000-000000000001" // tenant X
 	fixBranchB = "bbbbbbbb-0000-4000-8000-000000000002" // tenant X
-	fixBranchC = "bbbbbbbb-0000-4000-8000-000000000003" // tenant X (não participa de repasses)
+	fixBranchC = "bbbbbbbb-0000-4000-8000-000000000003" // tenant X (nao participa de repasses)
 	fixBranchY = "cccccccc-0000-4000-8000-000000000001" // tenant Y
-	// Sub-congregação filha da filial A (hierarquia, migração 000036).
+	// Sub-congregacao filha da filial A (hierarquia, migracao 000036).
 	fixSubBranchA = "bbbbbbbb-0000-4000-8000-000000000004"
 
 	fixMemberA1 = "dddddddd-0000-4000-8000-000000000001"
@@ -68,8 +68,8 @@ const (
 	fixVisitorA = "a2aaaaaa-0000-4000-8000-000000000001"
 	fixVisitorB = "a2aaaaaa-0000-4000-8000-000000000002"
 	fixVisitorY = "a2aaaaaa-0000-4000-8000-000000000003"
-	// Visitante da sub-congregação: prova que a filial A (pai) enxerga o
-	// descendente na leitura, mas a irmã B não.
+	// Visitante da sub-congregacao: prova que a filial A (pai) enxerga o
+	// descendente na leitura, mas a irma B nao.
 	fixVisitorSub = "a2aaaaaa-0000-4000-8000-000000000004"
 
 	fixBeneA      = "a3aaaaaa-0000-4000-8000-000000000001"
@@ -104,7 +104,7 @@ const (
 
 	fixTermX = "abaaaaaa-0000-4000-8000-000000000001"
 
-	// Governança (migração 000033).
+	// Governanca (migracao 000033).
 	fixMinuteA    = "c0aaaaaa-0000-4000-8000-000000000001"
 	fixMinuteB    = "c0aaaaaa-0000-4000-8000-000000000002"
 	fixSignatureA = "c2aaaaaa-0000-4000-8000-000000000001"
@@ -118,12 +118,12 @@ const (
 	fixLegalA     = "c5aaaaaa-0000-4000-8000-000000000001"
 	fixLegalB     = "c5aaaaaa-0000-4000-8000-000000000002"
 
-	// Identidade global + memberships (migração 000053).
+	// Identidade global + memberships (migracao 000053).
 	fixRoleXSuper = "0a000000-0000-4000-8000-000000000001" // tenant X, super_admin
 	fixRoleXSec   = "0a000000-0000-4000-8000-000000000002" // tenant X, secretario
 	fixRoleYSuper = "0a000000-0000-4000-8000-000000000003" // tenant Y, super_admin
-	fixUserX      = "0b000000-0000-4000-8000-000000000001" // só tenant X (filial A)
-	fixUserY      = "0b000000-0000-4000-8000-000000000002" // só tenant Y
+	fixUserX      = "0b000000-0000-4000-8000-000000000001" // so tenant X (filial A)
+	fixUserY      = "0b000000-0000-4000-8000-000000000002" // so tenant Y
 	fixUserBoth   = "0b000000-0000-4000-8000-000000000003" // tenant X (Sede) + tenant Y
 	fixMemX       = "0c000000-0000-4000-8000-000000000001"
 	fixMemY       = "0c000000-0000-4000-8000-000000000002"
@@ -131,13 +131,13 @@ const (
 	fixMemBothY   = "0c000000-0000-4000-8000-000000000004"
 )
 
-// bounds monta o contexto de segurança usado pelo gateway.
+// bounds monta o contexto de seguranca usado pelo gateway.
 func bounds(tenantID, branchID, role string) Bounds {
 	return Bounds{TenantID: tenantID, BranchID: branchID, Role: role}
 }
 
-// boundsUser inclui a identidade (app.user_id), necessária para o RLS de users
-// e memberships reconhecer a própria pessoa.
+// boundsUser inclui a identidade (app.user_id), necessaria para o RLS de users
+// e memberships reconhecer a propria pessoa.
 func boundsUser(tenantID, branchID, role, userID string) Bounds {
 	return Bounds{TenantID: tenantID, BranchID: branchID, Role: role, UserID: userID}
 }
@@ -151,7 +151,7 @@ var (
 func TestMain(m *testing.M) {
 	code, err := runSuite(m)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "store: falha ao preparar a suíte de RLS: %v\n", err)
+		fmt.Fprintf(os.Stderr, "store: falha ao preparar a suite de RLS: %v\n", err)
 		os.Exit(1)
 	}
 	os.Exit(code)
@@ -162,7 +162,7 @@ func runSuite(m *testing.M) (int, error) {
 	appDSN := firstEnv("CHOSEN_TEST_APP_URL", "DATABASE_URL")
 
 	if migrateDSN == "" || appDSN == "" {
-		msg := "store: testes de RLS pulados — defina CHOSEN_TEST_MIGRATE_URL e " +
+		msg := "store: testes de RLS pulados - defina CHOSEN_TEST_MIGRATE_URL e " +
 			"CHOSEN_TEST_APP_URL (ou MIGRATE_DATABASE_URL/DATABASE_URL)"
 		if os.Getenv("CHOSEN_TESTS_REQUIRED") != "" {
 			return 1, errors.New(msg)
@@ -171,7 +171,7 @@ func runSuite(m *testing.M) (int, error) {
 		return 0, nil
 	}
 
-	// Conexão administrativa no banco padrão, só para (re)criar o banco de teste.
+	// Conexao administrativa no banco padrao, so para (re)criar o banco de teste.
 	adminDSN, err := rewriteDatabase(migrateDSN, "postgres")
 	if err != nil {
 		return 1, err
@@ -195,10 +195,10 @@ func runSuite(m *testing.M) (int, error) {
 		return 1, err
 	}
 
-	// GRANT e ALTER DEFAULT PRIVILEGES valem apenas para o database onde são
-	// executados. Um database novo não os herda, então o script de setup precisa
-	// rodar aqui ANTES das migrações, para que os privilégios padrão já cubram
-	// as tabelas que serão criadas.
+	// GRANT e ALTER DEFAULT PRIVILEGES valem apenas para o database onde sao
+	// executados. Um database novo nao os herda, entao o script de setup precisa
+	// rodar aqui ANTES das migracoes, para que os privilegios padrao ja cubram
+	// as tabelas que serao criadas.
 	setup, err := pgx.Connect(testCtx, migrateTestDSN)
 	if err != nil {
 		return 1, fmt.Errorf("conectar no database de teste: %w", err)
@@ -231,8 +231,8 @@ func runSuite(m *testing.M) (int, error) {
 	return m.Run(), nil
 }
 
-// withSuperuser executa fn fora do RLS (o migrador é superuser), usado para
-// verificar gatilhos/triggers que a RLS esconderia do papel da aplicação.
+// withSuperuser executa fn fora do RLS (o migrador e superuser), usado para
+// verificar gatilhos/triggers que a RLS esconderia do papel da aplicacao.
 func withSuperuser(t *testing.T, fn func(conn *pgx.Conn) error) {
 	t.Helper()
 	conn, err := pgx.Connect(testCtx, testMigrateDSN)
@@ -246,7 +246,7 @@ func withSuperuser(t *testing.T, fn func(conn *pgx.Conn) error) {
 }
 
 // rewriteDatabase troca o nome do banco de um DSN postgres://... preservando
-// usuário, senha, host e parâmetros de query.
+// usuario, senha, host e parametros de query.
 func rewriteDatabase(dsn, database string) (string, error) {
 	u, err := url.Parse(dsn)
 	if err != nil {
@@ -265,8 +265,8 @@ func firstEnv(keys ...string) string {
 	return ""
 }
 
-// seedFixtures semeia os dados de teste usando o DSN do MIGRADOR, que é
-// superuser e portanto não é filtrado pelas políticas de RLS.
+// seedFixtures semeia os dados de teste usando o DSN do MIGRADOR, que e
+// superuser e portanto nao e filtrado pelas politicas de RLS.
 func seedFixtures(migrateDSN string) error {
 	conn, err := pgx.Connect(testCtx, migrateDSN)
 	if err != nil {
@@ -305,7 +305,7 @@ func seedFixtures(migrateDSN string) error {
 			('` + fixAccountB + `', '` + fixTenantX + `', '` + fixBranchB + `', 'Conta B', 'Banco B', '9876', '12345-6', 'checking', 500),
 			('` + fixAccountY + `', '` + fixTenantY + `', '` + fixBranchY + `', 'Conta Y', 'Banco Y', '1111', '22222-2', 'checking', 200)`,
 
-		// hash/prev_hash são preenchidos pelo trigger de hash-chain.
+		// hash/prev_hash sao preenchidos pelo trigger de hash-chain.
 		`INSERT INTO financial_transactions (id, tenant_id, branch_id, category_id, type, amount, currency, payment_method, description, account_id) VALUES
 			('` + fixTxnA + `', '` + fixTenantX + `', '` + fixBranchA + `', '` + fixCatA + `', 'income', 100.00, 'BRL', 'pix', 'dizimo A', '` + fixAccountA + `'),
 			('` + fixTxnB + `', '` + fixTenantX + `', '` + fixBranchB + `', '` + fixCatB + `', 'income', 250.00, 'BRL', 'pix', 'dizimo B', '` + fixAccountB + `')`,
@@ -345,15 +345,15 @@ func seedFixtures(migrateDSN string) error {
 			('` + fixMinistryB + `', '` + fixMemberB1 + `', 'leader')`,
 
 		// Cargos: um global do tenant X (branch NULL), um por filial, e um do
-		// tenant Y — cobre os três eixos de escopo (global / filial / tenant).
+		// tenant Y - cobre os tres eixos de escopo (global / filial / tenant).
 		`INSERT INTO cargos (id, tenant_id, branch_id, name, slug) VALUES
 			('` + fixCargoGlobal + `', '` + fixTenantX + `', NULL, 'Cargo Global X', 'rls-cargo-global-x'),
 			('` + fixCargoA + `', '` + fixTenantX + `', '` + fixBranchA + `', 'Cargo A', 'rls-cargo-a'),
 			('` + fixCargoB + `', '` + fixTenantX + `', '` + fixBranchB + `', 'Cargo B', 'rls-cargo-b'),
 			('` + fixCargoY + `', '` + fixTenantY + `', '` + fixBranchY + `', 'Cargo Y', 'rls-cargo-y')`,
 
-		// Um mandato por filial: é o que prova que member_cargos herda o escopo
-		// do membro (a tabela não tem tenant_id/branch_id próprios).
+		// Um mandato por filial: e o que prova que member_cargos herda o escopo
+		// do membro (a tabela nao tem tenant_id/branch_id proprios).
 		`INSERT INTO member_cargos (member_id, cargo_id, started_at, status) VALUES
 			('` + fixMemberA1 + `', '` + fixCargoA + `', '2024-01-01', 'ativo'),
 			('` + fixMemberB1 + `', '` + fixCargoB + `', '2024-01-01', 'ativo')`,
@@ -390,7 +390,7 @@ func seedFixtures(migrateDSN string) error {
 			('` + fixTenantX + `', 'member.created', 'members', '` + fixMemberA1 + `', '{}'::jsonb),
 			('` + fixTenantY + `', 'member.created', 'members', '` + fixMemberY1 + `', '{}'::jsonb)`,
 
-		// Governança: uma ata por filial, assinatura e votação na filial A, e um
+		// Governanca: uma ata por filial, assinatura e votacao na filial A, e um
 		// documento legal por filial.
 		`INSERT INTO minutes (id, tenant_id, branch_id, title, meeting_at, kind) VALUES
 			('` + fixMinuteA + `', '` + fixTenantX + `', '` + fixBranchA + `', 'Assembleia A', now(), 'assembleia'),
@@ -417,7 +417,7 @@ func seedFixtures(migrateDSN string) error {
 			('` + fixLegalB + `', '` + fixTenantX + `', '` + fixBranchB + `', 'contrato', 'Contrato B', current_date + 400)`,
 
 		// Identidade global + memberships (000053). O seed roda DEPOIS das
-		// migrações, então já usa o schema novo (users sem tenant_id/role_id).
+		// migracoes, entao ja usa o schema novo (users sem tenant_id/role_id).
 		`INSERT INTO roles (id, tenant_id, key, name, is_system) VALUES
 			('` + fixRoleXSuper + `', '` + fixTenantX + `', 'super_admin', 'Super Admin X', true),
 			('` + fixRoleXSec + `', '` + fixTenantX + `', 'secretario', 'Secretario X', true),
@@ -444,7 +444,7 @@ func seedFixtures(migrateDSN string) error {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers de asserção
+// Helpers de assercao
 // ---------------------------------------------------------------------------
 
 // inBounds executa fn dentro do escopo informado, SEMPRE com rollback, para
@@ -452,7 +452,7 @@ func seedFixtures(migrateDSN string) error {
 func inBounds(t *testing.T, b Bounds, fn func(tx pgx.Tx) error) error {
 	t.Helper()
 	if testStore == nil {
-		t.Fatal("store de teste não inicializado")
+		t.Fatal("store de teste nao inicializado")
 	}
 	err := testStore.WithTenant(testCtx, b, func(tx pgx.Tx) error {
 		if err := fn(tx); err != nil {
@@ -481,7 +481,7 @@ func inSystem(t *testing.T, fn func(tx pgx.Tx) error) error {
 	return err
 }
 
-// count executa uma contagem dentro da transação corrente.
+// count executa uma contagem dentro da transacao corrente.
 func count(t *testing.T, tx pgx.Tx, query string, args ...any) int {
 	t.Helper()
 	var n int

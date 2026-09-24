@@ -61,7 +61,7 @@ export function UnifiedDrawer({
               entityType={type}
               initial={modal.kind === "edit" ? modal.person : null}
               saving={saving}
-              submitLabel={modal.kind === "edit" ? "Salvar alterações" : "Salvar"}
+              submitLabel={modal.kind === "edit" ? "Salvar alteracoes" : "Salvar"}
               onSubmit={async (data) => {
                 await onSubmitPerson(type, modal.kind === "edit" ? modal.id : undefined, data);
               }}
@@ -164,13 +164,13 @@ function FamilyMemberDrawer({
             {members.map((m) => (<option key={m.id} value={m.id}>{m.full_name}</option>))}
           </Select>
         </Field>
-        <Field label="Vínculo com (responsável, opcional)">
+        <Field label="Vinculo com (responsavel, opcional)">
           <Select className="h-8 text-sm" value={relateId} onChange={(e) => setRelateId(e.target.value)}>
-            <option value="">—</option>
+            <option value="">-</option>
             {members.filter((m) => m.id !== memberId).map((m) => (<option key={m.id} value={m.id}>{m.full_name}</option>))}
           </Select>
         </Field>
-        <Field label="Relação">
+        <Field label="Relacao">
           <Select className="h-8 text-sm" value={relation} onChange={(e) => setRelation(e.target.value)}>
             {Object.entries(RELATION_LABELS).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
           </Select>
@@ -207,7 +207,7 @@ function AddRelationshipDrawer({
   }
 
   return (
-    <Drawer open={true} onClose={onCancel} title={`Adicionar vínculo a ${member.full_name}`}>
+    <Drawer open={true} onClose={onCancel} title={`Adicionar vinculo a ${member.full_name}`}>
       <form onSubmit={submit} className="space-y-3">
         <Field label="Pessoa" required>
           <Select className="h-8 text-sm" value={relateId} onChange={(e) => setRelateId(e.target.value)} required>

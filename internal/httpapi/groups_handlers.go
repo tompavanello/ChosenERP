@@ -10,7 +10,7 @@ import (
 	"chosenerp/internal/store"
 )
 
-// ---- Ministérios ----
+// ---- Ministerios ----
 
 func (a *App) handleListMinistries(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -84,7 +84,7 @@ func (a *App) handleUpdateMinistry(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "ministério não encontrado")
+			writeErr(w, http.StatusNotFound, "ministerio nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -105,7 +105,7 @@ func (a *App) handleDeleteMinistry(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "ministério não encontrado")
+			writeErr(w, http.StatusNotFound, "ministerio nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -134,7 +134,7 @@ func (a *App) handleUpdateGroup(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "grupo não encontrado")
+			writeErr(w, http.StatusNotFound, "grupo nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -155,7 +155,7 @@ func (a *App) handleDeleteGroup(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "grupo não encontrado")
+			writeErr(w, http.StatusNotFound, "grupo nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -274,7 +274,7 @@ func (a *App) handleRemoveMinistryMember(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// ---- Pequenos grupos / células + check-in ----
+// ---- Pequenos grupos / celulas + check-in ----
 
 func (a *App) handleListGroups(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())

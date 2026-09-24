@@ -10,10 +10,10 @@ import (
 	"chosenerp/internal/store"
 )
 
-// errCargoEmUso sinaliza 409 (conflito): o cargo tem histórico de mandato.
+// errCargoEmUso sinaliza 409 (conflito): o cargo tem historico de mandato.
 var errCargoEmUso = errors.New("cargo em uso")
 
-// ---- Catálogo de cargos (requisito CAD100 1.3) ----
+// ---- Catalogo de cargos (requisito CAD100 1.3) ----
 
 func (a *App) handleListCargos(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -51,15 +51,15 @@ func (a *App) handleCreateCargo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Kind != "" && !cargos.Kinds[in.Kind] {
-		writeErr(w, http.StatusBadRequest, "kind inválido")
+		writeErr(w, http.StatusBadRequest, "kind invalido")
 		return
 	}
 	b := boundsFromClaims(claims)
 	var c *cargos.Cargo
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
 		var err error
-		// branch_id vazio cria um cargo GLOBAL do tenant (catálogo da Sede),
-		// enxergado por todas as filiais — é o caso comum: "criar o cargo uma
+		// branch_id vazio cria um cargo GLOBAL do tenant (catalogo da Sede),
+		// enxergado por todas as filiais - e o caso comum: "criar o cargo uma
 		// vez e usar em toda a igreja".
 		c, err = a.Cargos.Create(r.Context(), tx, claims.TenantID, claims.BranchID, in)
 		return err
@@ -84,7 +84,7 @@ func (a *App) handleUpdateCargo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Kind != nil && !cargos.Kinds[*in.Kind] {
-		writeErr(w, http.StatusBadRequest, "kind inválido")
+		writeErr(w, http.StatusBadRequest, "kind invalido")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -105,10 +105,10 @@ func (a *App) handleUpdateCargo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, c)
 }
 
-// handleDeleteCargo responde 409 quando o cargo já tem mandatos.
-// Apagar o cargo levaria junto o histórico de quem o exerceu, e o requisito 1.4
-// existe justamente para preservar esse histórico. A saída correta para "não uso
-// mais este cargo" é desativá-lo (PATCH {"is_active": false}).
+// handleDeleteCargo responde 409 quando o cargo ja tem mandatos.
+// Apagar o cargo levaria junto o historico de quem o exerceu, e o requisito 1.4
+// existe justamente para preservar esse historico. A saida correta para "nao uso
+// mais este cargo" e desativa-lo (PATCH {"is_active": false}).
 func (a *App) handleDeleteCargo(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -181,7 +181,7 @@ func (a *App) handleAssignCargo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Status != "" && !cargos.StatusValidos[in.Status] {
-		writeErr(w, http.StatusBadRequest, "status inválido")
+		writeErr(w, http.StatusBadRequest, "status invalido")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -196,9 +196,9 @@ func (a *App) handleAssignCargo(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusNotFound, "member or cargo not found")
 			return
 		}
-		// ON CONFLICT DO NOTHING não devolve linha: mandato idêntico já existe.
+		// ON CONFLICT DO NOTHING nao devolve linha: mandato identico ja existe.
 		if err == pgx.ErrNoRows {
-			writeErr(w, http.StatusConflict, "este membro já tem este cargo no mesmo mandato")
+			writeErr(w, http.StatusConflict, "este membro ja tem este cargo no mesmo mandato")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -221,7 +221,7 @@ func (a *App) handleUpdateMemberCargo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Status != nil && !cargos.StatusValidos[*in.Status] {
-		writeErr(w, http.StatusBadRequest, "status inválido")
+		writeErr(w, http.StatusBadRequest, "status invalido")
 		return
 	}
 	b := boundsFromClaims(claims)

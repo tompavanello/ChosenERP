@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
-/* O tema é controlado por classe (.dark no <html>), não por preferência do sistema.
+/* O tema e controlado por classe (.dark no <html>), nao por preferencia do sistema.
    Sem este variant, `dark:` compila para @media (prefers-color-scheme: dark) e o
-   ThemeToggle não tem efeito nenhum. */
+   ThemeToggle nao tem efeito nenhum. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
@@ -43,8 +43,8 @@ body {
 body {
   color: var(--ink);
   background: var(--paper);
-  /* Stack corporativa: Inter quando instalada, senão a fonte de UI nativa de cada
-     sistema (Segoe UI Variable no Windows 11). Sem webfont para não criar dependência
+  /* Stack corporativa: Inter quando instalada, senao a fonte de UI nativa de cada
+     sistema (Segoe UI Variable no Windows 11). Sem webfont para nao criar dependencia
      de rede no build. */
   font-family: Inter, "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system,
     "Helvetica Neue", Arial, sans-serif;
@@ -52,7 +52,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Números, datas e valores alinham na vertical em tabelas. */
+/* Numeros, datas e valores alinham na vertical em tabelas. */
 .tnum {
   font-variant-numeric: tabular-nums;
 }
@@ -93,11 +93,11 @@ h3 {
   background: var(--scrollbar-hover);
 }
 
-/* Tudo abaixo vive em @layer components: regra sem camada vence QUALQUER utilitária
-   do Tailwind, então `Card className="p-0"`, `className="pl-9"` nos inputs de busca
+/* Tudo abaixo vive em @layer components: regra sem camada vence QUALQUER utilitaria
+   do Tailwind, entao `Card className="p-0"`, `className="pl-9"` nos inputs de busca
    e `Button size="sm"` eram todos silenciosamente ignorados. */
 @layer components {
-  /* ---- Botões ---- */
+  /* ---- Botoes ---- */
   .btn-base {
     display: inline-flex;
     align-items: center;
@@ -181,7 +181,7 @@ h3 {
     color: var(--muted);
   }
 
-  /* Container de página: ocupa a largura disponível em vez de travar em max-w-6xl,
+  /* Container de pagina: ocupa a largura disponivel em vez de travar em max-w-6xl,
      que deixava uma faixa vazia grande em monitores largos. */
   .page {
     width: 100%;
@@ -189,7 +189,7 @@ h3 {
     margin-inline: auto;
   }
 
-  /* Cabeçalho de seção do sidebar (micro-rótulo corporativo). */
+  /* Cabecalho de secao do sidebar (micro-rotulo corporativo). */
   .nav-section {
     padding: 0.75rem 0.625rem 0.25rem;
     font-size: 0.625rem;

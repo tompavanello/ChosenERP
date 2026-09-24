@@ -1,16 +1,16 @@
 -- 000016_tenant_scope_rls.up.sql
--- Correção de isolamento MULTI-TENANT nas políticas de RLS.
+-- Correcao de isolamento MULTI-TENANT nas politicas de RLS.
 --
 -- Problema: is_headquarters() verificava apenas branch nulo + papel
--- (super_admin/admin_sede), ignorando o tenant do contexto. Um usuário "Sede"
+-- (super_admin/admin_sede), ignorando o tenant do contexto. Um usuario "Sede"
 -- de qualquer tenant enxergava (e gravava em) dados de TODOS os tenants.
 -- Detectado pelos testes automatizados de RLS (internal/store/rls_test.go).
 --
 -- Novo modelo de escopo:
 --   * is_system()      -> workers internos (role 'system'): acesso total.
---   * is_headquarters()-> Sede, mas SOMENTE dentro do próprio tenant.
+--   * is_headquarters()-> Sede, mas SOMENTE dentro do proprio tenant.
 --   * rls_read()       -> leitura: tenant do contexto + (branch | global | Sede).
---   * rls_write()      -> gravação: tenant do contexto + branch exato (ou global).
+--   * rls_write()      -> gravacao: tenant do contexto + branch exato (ou global).
 --   * rls_hq()         -> tenant do contexto + escopo Sede.
 
 -- ---------------------------------------------------------------------------
@@ -24,16 +24,16 @@ LANGUAGE sql STABLE AS $$
        AND current_setting('app.role', true) IN ('super_admin','admin_sede')
 $$;
 
--- Workers internos (outbox de entrega, recorrências, app do membro).
--- Tanto store.WithSystem() (tenant vazio) quanto o worker de recorrências
+-- Workers internos (outbox de entrega, recorrencias, app do membro).
+-- Tanto store.WithSystem() (tenant vazio) quanto o worker de recorrencias
 -- (role 'system' com tenant/filial definidos) caem aqui.
 CREATE OR REPLACE FUNCTION is_system() RETURNS boolean
 LANGUAGE sql STABLE AS $$
     SELECT current_setting('app.role', true) = 'system'
 $$;
 
--- A linha pertence ao branch do contexto (ou é registro global do tenant,
--- quando p_allow_global e branch_id é NULL).
+-- A linha pertence ao branch do contexto (ou e registro global do tenant,
+-- quando p_allow_global e branch_id e NULL).
 CREATE OR REPLACE FUNCTION rls_branch_match(p_branch uuid, p_allow_global boolean)
 RETURNS boolean LANGUAGE sql STABLE AS $$
     SELECT p_branch = current_branch()
@@ -49,8 +49,8 @@ RETURNS boolean LANGUAGE sql STABLE AS $$
             AND (rls_branch_match(p_branch, p_allow_global) OR is_headquarters()))
 $$;
 
--- Gravação: sistema, ou tenant do contexto + branch exato (ou global).
--- Escopo Sede NÃO ganha gravação em branch alheio — só via rls_hq() explícito.
+-- Gravacao: sistema, ou tenant do contexto + branch exato (ou global).
+-- Escopo Sede NAO ganha gravacao em branch alheio - so via rls_hq() explicito.
 CREATE OR REPLACE FUNCTION rls_write(p_tenant uuid, p_branch uuid, p_allow_global boolean)
 RETURNS boolean LANGUAGE sql STABLE AS $$
     SELECT is_system()
@@ -59,7 +59,7 @@ RETURNS boolean LANGUAGE sql STABLE AS $$
             AND rls_branch_match(p_branch, p_allow_global))
 $$;
 
--- Acesso restrito à Sede (ou sistema) dentro do próprio tenant.
+-- Acesso restrito a Sede (ou sistema) dentro do proprio tenant.
 CREATE OR REPLACE FUNCTION rls_hq(p_tenant uuid)
 RETURNS boolean LANGUAGE sql STABLE AS $$
     SELECT is_system()
@@ -133,7 +133,7 @@ CREATE POLICY member_consents_all ON member_consents
   USING (rls_write(tenant_id, branch_id, false))
   WITH CHECK (rls_write(tenant_id, branch_id, false));
 
--- Tabelas sem tenant_id próprio: herdam o escopo pela tabela pai.
+-- Tabelas sem tenant_id proprio: herdam o escopo pela tabela pai.
 DROP POLICY IF EXISTS rels_sel ON member_relationships;
 CREATE POLICY rels_sel ON member_relationships USING (EXISTS (
     SELECT 1 FROM members m WHERE m.id = member_id AND rls_read(m.tenant_id, m.branch_id, false)
@@ -153,7 +153,7 @@ CREATE POLICY ministry_mem_all ON ministry_members
   WITH CHECK (EXISTS (SELECT 1 FROM ministries m WHERE m.id = ministry_id AND rls_write(m.tenant_id, m.branch_id, false)));
 
 -- ---------------------------------------------------------------------------
--- Ministérios, grupos e frequência (branch NOT NULL)
+-- Ministerios, grupos e frequencia (branch NOT NULL)
 -- ---------------------------------------------------------------------------
 DROP POLICY IF EXISTS ministries_sel ON ministries;
 CREATE POLICY ministries_sel ON ministries USING (rls_read(tenant_id, branch_id, false));
@@ -204,7 +204,7 @@ CREATE POLICY recurring_upd ON recurring_donations FOR UPDATE
   USING (rls_write(tenant_id, branch_id, false))
   WITH CHECK (rls_write(tenant_id, branch_id, false));
 
--- Repasses: visível para origem/destino/Sede do tenant; criável por
+-- Repasses: visivel para origem/destino/Sede do tenant; criavel por
 -- origem, destino ou Sede do tenant.
 DROP POLICY IF EXISTS transfers_sel ON transfers;
 CREATE POLICY transfers_sel ON transfers
@@ -252,7 +252,7 @@ CREATE POLICY benefactors_all ON benefactors
   WITH CHECK (rls_write(tenant_id, branch_id, true));
 
 -- ---------------------------------------------------------------------------
--- Auditoria: leitura só pela Sede do tenant (ou sistema); escrita livre
+-- Auditoria: leitura so pela Sede do tenant (ou sistema); escrita livre
 -- ---------------------------------------------------------------------------
 DROP POLICY IF EXISTS audit_sel ON audit_log;
 CREATE POLICY audit_sel ON audit_log FOR SELECT USING (rls_hq(tenant_id));

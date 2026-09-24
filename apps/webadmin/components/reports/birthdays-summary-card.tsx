@@ -8,13 +8,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getBirthdays, type BirthdaysResult } from "@/lib/api";
 
 const MONTHS = [
-  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "janeiro", "fevereiro", "marco", "abril", "maio", "junho",
   "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
 ];
 
 /**
- * Card-resumo de aniversariantes: total do mês e quantos fazem no dia.
- * Substitui a lista completa na Visão Geral (a lista vive no relatório).
+ * Card-resumo de aniversariantes: total do mes e quantos fazem no dia.
+ * Substitui a lista completa na Visao Geral (a lista vive no relatorio).
  */
 export function BirthdaysSummaryCard({ className }: { className?: string }) {
   const [data, setData] = useState<BirthdaysResult | null>(null);
@@ -45,7 +45,7 @@ export function BirthdaysSummaryCard({ className }: { className?: string }) {
       <div className="mt-4 grid grid-cols-2 gap-4">
         <div>
           <p className="text-3xl font-semibold tabular-nums">{data.birthdays.length}</p>
-          <p className="text-xs text-zinc-500">no mês</p>
+          <p className="text-xs text-zinc-500">no mes</p>
         </div>
         <div>
           <p className="text-3xl font-semibold tabular-nums text-sky-700 dark:text-sky-400">{hoje}</p>
@@ -53,10 +53,10 @@ export function BirthdaysSummaryCard({ className }: { className?: string }) {
         </div>
       </div>
       {casamentosHoje > 0 && (
-        <p className="mt-3 text-xs text-zinc-500">{casamentosHoje} aniversário(s) de casamento hoje.</p>
+        <p className="mt-3 text-xs text-zinc-500">{casamentosHoje} aniversario(s) de casamento hoje.</p>
       )}
       <Link href="/dashboard/reports/birthdays" className="mt-3 inline-block text-xs text-sky-600 hover:underline">
-        Ver relatório de aniversariantes
+        Ver relatorio de aniversariantes
       </Link>
     </Card>
   );

@@ -46,7 +46,7 @@ func (a *App) handleCreateConsentTerm(w http.ResponseWriter, r *http.Request) {
 		Body  string `json:"body"`
 	}
 	if err := readJSON(r, &in); err != nil || in.Title == "" || in.Body == "" {
-		writeErr(w, http.StatusBadRequest, "title e body são obrigatórios")
+		writeErr(w, http.StatusBadRequest, "title e body sao obrigatorios")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -96,7 +96,7 @@ func (a *App) handleRecordConsent(w http.ResponseWriter, r *http.Request) {
 		Consented bool   `json:"consented"`
 	}
 	if err := readJSON(r, &in); err != nil || in.TermID == "" {
-		writeErr(w, http.StatusBadRequest, "term_id é obrigatório")
+		writeErr(w, http.StatusBadRequest, "term_id e obrigatorio")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -116,7 +116,7 @@ func (a *App) handleRecordConsent(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "membro ou termo não encontrado")
+			writeErr(w, http.StatusNotFound, "membro ou termo nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -142,7 +142,7 @@ func (a *App) handleExportMemberData(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "membro não encontrado")
+			writeErr(w, http.StatusNotFound, "membro nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -154,7 +154,7 @@ func (a *App) handleExportMemberData(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
-// ---- Anonimização ----
+// ---- Anonimizacao ----
 
 func (a *App) handleAnonymizeMember(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -172,7 +172,7 @@ func (a *App) handleAnonymizeMember(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "membro não encontrado")
+			writeErr(w, http.StatusNotFound, "membro nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())

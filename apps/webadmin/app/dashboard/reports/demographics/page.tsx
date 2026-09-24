@@ -8,8 +8,8 @@ export default function DemographicsReportPage() {
   return (
     <div className="page">
       <PageHeader
-        title="Demográficos"
-        description="Pirâmide etária, situação no Rol, estado civil e distribuição geográfica"
+        title="Demograficos"
+        description="Piramide etaria, situacao no Rol, estado civil e distribuicao geografica"
         actions={
           <ExportButtons
             path="/api/v1/reports/demographics/export"

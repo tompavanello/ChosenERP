@@ -23,13 +23,13 @@ type NavItem = {
   perms: string[];
 };
 
-// Seções do menu. "Famílias" saiu daqui: a gestão de família passou a viver
-// dentro do cadastro do membro (aba Família).
+// Secoes do menu. "Familias" saiu daqui: a gestao de familia passou a viver
+// dentro do cadastro do membro (aba Familia).
 const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
   {
     title: null,
     items: [
-      { key: "overview", href: "/dashboard", label: "Visão Geral", icon: LayoutDashboard, perms: [] },
+      { key: "overview", href: "/dashboard", label: "Visao Geral", icon: LayoutDashboard, perms: [] },
     ],
   },
   {
@@ -49,30 +49,30 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
     ],
   },
   {
-    title: "Organização",
+    title: "Organizacao",
     items: [
-      { key: "ministries", href: "/dashboard/ministries", label: "Ministérios", icon: Church, perms: ["ministries.read"] },
+      { key: "ministries", href: "/dashboard/ministries", label: "Ministerios", icon: Church, perms: ["ministries.read"] },
       { key: "rosters", href: "/dashboard/rosters", label: "Escalas", icon: CalendarClock, perms: ["ministries.read"] },
       { key: "kids", href: "/dashboard/kids", label: "Kids", icon: Baby, perms: ["members.read"] },
       { key: "events", href: "/dashboard/events", label: "Eventos", icon: CalendarDays, perms: ["members.read"] },
-      { key: "governance", href: "/dashboard/governance", label: "Governança", icon: Gavel, perms: ["governance.read"] },
-      { key: "users", href: "/dashboard/users", label: "Usuários", icon: UserCog, perms: ["users.read"] },
-      { key: "settings", href: "/dashboard/settings", label: "Configurações", icon: Settings, perms: ["settings.read"] },
+      { key: "governance", href: "/dashboard/governance", label: "Governanca", icon: Gavel, perms: ["governance.read"] },
+      { key: "users", href: "/dashboard/users", label: "Usuarios", icon: UserCog, perms: ["users.read"] },
+      { key: "settings", href: "/dashboard/settings", label: "Configuracoes", icon: Settings, perms: ["settings.read"] },
       { key: "announcements", href: "/dashboard/announcements", label: "Comunicados", icon: Bell, perms: [] },
     ],
   },
   {
-    title: "Relatórios",
+    title: "Relatorios",
     items: [
       { key: "rep-balance", href: "/dashboard/reports/balance", label: "Balancete mensal", icon: BarChart3, perms: ["finance.read"] },
       { key: "rep-dre", href: "/dashboard/reports/dre", label: "DRE", icon: TrendingUp, perms: ["finance.read"] },
       { key: "rep-statement", href: "/dashboard/reports/monthly-statement", label: "Demonstrativo Mensal", icon: FileSpreadsheet, perms: ["finance.read"] },
       { key: "rep-assembly", href: "/dashboard/reports/assembly", label: "Demonstrativo (Assembleia)", icon: FileSpreadsheet, perms: ["finance.read"] },
       { key: "rep-audit", href: "/dashboard/reports/audit", label: "Auditoria financeira", icon: ShieldCheck, perms: ["finance.read"] },
-      { key: "rep-inc-exp", href: "/dashboard/reports/income-expense", label: "Entradas × Saídas", icon: ArrowLeftRight, perms: ["finance.read"] },
+      { key: "rep-inc-exp", href: "/dashboard/reports/income-expense", label: "Entradas x Saidas", icon: ArrowLeftRight, perms: ["finance.read"] },
       { key: "rep-consolidated", href: "/dashboard/reports/consolidated", label: "Consolidado Sede > Filiais", icon: Building2, perms: ["finance.read"] },
       { key: "rep-birthdays", href: "/dashboard/reports/birthdays", label: "Aniversariantes", icon: Cake, perms: ["members.read"] },
-      { key: "rep-demographics", href: "/dashboard/reports/demographics", label: "Demográficos", icon: PieChart, perms: ["members.read"] },
+      { key: "rep-demographics", href: "/dashboard/reports/demographics", label: "Demograficos", icon: PieChart, perms: ["members.read"] },
     ],
   },
 ];
@@ -86,17 +86,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [branchCtx, setBranchCtx] = useState("");
   useEffect(() => setBranchCtx(getBranchContext()), []);
   const isHQ = user?.role === "super_admin" || user?.role === "admin_sede";
-  // Igrejas da identidade: o switcher só aparece quando há mais de uma.
+  // Igrejas da identidade: o switcher so aparece quando ha mais de uma.
   const memberships = (user?.memberships ?? []).filter((m) => m.is_active);
 
-  // Seções do menu recolhíveis (persistidas por navegador).
+  // Secoes do menu recolhiveis (persistidas por navegador).
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   useEffect(() => {
     try {
       const raw = localStorage.getItem("chosen_nav_collapsed");
       if (raw) setCollapsed(JSON.parse(raw));
     } catch {
-      /* ignora storage inválido */
+      /* ignora storage invalido */
     }
   }, []);
   function toggleSection(title: string) {
@@ -120,7 +120,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!ready) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-zinc-500">
-        Carregando sessão...
+        Carregando sessao...
       </div>
     );
   }
@@ -131,7 +131,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     branchData?.branches.find((b) => b.id === user.branch_id)?.name ??
     (user.branch_id ? null : "Sede");
 
-  // Item ativo também nas sub-rotas (/dashboard/members/123 destaca "Membros").
+  // Item ativo tambem nas sub-rotas (/dashboard/members/123 destaca "Membros").
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 
@@ -212,7 +212,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen">
-      {/* Sidebar fixa: antes ela rolava junto com o conteúdo da página. */}
+      {/* Sidebar fixa: antes ela rolava junto com o conteudo da pagina. */}
       <div className="sticky top-0 hidden h-screen lg:block">{Sidebar}</div>
 
       {mobileOpen && (
@@ -253,7 +253,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   setBranchContext(e.target.value);
                   window.location.reload();
                 }}
-                title="Filial de trabalho (lançamentos e consultas)"
+                title="Filial de trabalho (lancamentos e consultas)"
                 className="hidden rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-600 sm:block dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
               >
                 <option value="all">Sede (todas as filiais)</option>

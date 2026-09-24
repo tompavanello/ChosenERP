@@ -1,5 +1,5 @@
 -- 000006_finance.up.sql
--- Plano de contas, transações (append-only), repasses e documentos
+-- Plano de contas, transacoes (append-only), repasses e documentos
 
 CREATE TABLE financial_categories (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -13,7 +13,7 @@ CREATE TABLE financial_categories (
     created_at    timestamptz NOT NULL DEFAULT now()
 );
 
--- Lançamentos financeiros: APPEND-ONLY (imutável), com hash-chain
+-- Lancamentos financeiros: APPEND-ONLY (imutavel), com hash-chain
 CREATE TABLE financial_transactions (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id     uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -42,7 +42,7 @@ CREATE TABLE transfers (
     to_branch_id  uuid NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
     financial_transaction_id uuid REFERENCES financial_transactions(id) ON DELETE SET NULL,
     amount        numeric(14,2) NOT NULL CHECK (amount >= 0),
-    rule_name     text, -- ex.: "10% sede", "5% missões"
+    rule_name     text, -- ex.: "10% sede", "5% missoes"
     executed_at   timestamptz NOT NULL DEFAULT now()
 );
 
@@ -90,7 +90,7 @@ BEGIN
             NEW.type || '|' || NEW.amount::text || '|' || NEW.currency || '|' ||
             COALESCE(NEW.donor_member_id::text,'') || '|' || COALESCE(NEW.benefactor_id::text,'') || '|' ||
             NEW.payment_method || '|' || NEW.occurred_at::text || '|' || COALESCE(NEW.description,'');
-    -- Chain cronológico dentro do TENANT (created_at, id) — evita vazamento cross-tenant
+    -- Chain cronologico dentro do TENANT (created_at, id) - evita vazamento cross-tenant
     NEW.prev_hash := (SELECT hash FROM financial_transactions
                       WHERE tenant_id = NEW.tenant_id
                         AND (created_at, id) < (NEW.created_at, NEW.id)

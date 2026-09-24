@@ -1,22 +1,22 @@
 -- 000020_cargos.up.sql
--- Cargos (funções/ministérios) customizáveis pela igreja + vínculo do membro
+-- Cargos (funcoes/ministerios) customizaveis pela igreja + vinculo do membro
 -- com controle de mandato.
 --
 -- Atende o CAD100 do cliente:
---   1.3 Função/Ministério — "o sistema deverá permitir que um mesmo membro
---       possua MAIS DE UMA função/ministério, quando aplicável".
---   1.4 Controle de mandato — data de início, data de vencimento e situação
+--   1.3 Funcao/Ministerio - "o sistema devera permitir que um mesmo membro
+--       possua MAIS DE UMA funcao/ministerio, quando aplicavel".
+--   1.4 Controle de mandato - data de inicio, data de vencimento e situacao
 --       (Ativo / Encerrado).
 --
--- Antes disso existia apenas `members.office`, um texto livre com um único
--- valor por membro (diacono, presbitero, evangelista...). A coluna é mantida
--- como legado (código antigo ainda a lê) mas a fonte de verdade passa a ser
+-- Antes disso existia apenas `members.office`, um texto livre com um unico
+-- valor por membro (diacono, presbitero, evangelista...). A coluna e mantida
+-- como legado (codigo antigo ainda a le) mas a fonte de verdade passa a ser
 -- `member_cargos`; o backfill abaixo migra os valores existentes.
 
 CREATE TABLE cargos (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id     uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    -- NULL = cargo global do tenant (catálogo da Sede, visível a todas as filiais).
+    -- NULL = cargo global do tenant (catalogo da Sede, visivel a todas as filiais).
     branch_id     uuid REFERENCES branches(id) ON DELETE SET NULL,
     name          text NOT NULL,
     slug          text NOT NULL,
@@ -28,9 +28,9 @@ CREATE TABLE cargos (
     CONSTRAINT cargos_kind_check CHECK (kind IN ('eclesiastico','lideranca','ensino','apoio','outro'))
 );
 
--- Slug único por tenant: é a chave estável usada no backfill de members.office.
+-- Slug unico por tenant: e a chave estavel usada no backfill de members.office.
 CREATE UNIQUE INDEX uq_cargos_tenant_slug ON cargos(tenant_id, slug);
--- Evita dois rótulos iguais ("Pastor" duplicado) poluindo os badges.
+-- Evita dois rotulos iguais ("Pastor" duplicado) poluindo os badges.
 CREATE UNIQUE INDEX uq_cargos_tenant_name ON cargos(tenant_id, name);
 CREATE INDEX idx_cargos_tenant ON cargos(tenant_id);
 CREATE INDEX idx_cargos_branch ON cargos(branch_id);
@@ -48,9 +48,9 @@ CREATE TABLE member_cargos (
     CONSTRAINT member_cargos_period_check CHECK (ends_at IS NULL OR started_at IS NULL OR ends_at >= started_at)
 );
 
--- Reeleição é permitida (mesmo cargo em mandatos distintos, com datas
--- diferentes), mas não duas vezes no mesmo mandato. NULL não colide em UNIQUE,
--- por isso os índices parciais abaixo.
+-- Reeleicao e permitida (mesmo cargo em mandatos distintos, com datas
+-- diferentes), mas nao duas vezes no mesmo mandato. NULL nao colide em UNIQUE,
+-- por isso os indices parciais abaixo.
 CREATE UNIQUE INDEX uq_member_cargos_dated
     ON member_cargos(member_id, cargo_id, started_at) WHERE started_at IS NOT NULL;
 CREATE UNIQUE INDEX uq_member_cargos_open
@@ -62,10 +62,10 @@ CREATE INDEX idx_member_cargos_cargo ON member_cargos(cargo_id);
 -- ---------------------------------------------------------------------------
 -- RLS
 -- ---------------------------------------------------------------------------
--- cargos tem tenant_id + branch_id: o teste genérico
+-- cargos tem tenant_id + branch_id: o teste generico
 -- TestRLS_NoCrossTenantReadForAnyTable / NoCrossBranchReadForAnyTable varre
 -- essas tabelas automaticamente, e TestRLS_AllTenantScopedTablesHaveRLS exige
--- relrowsecurity ligado (senão a suíte falha).
+-- relrowsecurity ligado (senao a suite falha).
 ALTER TABLE cargos ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY cargos_sel ON cargos
@@ -78,16 +78,16 @@ CREATE POLICY cargos_upd ON cargos
 CREATE POLICY cargos_del ON cargos
   FOR DELETE USING (rls_write(tenant_id, branch_id, true));
 
--- member_cargos não tem tenant_id próprio: herda o escopo do membro, igual a
--- member_relationships (política rels_all da migração 000016).
+-- member_cargos nao tem tenant_id proprio: herda o escopo do membro, igual a
+-- member_relationships (politica rels_all da migracao 000016).
 ALTER TABLE member_cargos ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY member_cargos_sel ON member_cargos
   FOR SELECT USING (EXISTS (
     SELECT 1 FROM members m WHERE m.id = member_id AND rls_read(m.tenant_id, m.branch_id, false)
   ));
--- O WITH CHECK valida TAMBÉM o cargo: as checagens de FK rodam como dono da
--- tabela e não passam por RLS, então sem este EXISTS seria possível vincular um
+-- O WITH CHECK valida TAMBEM o cargo: as checagens de FK rodam como dono da
+-- tabela e nao passam por RLS, entao sem este EXISTS seria possivel vincular um
 -- membro do tenant X a um cargo do tenant Y.
 CREATE POLICY member_cargos_all ON member_cargos
   USING (EXISTS (SELECT 1 FROM members m WHERE m.id = member_id AND rls_write(m.tenant_id, m.branch_id, false)))
@@ -97,8 +97,8 @@ CREATE POLICY member_cargos_all ON member_cargos
   );
 
 -- ---------------------------------------------------------------------------
--- Catálogo inicial de cargos (requisito 1.3) para todo tenant existente.
--- Os slugs de diacono/presbitero/evangelista/pastor/missionario são os mesmos
+-- Catalogo inicial de cargos (requisito 1.3) para todo tenant existente.
+-- Os slugs de diacono/presbitero/evangelista/pastor/missionario sao os mesmos
 -- do antigo members.office, para o backfill encontrar a linha.
 -- ---------------------------------------------------------------------------
 INSERT INTO cargos (tenant_id, branch_id, name, slug, kind, requires_term, sort_order)
@@ -106,21 +106,21 @@ SELECT t.id, NULL, v.name, v.slug, v.kind, v.requires_term, v.sort_order
 FROM tenants t
 CROSS JOIN (VALUES
     ('Pastor',                'pastor',              'eclesiastico', true,  10),
-    ('Presbítero',            'presbitero',          'eclesiastico', true,  20),
-    ('Diácono',               'diacono',             'eclesiastico', true,  30),
+    ('Presbitero',            'presbitero',          'eclesiastico', true,  20),
+    ('Diacono',               'diacono',             'eclesiastico', true,  30),
     ('Evangelista',           'evangelista',         'eclesiastico', true,  40),
-    ('Missionário',           'missionario',         'eclesiastico', false, 50),
-    ('Líder de Jovens',       'lider_jovens',        'lideranca',    false, 60),
-    ('Líder de Louvor',       'lider_louvor',        'lideranca',    false, 70),
-    ('Líder de Pequeno Grupo','lider_pequeno_grupo', 'lideranca',    false, 80),
+    ('Missionario',           'missionario',         'eclesiastico', false, 50),
+    ('Lider de Jovens',       'lider_jovens',        'lideranca',    false, 60),
+    ('Lider de Louvor',       'lider_louvor',        'lideranca',    false, 70),
+    ('Lider de Pequeno Grupo','lider_pequeno_grupo', 'lideranca',    false, 80),
     ('Professor',             'professor',           'ensino',       false, 90),
     ('Outro',                 'outro',               'outro',        false, 999)
 ) AS v(name, slug, kind, requires_term, sort_order)
 ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
--- Backfill: cada members.office existente vira um vínculo ativo, preservando
--- o que já estava cadastrado.
+-- Backfill: cada members.office existente vira um vinculo ativo, preservando
+-- o que ja estava cadastrado.
 -- ---------------------------------------------------------------------------
 INSERT INTO member_cargos (member_id, cargo_id, status)
 SELECT m.id, c.id, 'ativo'
@@ -129,14 +129,14 @@ JOIN cargos c ON c.tenant_id = m.tenant_id AND c.slug = m.office
 WHERE m.office IS NOT NULL AND btrim(m.office) <> '';
 
 -- ---------------------------------------------------------------------------
--- Carteirinha: no máximo UMA por membro.
+-- Carteirinha: no maximo UMA por membro.
 -- Antes, cada clique em "Emitir" inseria uma linha nova com um qr_token novo, e
--- o número exibido não identificava ninguém. O índice único abaixo é o que
--- torna a emissão idempotente (ON CONFLICT DO NOTHING em finance.IssueMembershipCard).
+-- o numero exibido nao identificava ninguem. O indice unico abaixo e o que
+-- torna a emissao idempotente (ON CONFLICT DO NOTHING em finance.IssueMembershipCard).
 -- ---------------------------------------------------------------------------
--- Duplicatas pré-existentes: mantém a mais recente de cada membro. As entregas
--- pendentes são reapontadas ANTES do DELETE — document_deliveries tem
--- ON DELETE CASCADE e o envio sumiria em silêncio.
+-- Duplicatas pre-existentes: mantem a mais recente de cada membro. As entregas
+-- pendentes sao reapontadas ANTES do DELETE - document_deliveries tem
+-- ON DELETE CASCADE e o envio sumiria em silencio.
 WITH keeper AS (
     SELECT DISTINCT ON (member_id) member_id, id
     FROM documents
@@ -163,7 +163,7 @@ CREATE UNIQUE INDEX uq_documents_membership_card_per_member
     ON documents(member_id)
     WHERE kind = 'membership_card' AND member_id IS NOT NULL;
 
--- qr_token é a capability do endpoint público (ResolveCard usa WHERE qr_token = $1):
+-- qr_token e a capability do endpoint publico (ResolveCard usa WHERE qr_token = $1):
 -- um token duplicado resolveria a carteirinha de OUTRA pessoa.
 UPDATE documents SET qr_token = encode(gen_random_bytes(16), 'hex')
 WHERE qr_token IS NOT NULL
@@ -178,19 +178,19 @@ CREATE UNIQUE INDEX uq_documents_qr_token
     WHERE qr_token IS NOT NULL;
 
 -- ---------------------------------------------------------------------------
--- Código da família (#001, #002...), como na planilha do cliente
--- ("Família AMARAL #001"). A coluna é text com zero à esquerda porque é
--- rótulo de exibição, não número de ordenação.
+-- Codigo da familia (#001, #002...), como na planilha do cliente
+-- ("Familia AMARAL #001"). A coluna e text com zero a esquerda porque e
+-- rotulo de exibicao, nao numero de ordenacao.
 -- ---------------------------------------------------------------------------
 ALTER TABLE families ADD COLUMN code text;
 
--- Numera as famílias já existentes por tenant, em ordem de criação.
+-- Numera as familias ja existentes por tenant, em ordem de criacao.
 UPDATE families f SET code = n.code
 FROM (
     SELECT id, lpad((row_number() OVER (PARTITION BY tenant_id ORDER BY created_at, id))::text, 3, '0') AS code
     FROM families
 ) n WHERE n.id = f.id;
 
--- Duas famílias "001" no mesmo tenant tornariam o código inútil como
--- identificador; o índice é por tenant, então tenants distintos não colidem.
+-- Duas familias "001" no mesmo tenant tornariam o codigo inutil como
+-- identificador; o indice e por tenant, entao tenants distintos nao colidem.
 CREATE UNIQUE INDEX uq_families_tenant_code ON families(tenant_id, code) WHERE code IS NOT NULL;

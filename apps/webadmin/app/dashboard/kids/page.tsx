@@ -31,11 +31,11 @@ import {
 
 const TABS = [
   { key: "classes", label: "Turmas", icon: <Users className="h-4 w-4" /> },
-  { key: "content", label: "Conteúdo", icon: <BookOpen className="h-4 w-4" /> },
+  { key: "content", label: "Conteudo", icon: <BookOpen className="h-4 w-4" /> },
   { key: "participants", label: "Participantes", icon: <Baby className="h-4 w-4" /> },
   { key: "sessions", label: "Encontros", icon: <CalendarDays className="h-4 w-4" /> },
   { key: "checkin", label: "Check-in", icon: <ClipboardCheck className="h-4 w-4" /> },
-  { key: "evolution", label: "Evolução", icon: <TrendingUp className="h-4 w-4" /> },
+  { key: "evolution", label: "Evolucao", icon: <TrendingUp className="h-4 w-4" /> },
 ];
 
 function ageFrom(birth?: string): number | null {
@@ -134,7 +134,7 @@ export default function KidsPage() {
 
   return (
     <div className="page space-y-6">
-      <PageHeader title="Ministério Infantil (Kids)" description="Trilha, turmas, participantes, check-in e evolução" />
+      <PageHeader title="Ministerio Infantil (Kids)" description="Trilha, turmas, participantes, check-in e evolucao" />
       <Tabs tabs={TABS} active={tab} onChange={setTab} />
 
       {tab === "classes" && (
@@ -202,8 +202,8 @@ function ClassesTab({ classes, tracks, members, reload, toast }: {
     } catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
   async function remove(c: KidClass) {
-    if (!confirm(`Excluir a turma "${c.name}"? Matrículas e encontros serão removidos.`)) return;
-    try { await deleteKidClass(c.id); toast("Turma excluída."); await reload(); }
+    if (!confirm(`Excluir a turma "${c.name}"? Matriculas e encontros serao removidos.`)) return;
+    try { await deleteKidClass(c.id); toast("Turma excluida."); await reload(); }
     catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
 
@@ -213,19 +213,19 @@ function ClassesTab({ classes, tracks, members, reload, toast }: {
         <Button onClick={openNew}><Plus className="h-4 w-4" /> Nova Turma</Button>
       </div>
       {classes.length === 0 ? (
-        <EmptyState icon={<Users className="h-10 w-10" />} title="Nenhuma turma" description="Crie a primeira turma do ministério infantil." />
+        <EmptyState icon={<Users className="h-10 w-10" />} title="Nenhuma turma" description="Crie a primeira turma do ministerio infantil." />
       ) : (
         <Card className="overflow-hidden p-0">
           <Table>
-            <THead><TRow><TH>Turma</TH><TH>Faixa</TH><TH>Trilha</TH><TH>Sala</TH><TH>Líder</TH><TH>Ativos</TH><TH>Status</TH><TH className="text-right">Ações</TH></TRow></THead>
+            <THead><TRow><TH>Turma</TH><TH>Faixa</TH><TH>Trilha</TH><TH>Sala</TH><TH>Lider</TH><TH>Ativos</TH><TH>Status</TH><TH className="text-right">Acoes</TH></TRow></THead>
             <TBody>
               {classes.map((c) => (
                 <TRow key={c.id}>
                   <TD className="font-medium">{c.name}</TD>
                   <TD className="text-zinc-500">{ageLabel(c.age_min, c.age_max)}</TD>
-                  <TD className="text-zinc-500">{c.track_name || "—"}</TD>
-                  <TD className="text-zinc-500">{c.room || "—"}</TD>
-                  <TD className="text-zinc-500">{c.leader_name || "—"}</TD>
+                  <TD className="text-zinc-500">{c.track_name || "-"}</TD>
+                  <TD className="text-zinc-500">{c.room || "-"}</TD>
+                  <TD className="text-zinc-500">{c.leader_name || "-"}</TD>
                   <TD>{c.enrollment_count}</TD>
                   <TD>{c.is_active ? <Badge tone="green">Ativa</Badge> : <Badge tone="zinc">Inativa</Badge>}</TD>
                   <TD className="text-right">
@@ -245,10 +245,10 @@ function ClassesTab({ classes, tracks, members, reload, toast }: {
         <form onSubmit={save} className="space-y-3">
           <Field label="Nome *"><Input required value={String(form.name ?? "")} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Idade mín."><Input type="number" min={0} value={String(form.age_min ?? "")} onChange={(e) => setForm({ ...form, age_min: e.target.value })} /></Field>
-            <Field label="Idade máx."><Input type="number" min={0} value={String(form.age_max ?? "")} onChange={(e) => setForm({ ...form, age_max: e.target.value })} /></Field>
+            <Field label="Idade min."><Input type="number" min={0} value={String(form.age_min ?? "")} onChange={(e) => setForm({ ...form, age_min: e.target.value })} /></Field>
+            <Field label="Idade max."><Input type="number" min={0} value={String(form.age_max ?? "")} onChange={(e) => setForm({ ...form, age_max: e.target.value })} /></Field>
           </div>
-          <Field label="Trilha (currículo)">
+          <Field label="Trilha (curriculo)">
             <select className="input w-full" value={String(form.track_id ?? "")} onChange={(e) => setForm({ ...form, track_id: e.target.value })}>
               <option value="">Sem trilha</option>
               {tracks.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -262,9 +262,9 @@ function ClassesTab({ classes, tracks, members, reload, toast }: {
               </select>
             </Field>
           )}
-          <Field label="Líder">
+          <Field label="Lider">
             <select className="input w-full" value={String(form.leader_member_id ?? "")} onChange={(e) => setForm({ ...form, leader_member_id: e.target.value })}>
-              <option value="">—</option>
+              <option value="">-</option>
               {members.map((m) => <option key={m.id} value={m.id}>{m.full_name}</option>)}
             </select>
           </Field>
@@ -282,14 +282,14 @@ function ClassesTab({ classes, tracks, members, reload, toast }: {
 }
 
 function ageLabel(min?: number, max?: number): string {
-  if (min == null && max == null) return "—";
-  if (min != null && max != null) return `${min}–${max} anos`;
+  if (min == null && max == null) return "-";
+  if (min != null && max != null) return `${min}-${max} anos`;
   if (min != null) return `${min}+ anos`;
-  return `até ${max} anos`;
+  return `ate ${max} anos`;
 }
 
 // ---------------------------------------------------------------------------
-// Conteúdo
+// Conteudo
 // ---------------------------------------------------------------------------
 
 function ContentTab({ tracks, trackId, setTrackId, lessons, reloadTracks, reloadLessons, toast }: {
@@ -313,8 +313,8 @@ function ContentTab({ tracks, trackId, setTrackId, lessons, reloadTracks, reload
     } catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
   async function removeTrack(t: KidTrack) {
-    if (!confirm(`Excluir a trilha "${t.name}" e suas lições?`)) return;
-    try { await deleteKidTrack(t.id); toast("Trilha excluída."); setTrackId(""); await reloadTracks(); }
+    if (!confirm(`Excluir a trilha "${t.name}" e suas licoes?`)) return;
+    try { await deleteKidTrack(t.id); toast("Trilha excluida."); setTrackId(""); await reloadTracks(); }
     catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
   async function saveLesson(e: React.FormEvent) {
@@ -323,13 +323,13 @@ function ContentTab({ tracks, trackId, setTrackId, lessons, reloadTracks, reload
     try {
       if (lessonForm.id) await updateKidLesson(String(lessonForm.id), lessonForm);
       else await createKidLesson(trackId, lessonForm);
-      toast("Lição salva.");
+      toast("Licao salva.");
       setLessonOpen(false);
       await reloadLessons(trackId);
     } catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
   async function removeLesson(l: KidLesson) {
-    if (!confirm(`Excluir a lição "${l.title}"?`)) return;
+    if (!confirm(`Excluir a licao "${l.title}"?`)) return;
     try { await deleteKidLesson(l.id); await reloadLessons(trackId); }
     catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
@@ -359,23 +359,23 @@ function ContentTab({ tracks, trackId, setTrackId, lessons, reloadTracks, reload
 
       <Card className="p-3">
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-semibold">Lições {trackId ? "da trilha" : ""}</p>
+          <p className="text-sm font-semibold">Licoes {trackId ? "da trilha" : ""}</p>
           <Button size="sm" onClick={() => { setLessonForm({ position: "", title: "", objective: "", verse: "", content: "", materials: "" }); setLessonOpen(true); }} disabled={!trackId}>
-            <Plus className="h-4 w-4" /> Lição
+            <Plus className="h-4 w-4" /> Licao
           </Button>
         </div>
         {lessons.length === 0 ? (
-          <p className="px-2 py-6 text-center text-sm text-zinc-500">Nenhuma lição. Crie a primeira.</p>
+          <p className="px-2 py-6 text-center text-sm text-zinc-500">Nenhuma licao. Crie a primeira.</p>
         ) : (
           <Table>
-            <THead><TRow><TH className="w-10">#</TH><TH>Título</TH><TH>Objetivo</TH><TH>Versículo</TH><TH className="text-right">Ações</TH></TRow></THead>
+            <THead><TRow><TH className="w-10">#</TH><TH>Titulo</TH><TH>Objetivo</TH><TH>Versiculo</TH><TH className="text-right">Acoes</TH></TRow></THead>
             <TBody>
               {lessons.map((l) => (
                 <TRow key={l.id}>
                   <TD className="text-zinc-400">{l.position}</TD>
                   <TD className="font-medium">{l.title}</TD>
-                  <TD className="text-zinc-500 line-clamp-1 max-w-xs">{l.objective || "—"}</TD>
-                  <TD className="text-zinc-500">{l.verse || "—"}</TD>
+                  <TD className="text-zinc-500 line-clamp-1 max-w-xs">{l.objective || "-"}</TD>
+                  <TD className="text-zinc-500">{l.verse || "-"}</TD>
                   <TD className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button size="sm" variant="ghost" onClick={() => { setLessonForm({ id: l.id, position: l.position, title: l.title, objective: l.objective, verse: l.verse, content: l.content, materials: l.materials }); setLessonOpen(true); }}><Pencil className="h-3 w-3" /></Button>
@@ -392,25 +392,25 @@ function ContentTab({ tracks, trackId, setTrackId, lessons, reloadTracks, reload
       <Drawer open={trackOpen} onClose={() => setTrackOpen(false)} title={trackForm.id ? "Editar Trilha" : "Nova Trilha"}>
         <form onSubmit={saveTrack} className="space-y-3">
           <Field label="Nome *"><Input required value={String(trackForm.name ?? "")} onChange={(e) => setTrackForm({ ...trackForm, name: e.target.value })} /></Field>
-          <Field label="Descrição"><Textarea rows={3} value={String(trackForm.description ?? "")} onChange={(e) => setTrackForm({ ...trackForm, description: e.target.value })} /></Field>
+          <Field label="Descricao"><Textarea rows={3} value={String(trackForm.description ?? "")} onChange={(e) => setTrackForm({ ...trackForm, description: e.target.value })} /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Idade mín."><Input type="number" min={0} value={String(trackForm.age_min ?? "")} onChange={(e) => setTrackForm({ ...trackForm, age_min: e.target.value })} /></Field>
-            <Field label="Idade máx."><Input type="number" min={0} value={String(trackForm.age_max ?? "")} onChange={(e) => setTrackForm({ ...trackForm, age_max: e.target.value })} /></Field>
+            <Field label="Idade min."><Input type="number" min={0} value={String(trackForm.age_min ?? "")} onChange={(e) => setTrackForm({ ...trackForm, age_min: e.target.value })} /></Field>
+            <Field label="Idade max."><Input type="number" min={0} value={String(trackForm.age_max ?? "")} onChange={(e) => setTrackForm({ ...trackForm, age_max: e.target.value })} /></Field>
           </div>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4" checked={!!trackForm.is_active} onChange={(e) => setTrackForm({ ...trackForm, is_active: e.target.checked })} /> Ativa</label>
           <div className="flex justify-end gap-2 pt-2"><Button variant="ghost" type="button" onClick={() => setTrackOpen(false)}>Cancelar</Button><Button type="submit">Salvar</Button></div>
         </form>
       </Drawer>
 
-      <Drawer open={lessonOpen} onClose={() => setLessonOpen(false)} title={lessonForm.id ? "Editar Lição" : "Nova Lição"} size="xl">
+      <Drawer open={lessonOpen} onClose={() => setLessonOpen(false)} title={lessonForm.id ? "Editar Licao" : "Nova Licao"} size="xl">
         <form onSubmit={saveLesson} className="space-y-3">
           <div className="grid grid-cols-[100px_1fr] gap-3">
             <Field label="Ordem"><Input type="number" min={1} value={String(lessonForm.position ?? "")} onChange={(e) => setLessonForm({ ...lessonForm, position: e.target.value })} /></Field>
-            <Field label="Título *"><Input required value={String(lessonForm.title ?? "")} onChange={(e) => setLessonForm({ ...lessonForm, title: e.target.value })} /></Field>
+            <Field label="Titulo *"><Input required value={String(lessonForm.title ?? "")} onChange={(e) => setLessonForm({ ...lessonForm, title: e.target.value })} /></Field>
           </div>
           <Field label="Objetivo"><Input value={String(lessonForm.objective ?? "")} onChange={(e) => setLessonForm({ ...lessonForm, objective: e.target.value })} /></Field>
-          <Field label="Versículo"><Input value={String(lessonForm.verse ?? "")} onChange={(e) => setLessonForm({ ...lessonForm, verse: e.target.value })} /></Field>
-          <Field label="Conteúdo / roteiro"><Textarea rows={5} value={String(lessonForm.content ?? "")} onChange={(e) => setLessonForm({ ...lessonForm, content: e.target.value })} /></Field>
+          <Field label="Versiculo"><Input value={String(lessonForm.verse ?? "")} onChange={(e) => setLessonForm({ ...lessonForm, verse: e.target.value })} /></Field>
+          <Field label="Conteudo / roteiro"><Textarea rows={5} value={String(lessonForm.content ?? "")} onChange={(e) => setLessonForm({ ...lessonForm, content: e.target.value })} /></Field>
           <Field label="Materiais"><Textarea rows={2} value={String(lessonForm.materials ?? "")} onChange={(e) => setLessonForm({ ...lessonForm, materials: e.target.value })} /></Field>
           <div className="flex justify-end gap-2 pt-2"><Button variant="ghost" type="button" onClick={() => setLessonOpen(false)}>Cancelar</Button><Button type="submit">Salvar</Button></div>
         </form>
@@ -438,14 +438,14 @@ function ParticipantsTab({ classes, classId, setClassId, enrollments, members, r
     try {
       if (form.id) await updateKidEnrollment(String(form.id), form);
       else await createKidEnrollment(classId, form);
-      toast("Matrícula salva.");
+      toast("Matricula salva.");
       setOpen(false);
       reload();
     } catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
   async function remove(en: KidEnrollment) {
     if (!confirm(`Remover ${en.member_name} da turma?`)) return;
-    try { await deleteKidEnrollment(en.id); toast("Matrícula removida."); reload(); }
+    try { await deleteKidEnrollment(en.id); toast("Matricula removida."); reload(); }
     catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
   async function openGuardians(en: KidEnrollment) {
@@ -457,7 +457,7 @@ function ParticipantsTab({ classes, classId, setClassId, enrollments, members, r
   async function addG(e: React.FormEvent) {
     e.preventDefault();
     if (!guardianFor) return;
-    if (!gForm.member_id) { toast("Selecione o responsável.", "error"); return; }
+    if (!gForm.member_id) { toast("Selecione o responsavel.", "error"); return; }
     try {
       await addKidGuardian(guardianFor.id, gForm);
       setGuardians((await listKidGuardians(guardianFor.id)).guardians);
@@ -485,22 +485,22 @@ function ParticipantsTab({ classes, classId, setClassId, enrollments, members, r
       </div>
 
       {enrollments.length === 0 ? (
-        <EmptyState icon={<Baby className="h-10 w-10" />} title="Nenhuma criança" description="Matricule crianças nesta turma." />
+        <EmptyState icon={<Baby className="h-10 w-10" />} title="Nenhuma crianca" description="Matricule criancas nesta turma." />
       ) : (
         <Card className="overflow-hidden p-0">
           <Table>
-            <THead><TRow><TH>Criança</TH><TH>Idade</TH><TH>Status</TH><TH>Responsáveis</TH><TH>Restrição alimentar</TH><TH className="text-right">Ações</TH></TRow></THead>
+            <THead><TRow><TH>Crianca</TH><TH>Idade</TH><TH>Status</TH><TH>Responsaveis</TH><TH>Restricao alimentar</TH><TH className="text-right">Acoes</TH></TRow></THead>
             <TBody>
               {enrollments.map((en) => (
                 <TRow key={en.id}>
                   <TD className="font-medium">{en.member_name}</TD>
-                  <TD className="text-zinc-500">{ageFrom(en.birth_date) ?? "—"}</TD>
+                  <TD className="text-zinc-500">{ageFrom(en.birth_date) ?? "-"}</TD>
                   <TD><Badge tone={en.status === "active" ? "green" : en.status === "paused" ? "amber" : "zinc"}>{en.status === "active" ? "Ativa" : en.status === "paused" ? "Pausada" : "Encerrada"}</Badge></TD>
                   <TD>{en.guardians_count}</TD>
-                  <TD className="text-zinc-500">{en.dietary_restrictions || "—"}</TD>
+                  <TD className="text-zinc-500">{en.dietary_restrictions || "-"}</TD>
                   <TD className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button size="sm" variant="outline" onClick={() => openGuardians(en)}><Users className="h-3 w-3" /> Responsáveis</Button>
+                      <Button size="sm" variant="outline" onClick={() => openGuardians(en)}><Users className="h-3 w-3" /> Responsaveis</Button>
                       <Button size="sm" variant="ghost" onClick={() => { setForm({ id: en.id, status: en.status, start_date: en.start_date, dietary_restrictions: en.dietary_restrictions, notes: en.notes }); setOpen(true); }}><Pencil className="h-3 w-3" /></Button>
                       <Button size="sm" variant="ghost" onClick={() => remove(en)}><Trash2 className="h-3 w-3" /></Button>
                     </div>
@@ -512,13 +512,13 @@ function ParticipantsTab({ classes, classId, setClassId, enrollments, members, r
         </Card>
       )}
 
-      <Drawer open={open} onClose={() => setOpen(false)} title={form.id ? "Editar Matrícula" : "Matricular Criança"}>
+      <Drawer open={open} onClose={() => setOpen(false)} title={form.id ? "Editar Matricula" : "Matricular Crianca"}>
         <form onSubmit={save} className="space-y-3">
           {!form.id && (
-            <Field label="Criança (membro) *">
+            <Field label="Crianca (membro) *">
               <select required className="input w-full" value={String(form.member_id ?? "")} onChange={(e) => setForm({ ...form, member_id: e.target.value })}>
                 <option value="">Selecione...</option>
-                {members.map((m) => <option key={m.id} value={m.id}>{m.full_name}{m.birth_date ? ` · ${ageFrom(m.birth_date)}a` : ""}</option>)}
+                {members.map((m) => <option key={m.id} value={m.id}>{m.full_name}{m.birth_date ? ` - ${ageFrom(m.birth_date)}a` : ""}</option>)}
               </select>
             </Field>
           )}
@@ -528,33 +528,33 @@ function ParticipantsTab({ classes, classId, setClassId, enrollments, members, r
             </select>
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Início"><Input type="date" value={String(form.start_date ?? "")} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /></Field>
+            <Field label="Inicio"><Input type="date" value={String(form.start_date ?? "")} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /></Field>
             <Field label="Encerramento"><Input type="date" value={String(form.end_date ?? "")} onChange={(e) => setForm({ ...form, end_date: e.target.value })} /></Field>
           </div>
-          <Field label="Restrição alimentar / alergia"><Input value={String(form.dietary_restrictions ?? "")} onChange={(e) => setForm({ ...form, dietary_restrictions: e.target.value })} /></Field>
-          <Field label="Observações"><Textarea rows={2} value={String(form.notes ?? "")} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+          <Field label="Restricao alimentar / alergia"><Input value={String(form.dietary_restrictions ?? "")} onChange={(e) => setForm({ ...form, dietary_restrictions: e.target.value })} /></Field>
+          <Field label="Observacoes"><Textarea rows={2} value={String(form.notes ?? "")} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
           <div className="flex justify-end gap-2 pt-2"><Button variant="ghost" type="button" onClick={() => setOpen(false)}>Cancelar</Button><Button type="submit">Salvar</Button></div>
         </form>
       </Drawer>
 
-      <Modal open={!!guardianFor} onClose={() => setGuardianFor(null)} title={`Responsáveis · ${guardianFor?.member_name ?? ""}`}>
+      <Modal open={!!guardianFor} onClose={() => setGuardianFor(null)} title={`Responsaveis - ${guardianFor?.member_name ?? ""}`}>
         <div className="space-y-4">
           <Table>
-            <THead><TRow><TH>Responsável</TH><TH>Parentesco</TH><TH>Principal</TH><TH /></TRow></THead>
+            <THead><TRow><TH>Responsavel</TH><TH>Parentesco</TH><TH>Principal</TH><TH /></TRow></THead>
             <TBody>
               {guardians.map((g) => (
                 <TRow key={g.id}>
-                  <TD>{g.member_name}</TD><TD className="text-zinc-500">{g.relationship || "—"}</TD>
-                  <TD>{g.is_primary ? <Badge tone="sky">Principal</Badge> : "—"}</TD>
+                  <TD>{g.member_name}</TD><TD className="text-zinc-500">{g.relationship || "-"}</TD>
+                  <TD>{g.is_primary ? <Badge tone="sky">Principal</Badge> : "-"}</TD>
                   <TD className="text-right"><Button size="sm" variant="ghost" onClick={() => delG(g.id)}><X className="h-3 w-3" /></Button></TD>
                 </TRow>
               ))}
-              {guardians.length === 0 && <TRow><TD colSpan={4} className="text-center text-sm text-zinc-500">Nenhum responsável.</TD></TRow>}
+              {guardians.length === 0 && <TRow><TD colSpan={4} className="text-center text-sm text-zinc-500">Nenhum responsavel.</TD></TRow>}
             </TBody>
           </Table>
           <form onSubmit={addG} className="flex items-end gap-2">
             <Field label="Membro"><select className="input w-56" value={String(gForm.member_id ?? "")} onChange={(e) => setGForm({ ...gForm, member_id: e.target.value })}><option value="">Selecione...</option>{members.map((m) => <option key={m.id} value={m.id}>{m.full_name}</option>)}</select></Field>
-            <Field label="Parentesco"><Input className="w-32" value={String(gForm.relationship ?? "")} onChange={(e) => setGForm({ ...gForm, relationship: e.target.value })} placeholder="Mãe, Pai..." /></Field>
+            <Field label="Parentesco"><Input className="w-32" value={String(gForm.relationship ?? "")} onChange={(e) => setGForm({ ...gForm, relationship: e.target.value })} placeholder="Mae, Pai..." /></Field>
             <label className="mb-2 flex items-center gap-1 text-sm"><input type="checkbox" className="h-4 w-4" checked={!!gForm.is_primary} onChange={(e) => setGForm({ ...gForm, is_primary: e.target.checked })} /> Principal</label>
             <Button type="submit" className="mb-0.5"><Plus className="h-4 w-4" /> Add</Button>
           </form>
@@ -595,8 +595,8 @@ function SessionsTab({ classes, classId, setClassId, sessions, reload, openCheck
     } catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
   async function remove(s: KidSession) {
-    if (!confirm("Excluir este encontro? Os check-ins serão removidos.")) return;
-    try { await deleteKidSession(s.id); toast("Encontro excluído."); await reload(); }
+    if (!confirm("Excluir este encontro? Os check-ins serao removidos.")) return;
+    try { await deleteKidSession(s.id); toast("Encontro excluido."); await reload(); }
     catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
 
@@ -608,16 +608,16 @@ function SessionsTab({ classes, classId, setClassId, sessions, reload, openCheck
       </div>
 
       {sessions.length === 0 ? (
-        <EmptyState icon={<CalendarDays className="h-10 w-10" />} title="Nenhum encontro" description="Agende um encontro e faça a chamada." />
+        <EmptyState icon={<CalendarDays className="h-10 w-10" />} title="Nenhum encontro" description="Agende um encontro e faca a chamada." />
       ) : (
         <Card className="overflow-hidden p-0">
           <Table>
-            <THead><TRow><TH>Data/hora</TH><TH>Lição</TH><TH>Status</TH><TH>Presentes</TH><TH className="text-right">Ações</TH></TRow></THead>
+            <THead><TRow><TH>Data/hora</TH><TH>Licao</TH><TH>Status</TH><TH>Presentes</TH><TH className="text-right">Acoes</TH></TRow></THead>
             <TBody>
               {sessions.map((s) => (
                 <TRow key={s.id}>
                   <TD className="font-medium">{new Date(s.starts_at).toLocaleString("pt-BR")}</TD>
-                  <TD className="text-zinc-500">{s.lesson_title || "—"}</TD>
+                  <TD className="text-zinc-500">{s.lesson_title || "-"}</TD>
                   <TD><Badge tone={s.status === "closed" ? "zinc" : s.status === "open" ? "green" : "sky"}>{s.status}</Badge></TD>
                   <TD>{s.checkin_count}</TD>
                   <TD className="text-right">
@@ -637,9 +637,9 @@ function SessionsTab({ classes, classId, setClassId, sessions, reload, openCheck
       <Drawer open={open} onClose={() => setOpen(false)} title={form.id ? "Editar Encontro" : "Novo Encontro"}>
         <form onSubmit={save} className="space-y-3">
           <Field label="Data e hora *"><Input type="datetime-local" required value={String(form.starts_at ?? "")} onChange={(e) => setForm({ ...form, starts_at: e.target.value })} /></Field>
-          <Field label="Lição">
+          <Field label="Licao">
             <select className="input w-full" value={String(form.lesson_id ?? "")} onChange={(e) => setForm({ ...form, lesson_id: e.target.value })}>
-              <option value="">—</option>
+              <option value="">-</option>
               {lessons.map((l) => <option key={l.id} value={l.id}>{l.position}. {l.title}</option>)}
             </select>
           </Field>
@@ -648,7 +648,7 @@ function SessionsTab({ classes, classId, setClassId, sessions, reload, openCheck
               <option value="scheduled">Agendado</option><option value="open">Aberto</option><option value="closed">Encerrado</option>
             </select>
           </Field>
-          <Field label="Observações"><Textarea rows={2} value={String(form.notes ?? "")} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+          <Field label="Observacoes"><Textarea rows={2} value={String(form.notes ?? "")} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
           <div className="flex justify-end gap-2 pt-2"><Button variant="ghost" type="button" onClick={() => setOpen(false)}>Cancelar</Button><Button type="submit">Salvar</Button></div>
         </form>
       </Drawer>
@@ -672,7 +672,7 @@ function CheckinTab({ classes, sessions, sessionId, roster, onSelectSession, rel
     catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
   async function doCheckout(e: KidRosterEntry) {
-    const code = prompt(`Código de segurança para retirar ${e.member_name} (deixe vazio para não conferir):`, e.security_code);
+    const code = prompt(`Codigo de seguranca para retirar ${e.member_name} (deixe vazio para nao conferir):`, e.security_code);
     if (code === null) return;
     try { await kidCheckout(sessionId, { enrollment_id: e.enrollment_id, security_code: code }); refresh(); toast("Check-out registrado."); }
     catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
@@ -696,10 +696,10 @@ function CheckinTab({ classes, sessions, sessionId, roster, onSelectSession, rel
       .name{font-size:20px;font-weight:600;margin:8px 0}.muted{color:#555;font-size:12px}</style></head><body>
       <div class="name">${e.member_name}</div>
       <div>Turma: ${cls?.class_name ?? ""}</div>
-      <div>Responsáveis: ${e.guardians || "—"}</div>
-      ${e.dietary_restrictions ? `<div class="muted">⚠ Alergia/restrição: ${e.dietary_restrictions}</div>` : ""}
+      <div>Responsaveis: ${e.guardians || "-"}</div>
+      ${e.dietary_restrictions ? `<div class="muted"> Alergia/restricao: ${e.dietary_restrictions}</div>` : ""}
       <div class="code">${e.security_code || "- - - -"}</div>
-      <div class="muted">Código de segurança para retirada</div>
+      <div class="muted">Codigo de seguranca para retirada</div>
       </body></html>`);
     w.document.close();
     w.focus();
@@ -714,7 +714,7 @@ function CheckinTab({ classes, sessions, sessionId, roster, onSelectSession, rel
         <Field label="Encontro">
           <select className="input w-96" value={sessionId} onChange={(e) => onSelectSession(e.target.value)}>
             <option value="">Selecione um encontro...</option>
-            {sessions.map((s) => <option key={s.id} value={s.id}>{s.class_name} · {new Date(s.starts_at).toLocaleString("pt-BR")} {s.lesson_title ? `· ${s.lesson_title}` : ""}</option>)}
+            {sessions.map((s) => <option key={s.id} value={s.id}>{s.class_name} - {new Date(s.starts_at).toLocaleString("pt-BR")} {s.lesson_title ? `- ${s.lesson_title}` : ""}</option>)}
           </select>
         </Field>
         {sessionId && <Badge tone="green">{present} presente(s)</Badge>}
@@ -723,26 +723,26 @@ function CheckinTab({ classes, sessions, sessionId, roster, onSelectSession, rel
       {!sessionId ? (
         <EmptyState icon={<ClipboardCheck className="h-10 w-10" />} title="Selecione um encontro" description="Escolha um encontro para fazer a chamada." />
       ) : roster.length === 0 ? (
-        <EmptyState icon={<Baby className="h-10 w-10" />} title="Sem crianças ativas" description="Matricule crianças na turma deste encontro." />
+        <EmptyState icon={<Baby className="h-10 w-10" />} title="Sem criancas ativas" description="Matricule criancas na turma deste encontro." />
       ) : (
         <Card className="overflow-hidden p-0">
           <Table>
-            <THead><TRow><TH>Criança</TH><TH>Responsáveis</TH><TH>Restrição</TH><TH>Status</TH><TH>Código</TH><TH>Entrada/Saída</TH><TH className="text-right">Ações</TH></TRow></THead>
+            <THead><TRow><TH>Crianca</TH><TH>Responsaveis</TH><TH>Restricao</TH><TH>Status</TH><TH>Codigo</TH><TH>Entrada/Saida</TH><TH className="text-right">Acoes</TH></TRow></THead>
             <TBody>
               {roster.map((e) => (
                 <TRow key={e.enrollment_id}>
                   <TD className="font-medium">{e.member_name}</TD>
-                  <TD className="text-zinc-500 max-w-[180px] truncate">{e.guardians || "—"}</TD>
-                  <TD>{e.dietary_restrictions ? <Badge tone="amber">{e.dietary_restrictions}</Badge> : "—"}</TD>
+                  <TD className="text-zinc-500 max-w-[180px] truncate">{e.guardians || "-"}</TD>
+                  <TD>{e.dietary_restrictions ? <Badge tone="amber">{e.dietary_restrictions}</Badge> : "-"}</TD>
                   <TD>
                     {e.status === "present" ? <Badge tone="green"><CheckCircle className="h-3 w-3" /> Presente</Badge>
                       : e.status === "absent" ? <Badge tone="red"><XCircle className="h-3 w-3" /> Ausente</Badge>
-                      : <Badge tone="zinc">—</Badge>}
+                      : <Badge tone="zinc">-</Badge>}
                   </TD>
-                  <TD className="font-mono">{e.security_code || "—"}</TD>
+                  <TD className="font-mono">{e.security_code || "-"}</TD>
                   <TD className="text-xs text-zinc-500">
-                    {e.checkin_at ? new Date(e.checkin_at).toLocaleTimeString("pt-BR") : "—"}
-                    {e.checkout_at ? ` → ${new Date(e.checkout_at).toLocaleTimeString("pt-BR")}` : ""}
+                    {e.checkin_at ? new Date(e.checkin_at).toLocaleTimeString("pt-BR") : "-"}
+                    {e.checkout_at ? ` -> ${new Date(e.checkout_at).toLocaleTimeString("pt-BR")}` : ""}
                   </TD>
                   <TD className="text-right">
                     <div className="flex justify-end gap-1">
@@ -764,7 +764,7 @@ function CheckinTab({ classes, sessions, sessionId, roster, onSelectSession, rel
 }
 
 // ---------------------------------------------------------------------------
-// Evolução
+// Evolucao
 // ---------------------------------------------------------------------------
 
 function EvolutionTab({ classes, classId, setClassId, evolution, reload, toast }: {
@@ -778,23 +778,23 @@ function EvolutionTab({ classes, classId, setClassId, evolution, reload, toast }
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <Field label="Turma"><select className="input w-56" value={classId} onChange={(e) => setClassId(e.target.value)}>{classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
         <Field label="De"><Input type="date" value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} /></Field>
-        <Field label="Até"><Input type="date" value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} /></Field>
+        <Field label="Ate"><Input type="date" value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} /></Field>
         <Button onClick={reload} className="mb-0.5"><Search className="h-4 w-4" /> Aplicar</Button>
       </div>
 
       {evolution && (
         <>
           <div className="mb-4 grid gap-3 sm:grid-cols-3">
-            <StatCard label="Encontros no período" value={String(evolution.total_sessions)} tone="sky" />
-            <StatCard label="Lições da trilha" value={String(evolution.total_lessons)} tone="zinc" />
-            <StatCard label="Crianças ativas" value={String(evolution.rows.length)} tone="green" />
+            <StatCard label="Encontros no periodo" value={String(evolution.total_sessions)} tone="sky" />
+            <StatCard label="Licoes da trilha" value={String(evolution.total_lessons)} tone="zinc" />
+            <StatCard label="Criancas ativas" value={String(evolution.rows.length)} tone="green" />
           </div>
           {evolution.rows.length === 0 ? (
-            <EmptyState icon={<TrendingUp className="h-10 w-10" />} title="Sem dados" description="Sem crianças ativas ou encontros no período." />
+            <EmptyState icon={<TrendingUp className="h-10 w-10" />} title="Sem dados" description="Sem criancas ativas ou encontros no periodo." />
           ) : (
             <Card className="overflow-hidden p-0">
               <Table>
-                <THead><TRow><TH>Criança</TH><TH>Presenças</TH><TH>Frequência</TH><TH>Lições</TH><TH>Progresso</TH><TH>Última lição</TH></TRow></THead>
+                <THead><TRow><TH>Crianca</TH><TH>Presencas</TH><TH>Frequencia</TH><TH>Licoes</TH><TH>Progresso</TH><TH>Ultima licao</TH></TRow></THead>
                 <TBody>
                   {evolution.rows.map((r) => (
                     <TRow key={r.enrollment_id}>
@@ -803,7 +803,7 @@ function EvolutionTab({ classes, classId, setClassId, evolution, reload, toast }
                       <TD><PctBar value={r.attendance_pct} /></TD>
                       <TD>{r.lessons_attended}/{r.total_lessons}</TD>
                       <TD><PctBar value={r.progress_pct} /></TD>
-                      <TD className="text-zinc-500">{r.last_lesson || "—"}</TD>
+                      <TD className="text-zinc-500">{r.last_lesson || "-"}</TD>
                     </TRow>
                   ))}
                 </TBody>

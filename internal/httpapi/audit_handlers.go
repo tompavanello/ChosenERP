@@ -15,7 +15,7 @@ func statusLabel(t string) string {
 	if t == "income" {
 		return "Entrada"
 	}
-	return "Saída"
+	return "Saida"
 }
 
 func strOrEmpty(s *string) string {
@@ -53,7 +53,7 @@ func (a *App) handleCreateAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	var in audit.CreateInput
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -93,7 +93,7 @@ func (a *App) handleGetAudit(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "auditoria não encontrada")
+			writeErr(w, http.StatusNotFound, "auditoria nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -110,7 +110,7 @@ func (a *App) handleMarkAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	var in audit.MarkInput
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -123,7 +123,7 @@ func (a *App) handleMarkAudit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "auditoria não encontrada")
+			writeErr(w, http.StatusNotFound, "auditoria nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -140,7 +140,7 @@ func (a *App) handleCloseAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	var in audit.CloseInput
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -156,7 +156,7 @@ func (a *App) handleCloseAudit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "auditoria não encontrada")
+			writeErr(w, http.StatusNotFound, "auditoria nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -187,7 +187,7 @@ func (a *App) handleExportAudit(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "auditoria não encontrada")
+			writeErr(w, http.StatusNotFound, "auditoria nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -201,7 +201,7 @@ func (a *App) handleExportAudit(w http.ResponseWriter, r *http.Request) {
 		acc := strOrEmpty(it.AccountName)
 		sup := strOrEmpty(it.SupplierName)
 		pay := strOrEmpty(it.PaymentMethod)
-		audited := "Não"
+		audited := "Nao"
 		if it.Audited {
 			audited = "Sim"
 		}
@@ -227,19 +227,19 @@ func (a *App) handleExportAudit(w http.ResponseWriter, r *http.Request) {
 	if au.SignatureHash != nil {
 		hash = *au.SignatureHash
 	}
-	subtitle := "Período: " + au.PeriodStart + " a " + au.PeriodEnd +
-		"  ·  Situação: " + auditedMark +
-		"  ·  Auditados: " + strconv.Itoa(au.AuditedItems) + "/" + strconv.Itoa(au.TotalItems)
+	subtitle := "Periodo: " + au.PeriodStart + " a " + au.PeriodEnd +
+		"  -  Situacao: " + auditedMark +
+		"  -  Auditados: " + strconv.Itoa(au.AuditedItems) + "/" + strconv.Itoa(au.TotalItems)
 
 	writeReport(w, "auditoria-"+au.PeriodStart+"-"+au.PeriodEnd,
-		"Auditoria financeira — "+au.Title, subtitle, format,
+		"Auditoria financeira - "+au.Title, subtitle, format,
 		[]exportSection{
-			{Title: "Lançamentos do período", Headers: []string{"Data", "Tipo", "Conta contábil", "Conta bancária", "Fornecedor", "Forma pagto", "Descrição", "Valor", "Auditado"}, Rows: rows},
+			{Title: "Lancamentos do periodo", Headers: []string{"Data", "Tipo", "Conta contabil", "Conta bancaria", "Fornecedor", "Forma pagto", "Descricao", "Valor", "Auditado"}, Rows: rows},
 			{Title: "Totais", Headers: []string{"Indicador", "", "", "", "Valor"}, Rows: [][]string{
-				{"Total do período", "", "", "", money(au.TotalAmount)},
+				{"Total do periodo", "", "", "", money(au.TotalAmount)},
 				{"Total auditado", "", "", "", money(au.AuditedAmount)},
 			}},
-			{Title: "Fechamento / assinatura", Headers: []string{"Responsável", "Função", "Data/hora", "Hash", "", ""}, Rows: [][]string{
+			{Title: "Fechamento / assinatura", Headers: []string{"Responsavel", "Funcao", "Data/hora", "Hash", "", ""}, Rows: [][]string{
 				{signer, role, closedAt, hash, "", ""},
 			}},
 		})
@@ -259,7 +259,7 @@ func (a *App) handleDeleteAudit(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "auditoria não encontrada")
+			writeErr(w, http.StatusNotFound, "auditoria nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())

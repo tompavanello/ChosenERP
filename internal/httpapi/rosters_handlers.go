@@ -39,15 +39,15 @@ func (a *App) handleCreateRoster(w http.ResponseWriter, r *http.Request) {
 	}
 	var in rosters.CreateInput
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	if in.Title == "" || in.StartsAt == "" {
-		writeErr(w, http.StatusBadRequest, "title e starts_at são obrigatórios")
+		writeErr(w, http.StatusBadRequest, "title e starts_at sao obrigatorios")
 		return
 	}
 	if in.CreateEvent && (in.EventID == nil || *in.EventID == "") && (in.EventKindID == nil || *in.EventKindID == "") {
-		writeErr(w, http.StatusBadRequest, "para gerar evento automático, informe o tipo de evento")
+		writeErr(w, http.StatusBadRequest, "para gerar evento automatico, informe o tipo de evento")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -82,7 +82,7 @@ func (a *App) handleGetRoster(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "escala não encontrada")
+			writeErr(w, http.StatusNotFound, "escala nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -99,7 +99,7 @@ func (a *App) handleUpdateRoster(w http.ResponseWriter, r *http.Request) {
 	}
 	var in rosters.UpdateInput
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -111,7 +111,7 @@ func (a *App) handleUpdateRoster(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "escala não encontrada")
+			writeErr(w, http.StatusNotFound, "escala nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -133,7 +133,7 @@ func (a *App) handleDeleteRoster(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "escala não encontrada")
+			writeErr(w, http.StatusNotFound, "escala nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -152,7 +152,7 @@ func (a *App) handleSetRosterAssignments(w http.ResponseWriter, r *http.Request)
 		Assignments []rosters.AssignmentInput `json:"assignments"`
 	}
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -167,7 +167,7 @@ func (a *App) handleSetRosterAssignments(w http.ResponseWriter, r *http.Request)
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "escala não encontrada")
+			writeErr(w, http.StatusNotFound, "escala nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -187,7 +187,7 @@ func (a *App) handleRespondRosterAssignment(w http.ResponseWriter, r *http.Reque
 		Notes  *string `json:"notes"`
 	}
 	if err := readJSON(r, &in); err != nil || in.Status == "" {
-		writeErr(w, http.StatusBadRequest, "status é obrigatório")
+		writeErr(w, http.StatusBadRequest, "status e obrigatorio")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -202,7 +202,7 @@ func (a *App) handleRespondRosterAssignment(w http.ResponseWriter, r *http.Reque
 		case errors.Is(err, rosters.ErrInvalidStatus):
 			writeErr(w, http.StatusBadRequest, err.Error())
 		case store.IsNotFound(err):
-			writeErr(w, http.StatusNotFound, "escalado não encontrado")
+			writeErr(w, http.StatusNotFound, "escalado nao encontrado")
 		default:
 			writeErr(w, http.StatusBadRequest, err.Error())
 		}

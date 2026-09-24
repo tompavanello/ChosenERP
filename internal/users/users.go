@@ -1,5 +1,5 @@
-// Package users gerencia os usuários administrativos e o catálogo de perfis
-// (RBAC) do tenant. O isolamento é do RLS; a autorização (quem pode gerir) é
+// Package users gerencia os usuarios administrativos e o catalogo de perfis
+// (RBAC) do tenant. O isolamento e do RLS; a autorizacao (quem pode gerir) e
 // aplicada no handler.
 package users
 
@@ -57,8 +57,8 @@ type UpdateInput struct {
 
 type Repo struct{}
 
-// userCols projeta a identidade junto com o VÍNCULO na igreja do contexto
-// (papel + filial). O mesmo usuário pode ter vínculos diferentes por tenant.
+// userCols projeta a identidade junto com o VINCULO na igreja do contexto
+// (papel + filial). O mesmo usuario pode ter vinculos diferentes por tenant.
 const userCols = `u.id::text, m.branch_id::text, r.key, u.email::text, u.full_name,
 	u.is_active, u.mfa_enabled, u.last_login_at::text, u.created_at`
 
@@ -100,9 +100,9 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx) ([]User, error) {
 	return out, rows.Err()
 }
 
-// Create cria (ou anexa) a identidade e o vínculo com a igreja do contexto via
-// função SECURITY DEFINER. Se o e-mail já existe, NÃO altera a senha existente —
-// apenas cria o membership. Perfil inexistente => SQLSTATE P0002; vínculo
+// Create cria (ou anexa) a identidade e o vinculo com a igreja do contexto via
+// funcao SECURITY DEFINER. Se o e-mail ja existe, NAO altera a senha existente -
+// apenas cria o membership. Perfil inexistente => SQLSTATE P0002; vinculo
 // duplicado => 23505 (o handler traduz).
 func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID string, in CreateInput) (*User, error) {
 	hash, err := auth.HashPassword(in.Password)
@@ -120,8 +120,8 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID string, in Create
 	return r.Get(ctx, tx, newID)
 }
 
-// Update separa identidade (users) de vínculo (memberships). `branch_id` tem
-// semântica de três estados: ausente mantém; presente e vazio limpa (Sede);
+// Update separa identidade (users) de vinculo (memberships). `branch_id` tem
+// semantica de tres estados: ausente mantem; presente e vazio limpa (Sede);
 // presente e preenchido troca.
 func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput) (*User, error) {
 	var updatedID string
@@ -165,7 +165,7 @@ func (r *Repo) ResetPassword(ctx context.Context, tx pgx.Tx, id, password string
 	return nil
 }
 
-// ListRoles devolve os perfis do tenant com suas permissões e contagem de usuários.
+// ListRoles devolve os perfis do tenant com suas permissoes e contagem de usuarios.
 func (r *Repo) ListRoles(ctx context.Context, tx pgx.Tx) ([]Role, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT r.id::text, r.key, r.name, r.is_system,
@@ -214,7 +214,7 @@ func (r *Repo) ListRoles(ctx context.Context, tx pgx.Tx) ([]Role, error) {
 	return out, prows.Err()
 }
 
-// ListPermissions devolve o catálogo global de permissões.
+// ListPermissions devolve o catalogo global de permissoes.
 func (r *Repo) ListPermissions(ctx context.Context, tx pgx.Tx) ([]Permission, error) {
 	rows, err := tx.Query(ctx, `SELECT key, module, name FROM permissions ORDER BY module, key`)
 	if err != nil {

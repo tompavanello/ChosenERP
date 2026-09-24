@@ -24,12 +24,12 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
-      # O harness dos testes cria/recria o banco descartável `chosenerp_test`
+      # O harness dos testes cria/recria o banco descartavel `chosenerp_test`
       # a partir do DSN do migrador e roda db/init/setup.sql (que cria o papel
-      # chosenerp_app) antes das migrações.
+      # chosenerp_app) antes das migracoes.
       CHOSEN_TEST_MIGRATE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
       CHOSEN_TEST_APP_URL: postgres://chosenerp_app:chosenapp@localhost:5432/postgres?sslmode=disable
-      # Falha em vez de pular quando os DSNs não existem.
+      # Falha em vez de pular quando os DSNs nao existem.
       CHOSEN_TESTS_REQUIRED: "1"
     steps:
       - uses: actions/checkout@v4

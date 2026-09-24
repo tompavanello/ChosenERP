@@ -1,12 +1,12 @@
 -- 000027_fix_fin_hash.up.sql
 -- Corrige o hash-chain de financial_transactions: o corpo do hash concatenava
--- NEW.payment_method SEM COALESCE. Como payment_method é anulável, um lançamento
+-- NEW.payment_method SEM COALESCE. Como payment_method e anulavel, um lancamento
 -- sem forma de pagamento gerava body = NULL, digest(NULL) = NULL e o INSERT
 -- falhava no NOT NULL de `hash` ("null value in column hash"). Passou
 -- despercebido porque os seeds/fixtures sempre informavam a forma de pagamento.
 --
--- Também padroniza a busca do hash anterior no formato tenant-scoped por
--- (created_at, id), evitando cadeia não-temporal e vazamento entre tenants.
+-- Tambem padroniza a busca do hash anterior no formato tenant-scoped por
+-- (created_at, id), evitando cadeia nao-temporal e vazamento entre tenants.
 
 CREATE OR REPLACE FUNCTION fin_tx_hash() RETURNS trigger
 LANGUAGE plpgsql AS $$

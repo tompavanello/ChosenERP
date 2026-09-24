@@ -9,7 +9,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// LEITURA — isolamento por filial
+// LEITURA - isolamento por filial
 // ---------------------------------------------------------------------------
 
 func TestRLS_Members_ScopedToBranch(t *testing.T) {
@@ -95,7 +95,7 @@ func TestRLS_Members_CrossTenantBlocked(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// LEITURA — financeiro e relatórios
+// LEITURA - financeiro e relatorios
 // ---------------------------------------------------------------------------
 
 func TestRLS_Finance_ScopedToBranch(t *testing.T) {
@@ -113,7 +113,7 @@ func TestRLS_Finance_ScopedToBranch(t *testing.T) {
 	}
 }
 
-// Os relatórios agregam por período; a RLS precisa valer também para eles
+// Os relatorios agregam por periodo; a RLS precisa valer tambem para eles
 // (o checkpoint validou isso manualmente para a filial Norte).
 func TestRLS_ReportsAggregatesScopedToBranch(t *testing.T) {
 	err := inBounds(t, bounds(fixTenantX, fixBranchB, "tesoureiro"), func(tx pgx.Tx) error {
@@ -156,7 +156,7 @@ func TestRLS_Documents_ScopedToBranch(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// LEITURA — audit_log (somente Sede/sistema)
+// LEITURA - audit_log (somente Sede/sistema)
 // ---------------------------------------------------------------------------
 
 func TestRLS_AuditLog_BranchRoleCannotRead(t *testing.T) {
@@ -188,26 +188,26 @@ func TestRLS_AuditLog_HeadquartersSeesOnlyOwnTenant(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ESCRITA — cross-branch bloqueado
+// ESCRITA - cross-branch bloqueado
 // ---------------------------------------------------------------------------
 
 // expectRLSDenied roda stmt dentro do escopo dado e exige que o PostgreSQL
-// recuse a operação por violação de política de RLS.
+// recuse a operacao por violacao de politica de RLS.
 func expectRLSDenied(t *testing.T, b Bounds, stmt string, args ...any) {
 	t.Helper()
 	var execErr error
 	if err := inBounds(t, b, func(tx pgx.Tx) error {
 		_, execErr = tx.Exec(testCtx, stmt, args...)
-		// A transação fica abortada depois do erro; apenas encerramos.
+		// A transacao fica abortada depois do erro; apenas encerramos.
 		return errRollback
 	}); err != nil {
 		t.Fatalf("WithTenant: %v", err)
 	}
 	if execErr == nil {
-		t.Fatal("operação cross-branch foi aceita; a política WITH CHECK não barrou")
+		t.Fatal("operacao cross-branch foi aceita; a politica WITH CHECK nao barrou")
 	}
 	if !strings.Contains(execErr.Error(), "row-level security") {
-		t.Fatalf("erro inesperado (esperada violação de RLS): %v", execErr)
+		t.Fatalf("erro inesperado (esperada violacao de RLS): %v", execErr)
 	}
 }
 
@@ -275,7 +275,7 @@ func TestRLS_Finance_InsertCrossBranchBlocked(t *testing.T) {
 }
 
 func TestRLS_Transfers_InsertRequiresParticipation(t *testing.T) {
-	// A filial C não é origem nem destino do repasse A -> B.
+	// A filial C nao e origem nem destino do repasse A -> B.
 	expectRLSDenied(t,
 		bounds(fixTenantX, fixBranchC, "tesoureiro"),
 		`INSERT INTO transfers (tenant_id, from_branch_id, to_branch_id, amount, rule_name)
@@ -292,7 +292,7 @@ func TestRLS_Recurring_InsertCrossBranchBlocked(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Contas bancárias e classificações (tabelas novas da reestrutura 000018)
+// Contas bancarias e classificacoes (tabelas novas da reestrutura 000018)
 // ---------------------------------------------------------------------------
 
 func TestRLS_FinancialAccounts_ScopedToBranch(t *testing.T) {
@@ -316,7 +316,7 @@ func TestRLS_FinancialAccounts_InsertCrossBranchBlocked(t *testing.T) {
 }
 
 func TestRLS_Finance_TransactionsAssociatedWithAccount(t *testing.T) {
-	// Branch A vê sua conta associada ao lançamento.
+	// Branch A ve sua conta associada ao lancamento.
 	err := inBounds(t, bounds(fixTenantX, fixBranchA, "tesoureiro"), func(tx pgx.Tx) error {
 		var acctID string
 		if err := tx.QueryRow(testCtx,
@@ -324,7 +324,7 @@ func TestRLS_Finance_TransactionsAssociatedWithAccount(t *testing.T) {
 			t.Fatalf("ler account_id: %v", err)
 		}
 		if acctID != fixAccountA {
-			t.Errorf("account_id do lançamento A = %s, queria %s", acctID, fixAccountA)
+			t.Errorf("account_id do lancamento A = %s, queria %s", acctID, fixAccountA)
 		}
 		return nil
 	})
@@ -334,12 +334,12 @@ func TestRLS_Finance_TransactionsAssociatedWithAccount(t *testing.T) {
 }
 
 func TestRLS_FinancialAttachments_ScopedToBranch(t *testing.T) {
-	// Branch A vê os anexos de seus lançamentos.
+	// Branch A ve os anexos de seus lancamentos.
 	err := inBounds(t, bounds(fixTenantX, fixBranchA, "tesoureiro"), func(tx pgx.Tx) error {
 		if got := count(t, tx, `SELECT count(*) FROM financial_attachments`); got != 1 {
 			t.Errorf("filial A leu %d anexos, queria 1", got)
 		}
-		// Não vê anexos de lançamentos da filial B.
+		// Nao ve anexos de lancamentos da filial B.
 		if got := count(t, tx, `SELECT count(*) FROM financial_attachments fa JOIN financial_transactions t ON t.id = fa.transaction_id WHERE t.branch_id = $1`, fixBranchB); got != 0 {
 			t.Errorf("vazamento: filial A leu %d anexos da filial B", got)
 		}
@@ -350,8 +350,8 @@ func TestRLS_FinancialAttachments_ScopedToBranch(t *testing.T) {
 	}
 }
 
-// TestFinancialTransactions_HashWithNullPaymentMethod cobre a regressão do
-// trigger de hash-chain: payment_method é anulável e, sem COALESCE, um lançamento
+// TestFinancialTransactions_HashWithNullPaymentMethod cobre a regressao do
+// trigger de hash-chain: payment_method e anulavel e, sem COALESCE, um lancamento
 // sem forma de pagamento gerava hash NULL e quebrava o NOT NULL da coluna.
 func TestFinancialTransactions_HashWithNullPaymentMethod(t *testing.T) {
 	err := inBounds(t, bounds(fixTenantX, fixBranchA, "tesoureiro"), func(tx pgx.Tx) error {
@@ -363,7 +363,7 @@ func TestFinancialTransactions_HashWithNullPaymentMethod(t *testing.T) {
 			t.Fatalf("insert sem forma de pagamento: %v", err)
 		}
 		if !hasHash {
-			t.Errorf("hash ficou nulo quando payment_method é NULL")
+			t.Errorf("hash ficou nulo quando payment_method e NULL")
 		}
 		return errRollback
 	})
@@ -382,7 +382,7 @@ func TestAppendOnly_FinancialTransactions_UpdateBlocked(t *testing.T) {
 		t.Fatalf("WithTenant: %v", err)
 	}
 	if execErr == nil {
-		t.Fatal("UPDATE em lançamento foi aceito; a tabela deve ser append-only")
+		t.Fatal("UPDATE em lancamento foi aceito; a tabela deve ser append-only")
 	}
 	if !strings.Contains(execErr.Error(), "append-only") {
 		t.Fatalf("erro inesperado (esperado 'append-only'): %v", execErr)
@@ -399,7 +399,7 @@ func TestAppendOnly_FinancialTransactions_DeleteBlocked(t *testing.T) {
 		t.Fatalf("WithTenant: %v", err)
 	}
 	if execErr == nil {
-		t.Fatal("DELETE em lançamento foi aceito; a tabela deve ser append-only")
+		t.Fatal("DELETE em lancamento foi aceito; a tabela deve ser append-only")
 	}
 	if !strings.Contains(execErr.Error(), "append-only") {
 		t.Fatalf("erro inesperado (esperado 'append-only'): %v", execErr)
@@ -407,8 +407,8 @@ func TestAppendOnly_FinancialTransactions_DeleteBlocked(t *testing.T) {
 }
 
 func TestAppendOnly_AuditLog(t *testing.T) {
-	// Pelo papel da aplicação não existe política de UPDATE/DELETE: a RLS
-	// simplesmente não devolve linhas (nem mesmo para a Sede).
+	// Pelo papel da aplicacao nao existe politica de UPDATE/DELETE: a RLS
+	// simplesmente nao devolve linhas (nem mesmo para a Sede).
 	err := inBounds(t, bounds(fixTenantX, "", "super_admin"), func(tx pgx.Tx) error {
 		tag, err := tx.Exec(testCtx, `UPDATE audit_log SET action = 'hack' WHERE tenant_id = $1`, fixTenantX)
 		if err != nil {
@@ -439,8 +439,8 @@ func TestAppendOnly_AuditLog(t *testing.T) {
 // ESCOPO DE SISTEMA (workers internos)
 // ---------------------------------------------------------------------------
 
-// WithSystem é usado pelos workers (outbox de envio, recorrências). Ele
-// enxerga todos os tenants de propósito — as políticas is_headquarters()
+// WithSystem e usado pelos workers (outbox de envio, recorrencias). Ele
+// enxerga todos os tenants de proposito - as politicas is_headquarters()
 // incluem a role 'system'. Este teste fixa esse comportamento.
 func TestRLS_SystemScopeSeesAllTenants(t *testing.T) {
 	err := inSystem(t, func(tx pgx.Tx) error {
@@ -455,11 +455,11 @@ func TestRLS_SystemScopeSeesAllTenants(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// REGRESSÃO — toda tabela tenant-scoped precisa ter RLS
+// REGRESSAO - toda tabela tenant-scoped precisa ter RLS
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// REGRESSÃO — varredura de TODAS as tabelas tenant-scoped
+// REGRESSAO - varredura de TODAS as tabelas tenant-scoped
 // ---------------------------------------------------------------------------
 
 // columnsLike devolve as tabelas do schema public que possuem a coluna dada.
@@ -487,8 +487,8 @@ func columnsLike(t *testing.T, column string) []string {
 	return out
 }
 
-// TestRLS_NoCrossTenantReadForAnyTable é a rede de segurança contra o vazamento
-// corrigido pela migração 000016: um usuário com escopo "Sede" de um tenant não
+// TestRLS_NoCrossTenantReadForAnyTable e a rede de seguranca contra o vazamento
+// corrigido pela migracao 000016: um usuario com escopo "Sede" de um tenant nao
 // pode ler linhas de OUTRO tenant em tabela alguma (com ou sem branch_id).
 func TestRLS_NoCrossTenantReadForAnyTable(t *testing.T) {
 	for _, table := range columnsLike(t, "tenant_id") {
@@ -506,7 +506,7 @@ func TestRLS_NoCrossTenantReadForAnyTable(t *testing.T) {
 				t.Fatalf("WithTenant(sede Y): %v", err)
 			}
 
-			// Filial A também não pode ler o tenant Y.
+			// Filial A tambem nao pode ler o tenant Y.
 			err = inBounds(t, bounds(fixTenantX, fixBranchA, "secretario"), func(tx pgx.Tx) error {
 				if got := count(t, tx, q, fixTenantY); got != 0 {
 					t.Errorf("vazamento cross-tenant: filial A leu %d linha(s) de %s do tenant Y", got, table)
@@ -527,7 +527,7 @@ func TestRLS_NoCrossBranchReadForAnyTable(t *testing.T) {
 		t.Run(table, func(t *testing.T) {
 			q := fmt.Sprintf(`SELECT count(*) FROM %s WHERE branch_id = $1`, table)
 
-			// A filial A não vê linhas da filial B...
+			// A filial A nao ve linhas da filial B...
 			err := inBounds(t, bounds(fixTenantX, fixBranchA, "secretario"), func(tx pgx.Tx) error {
 				if got := count(t, tx, q, fixBranchB); got != 0 {
 					t.Errorf("vazamento entre filiais: filial A leu %d linha(s) de %s da filial B", got, table)
@@ -552,11 +552,11 @@ func TestRLS_NoCrossBranchReadForAnyTable(t *testing.T) {
 	}
 }
 
-// Tabelas de vínculo não têm tenant_id próprio: herdam o escopo da tabela pai.
+// Tabelas de vinculo nao tem tenant_id proprio: herdam o escopo da tabela pai.
 func TestRLS_RelationshipTablesInheritTenantScope(t *testing.T) {
 	cases := []struct {
 		table  string
-		column string // coluna pela qual a tabela pai é referenciada
+		column string // coluna pela qual a tabela pai e referenciada
 		// valor que aponta para a filial A e valor que aponta para a filial B
 		idA, idB string
 	}{
@@ -569,10 +569,10 @@ func TestRLS_RelationshipTablesInheritTenantScope(t *testing.T) {
 		t.Run(tc.table, func(t *testing.T) {
 			q := fmt.Sprintf(`SELECT count(*) FROM %s WHERE %s = $1`, tc.table, tc.column)
 
-			// A filial A não vê vínculos da filial B.
+			// A filial A nao ve vinculos da filial B.
 			err := inBounds(t, bounds(fixTenantX, fixBranchA, "secretario"), func(tx pgx.Tx) error {
 				if got := count(t, tx, q, tc.idB); got != 0 {
-					t.Errorf("filial A leu %d vínculo(s) da filial B em %s", got, tc.table)
+					t.Errorf("filial A leu %d vinculo(s) da filial B em %s", got, tc.table)
 				}
 				return nil
 			})
@@ -580,13 +580,13 @@ func TestRLS_RelationshipTablesInheritTenantScope(t *testing.T) {
 				t.Fatalf("WithTenant: %v", err)
 			}
 
-			// A Sede de Y não vê vínculos do tenant X.
+			// A Sede de Y nao ve vinculos do tenant X.
 			err = inBounds(t, bounds(fixTenantY, "", "super_admin"), func(tx pgx.Tx) error {
 				if got := count(t, tx, q, tc.idA); got != 0 {
-					t.Errorf("vazamento cross-tenant: sede de Y leu %d vínculo(s) de %s do tenant X", got, tc.table)
+					t.Errorf("vazamento cross-tenant: sede de Y leu %d vinculo(s) de %s do tenant X", got, tc.table)
 				}
 				if got := count(t, tx, q, tc.idB); got != 0 {
-					t.Errorf("vazamento cross-tenant: sede de Y leu %d vínculo(s) de %s do tenant X", got, tc.table)
+					t.Errorf("vazamento cross-tenant: sede de Y leu %d vinculo(s) de %s do tenant X", got, tc.table)
 				}
 				return nil
 			})
@@ -639,24 +639,24 @@ func TestRLS_AllTenantScopedTablesHaveRLS(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Cargos (funções/ministérios) — migração 000020
+// Cargos (funcoes/ministerios) - migracao 000020
 // ---------------------------------------------------------------------------
 
-// TestRLS_CargoScope cobre o eixo que os testes genéricos não alcançam: o cargo
-// GLOBAL do tenant (branch_id NULL) precisa ser visível e gravável pela filial —
-// é o caso de uso real ("criar o cargo uma vez e usar em toda a igreja") — sem
+// TestRLS_CargoScope cobre o eixo que os testes genericos nao alcancam: o cargo
+// GLOBAL do tenant (branch_id NULL) precisa ser visivel e gravavel pela filial -
+// e o caso de uso real ("criar o cargo uma vez e usar em toda a igreja") - sem
 // que isso abra a porteira para o cargo de OUTRA filial ou de outro tenant.
 func TestRLS_CargoScope(t *testing.T) {
-	// A filial A enxerga o cargo global do tenant e o próprio cargo...
+	// A filial A enxerga o cargo global do tenant e o proprio cargo...
 	err := inBounds(t, bounds(fixTenantX, fixBranchA, "secretario"), func(tx pgx.Tx) error {
 		visiveis := ids(t, tx, `SELECT id::text FROM cargos ORDER BY id`)
 		if !contains(visiveis, fixCargoGlobal) {
-			t.Errorf("filial A não enxergou o cargo global do tenant")
+			t.Errorf("filial A nao enxergou o cargo global do tenant")
 		}
 		if !contains(visiveis, fixCargoA) {
-			t.Errorf("filial A não enxergou o próprio cargo")
+			t.Errorf("filial A nao enxergou o proprio cargo")
 		}
-		// ...e NÃO enxerga o da filial B.
+		// ...e NAO enxerga o da filial B.
 		if contains(visiveis, fixCargoB) {
 			t.Errorf("vazamento entre filiais: filial A enxergou o cargo da filial B")
 		}
@@ -666,11 +666,11 @@ func TestRLS_CargoScope(t *testing.T) {
 		t.Fatalf("WithTenant(filial A): %v", err)
 	}
 
-	// A filial B enxerga o global e o dela, não o da A.
+	// A filial B enxerga o global e o dela, nao o da A.
 	err = inBounds(t, bounds(fixTenantX, fixBranchB, "secretario"), func(tx pgx.Tx) error {
 		visiveis := ids(t, tx, `SELECT id::text FROM cargos ORDER BY id`)
 		if !contains(visiveis, fixCargoGlobal) {
-			t.Errorf("filial B não enxergou o cargo global do tenant")
+			t.Errorf("filial B nao enxergou o cargo global do tenant")
 		}
 		if contains(visiveis, fixCargoA) {
 			t.Errorf("vazamento entre filiais: filial B enxergou o cargo da filial A")
@@ -681,12 +681,12 @@ func TestRLS_CargoScope(t *testing.T) {
 		t.Fatalf("WithTenant(filial B): %v", err)
 	}
 
-	// A Sede do tenant X enxerga os três cargos do seu tenant, nenhum de Y.
+	// A Sede do tenant X enxerga os tres cargos do seu tenant, nenhum de Y.
 	err = inBounds(t, bounds(fixTenantX, "", "admin_sede"), func(tx pgx.Tx) error {
 		visiveis := ids(t, tx, `SELECT id::text FROM cargos ORDER BY id`)
 		for _, want := range []string{fixCargoGlobal, fixCargoA, fixCargoB} {
 			if !contains(visiveis, want) {
-				t.Errorf("sede de X não enxergou o cargo %s do próprio tenant", want)
+				t.Errorf("sede de X nao enxergou o cargo %s do proprio tenant", want)
 			}
 		}
 		if contains(visiveis, fixCargoY) {
@@ -699,13 +699,13 @@ func TestRLS_CargoScope(t *testing.T) {
 	}
 }
 
-// TestRLS_MemberCargoCannotBindForeignCargo é o teste do WITH CHECK da política
+// TestRLS_MemberCargoCannotBindForeignCargo e o teste do WITH CHECK da politica
 // member_cargos_all. As checagens de chave estrangeira rodam como dono da tabela
-// e NÃO passam por RLS, então sem o EXISTS sobre `cargos` na política seria
-// possível vincular um membro de um tenant a um cargo de outro.
+// e NAO passam por RLS, entao sem o EXISTS sobre `cargos` na politica seria
+// possivel vincular um membro de um tenant a um cargo de outro.
 func TestRLS_MemberCargoCannotBindForeignCargo(t *testing.T) {
-	// Filial A tentando vincular o próprio membro a um cargo do tenant Y:
-	// o RLS esconde o cargo Y, então o EXISTS da política é falso.
+	// Filial A tentando vincular o proprio membro a um cargo do tenant Y:
+	// o RLS esconde o cargo Y, entao o EXISTS da politica e falso.
 	err := inBounds(t, bounds(fixTenantX, fixBranchA, "secretario"), func(tx pgx.Tx) error {
 		_, err := tx.Exec(testCtx, `
 			INSERT INTO member_cargos (member_id, cargo_id, status)
@@ -720,7 +720,7 @@ func TestRLS_MemberCargoCannotBindForeignCargo(t *testing.T) {
 	}
 
 	// Filial A tentando vincular um membro da filial B (mesmo tenant): escrever
-	// fora da própria filial também é bloqueado.
+	// fora da propria filial tambem e bloqueado.
 	err = inBounds(t, bounds(fixTenantX, fixBranchA, "secretario"), func(tx pgx.Tx) error {
 		_, err := tx.Exec(testCtx, `
 			INSERT INTO member_cargos (member_id, cargo_id, status)
@@ -734,13 +734,13 @@ func TestRLS_MemberCargoCannotBindForeignCargo(t *testing.T) {
 		t.Fatalf("WithTenant(filial A): %v", err)
 	}
 
-	// Contraprova: o vínculo legítimo (membro e cargo da própria filial) passa.
+	// Contraprova: o vinculo legitimo (membro e cargo da propria filial) passa.
 	err = inBounds(t, bounds(fixTenantX, fixBranchA, "secretario"), func(tx pgx.Tx) error {
 		_, err := tx.Exec(testCtx, `
 			INSERT INTO member_cargos (member_id, cargo_id, status)
 			VALUES ($1::uuid, $2::uuid, 'ativo')`, fixMemberA2, fixCargoA)
 		if err != nil {
-			t.Errorf("filial A não conseguiu vincular cargo da própria filial: %v", err)
+			t.Errorf("filial A nao conseguiu vincular cargo da propria filial: %v", err)
 		}
 		return nil
 	})
@@ -750,11 +750,11 @@ func TestRLS_MemberCargoCannotBindForeignCargo(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Histórico eclesiástico do membro (migração 000022)
+// Historico eclesiastico do membro (migracao 000022)
 // ---------------------------------------------------------------------------
 
-// runInTx executa fn numa transação própria (sempre rollback), para que um erro
-// esperado não aborte os cenários seguintes do mesmo teste.
+// runInTx executa fn numa transacao propria (sempre rollback), para que um erro
+// esperado nao aborte os cenarios seguintes do mesmo teste.
 func runInTx(conn *pgx.Conn, fn func(tx pgx.Tx) error) error {
 	tx, err := conn.Begin(testCtx)
 	if err != nil {
@@ -764,8 +764,8 @@ func runInTx(conn *pgx.Conn, fn func(tx pgx.Tx) error) error {
 	return fn(tx)
 }
 
-// seedHistoryMember cria um membro descartável com uma entrada de histórico e
-// devolve o id. Roda transacionalmente e é sempre revertido.
+// seedHistoryMember cria um membro descartavel com uma entrada de historico e
+// devolve o id. Roda transacionalmente e e sempre revertido.
 func seedHistoryMember(t *testing.T, tx pgx.Tx) string {
 	t.Helper()
 	var id string
@@ -778,14 +778,14 @@ func seedHistoryMember(t *testing.T, tx pgx.Tx) string {
 	if _, err := tx.Exec(testCtx, `
 		INSERT INTO member_history (tenant_id, branch_id, member_id, kind)
 		VALUES ($1, $2, $3, 'cadastro')`, fixTenantX, fixBranchA, id); err != nil {
-		t.Fatalf("inserir histórico de teste: %v", err)
+		t.Fatalf("inserir historico de teste: %v", err)
 	}
 	return id
 }
 
 func TestMemberHistory_AppendOnly(t *testing.T) {
 	withSuperuser(t, func(conn *pgx.Conn) error {
-		// UPDATE direto é barrado pelo trigger.
+		// UPDATE direto e barrado pelo trigger.
 		if err := runInTx(conn, func(tx pgx.Tx) error {
 			id := seedHistoryMember(t, tx)
 			if _, err := tx.Exec(testCtx,
@@ -794,10 +794,10 @@ func TestMemberHistory_AppendOnly(t *testing.T) {
 			}
 			return nil
 		}); err != nil {
-			t.Fatalf("cenário UPDATE: %v", err)
+			t.Fatalf("cenario UPDATE: %v", err)
 		}
 
-		// DELETE direto também.
+		// DELETE direto tambem.
 		if err := runInTx(conn, func(tx pgx.Tx) error {
 			id := seedHistoryMember(t, tx)
 			if _, err := tx.Exec(testCtx,
@@ -806,22 +806,22 @@ func TestMemberHistory_AppendOnly(t *testing.T) {
 			}
 			return nil
 		}); err != nil {
-			t.Fatalf("cenário DELETE: %v", err)
+			t.Fatalf("cenario DELETE: %v", err)
 		}
 		return nil
 	})
 }
 
 // TestMemberHistory_CascadeDeleteWhenMemberRemoved garante que a imutabilidade
-// NÃO impede apagar um membro: o histórico some junto (FK ON DELETE CASCADE) e
-// o trigger libera a exclusão em cascata (pg_trigger_depth() > 1). Sem isso,
-// remover um membro — ou reverter a conversão de um visitante — quebraria.
+// NAO impede apagar um membro: o historico some junto (FK ON DELETE CASCADE) e
+// o trigger libera a exclusao em cascata (pg_trigger_depth() > 1). Sem isso,
+// remover um membro - ou reverter a conversao de um visitante - quebraria.
 func TestMemberHistory_CascadeDeleteWhenMemberRemoved(t *testing.T) {
 	withSuperuser(t, func(conn *pgx.Conn) error {
 		return runInTx(conn, func(tx pgx.Tx) error {
 			id := seedHistoryMember(t, tx)
 			if _, err := tx.Exec(testCtx, `DELETE FROM members WHERE id = $1::uuid`, id); err != nil {
-				t.Fatalf("excluir membro com histórico deveria funcionar: %v", err)
+				t.Fatalf("excluir membro com historico deveria funcionar: %v", err)
 			}
 			var n int
 			if err := tx.QueryRow(testCtx,
@@ -829,7 +829,7 @@ func TestMemberHistory_CascadeDeleteWhenMemberRemoved(t *testing.T) {
 				return err
 			}
 			if n != 0 {
-				t.Errorf("histórico do membro excluído continuou: %d linha(s)", n)
+				t.Errorf("historico do membro excluido continuou: %d linha(s)", n)
 			}
 			return nil
 		})
@@ -845,10 +845,10 @@ func TestRLS_MemberHistory_InsertCrossBranchBlocked(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Governança (migração 000033)
+// Governanca (migracao 000033)
 // ---------------------------------------------------------------------------
 
-// TestRLS_Governance_ScopedToBranch confirma que atas, votações, opções, votos,
+// TestRLS_Governance_ScopedToBranch confirma que atas, votacoes, opcoes, votos,
 // documentos legais e assinaturas respeitam o escopo da filial.
 func TestRLS_Governance_ScopedToBranch(t *testing.T) {
 	cases := []struct {
@@ -865,7 +865,7 @@ func TestRLS_Governance_ScopedToBranch(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.table, func(t *testing.T) {
-			// A filial A enxerga o próprio registro.
+			// A filial A enxerga o proprio registro.
 			if err := inBounds(t, bounds(fixTenantX, fixBranchA, "secretario"), func(tx pgx.Tx) error {
 				var n int
 				if err := tx.QueryRow(testCtx, `SELECT count(*) FROM `+tc.table+` WHERE id = $1::uuid`, tc.idA).Scan(&n); err != nil {
@@ -879,7 +879,7 @@ func TestRLS_Governance_ScopedToBranch(t *testing.T) {
 				t.Fatalf("WithTenant: %v", err)
 			}
 
-			// A filial B não enxerga o registro da filial A.
+			// A filial B nao enxerga o registro da filial A.
 			if err := inBounds(t, bounds(fixTenantX, fixBranchB, "secretario"), func(tx pgx.Tx) error {
 				var n int
 				if err := tx.QueryRow(testCtx, `SELECT count(*) FROM `+tc.table+` WHERE id = $1::uuid`, tc.idA).Scan(&n); err != nil {
@@ -916,14 +916,14 @@ func TestGovernance_AppendOnly(t *testing.T) {
 			`DELETE FROM vote_ballots WHERE id = '` + fixBallotA + `'`,
 		} {
 			if _, err := conn.Exec(testCtx, q); err == nil {
-				t.Errorf("operação aceita em tabela append-only: %s", q)
+				t.Errorf("operacao aceita em tabela append-only: %s", q)
 			}
 		}
 		return nil
 	})
 }
 
-// TestGovernance_CascadeDeleteWhenMinuteRemoved garante que a imutabilidade não
+// TestGovernance_CascadeDeleteWhenMinuteRemoved garante que a imutabilidade nao
 // impede apagar a ata: as assinaturas somem por cascade.
 func TestGovernance_CascadeDeleteWhenMinuteRemoved(t *testing.T) {
 	withSuperuser(t, func(conn *pgx.Conn) error {
@@ -937,7 +937,7 @@ func TestGovernance_CascadeDeleteWhenMinuteRemoved(t *testing.T) {
 				return err
 			}
 			if n != 0 {
-				t.Errorf("assinaturas da ata excluída continuaram: %d", n)
+				t.Errorf("assinaturas da ata excluida continuaram: %d", n)
 			}
 			return nil
 		})
@@ -945,11 +945,11 @@ func TestGovernance_CascadeDeleteWhenMinuteRemoved(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Hierarquia de filiais / sub-congregações (migração 000036)
+// Hierarquia de filiais / sub-congregacoes (migracao 000036)
 // ---------------------------------------------------------------------------
 
-// TestRLS_BranchSeesSubCongregation prova a leitura hierárquica: a filial pai
-// enxerga os dados da sub-congregação, a filial irmã não, a Sede sim.
+// TestRLS_BranchSeesSubCongregation prova a leitura hierarquica: a filial pai
+// enxerga os dados da sub-congregacao, a filial irma nao, a Sede sim.
 func TestRLS_BranchSeesSubCongregation(t *testing.T) {
 	cases := []struct {
 		name string
@@ -975,9 +975,9 @@ func TestRLS_BranchSeesSubCongregation(t *testing.T) {
 	}
 }
 
-// TestRLS_BranchWriteStaysExact fixa a decisão de arquitetura: a LEITURA é
-// hierárquica, mas a GRAVAÇÃO continua no branch exato do contexto. Assim uma
-// congregação não altera o cadastro da sub-congregação por engano.
+// TestRLS_BranchWriteStaysExact fixa a decisao de arquitetura: a LEITURA e
+// hierarquica, mas a GRAVACAO continua no branch exato do contexto. Assim uma
+// congregacao nao altera o cadastro da sub-congregacao por engano.
 func TestRLS_BranchWriteStaysExact(t *testing.T) {
 	expectRLSDenied(t,
 		bounds(fixTenantX, fixBranchA, "secretario"),
@@ -986,9 +986,9 @@ func TestRLS_BranchWriteStaysExact(t *testing.T) {
 		fixTenantX, fixSubBranchA)
 }
 
-// TestRLS_HeadquartersWriteAllowed fixa a correção da migração 000045: a Sede
-// do tenant (branch vazio + papel super_admin) mantém registros de qualquer
-// filial do PRÓPRIO tenant — é o que destrava PATCH/DELETE/estorno que retornavam
+// TestRLS_HeadquartersWriteAllowed fixa a correcao da migracao 000045: a Sede
+// do tenant (branch vazio + papel super_admin) mantem registros de qualquer
+// filial do PROPRIO tenant - e o que destrava PATCH/DELETE/estorno que retornavam
 // 404. O isolamento entre tenants continua valendo.
 func TestRLS_HeadquartersWriteAllowed(t *testing.T) {
 	// Sede do tenant X altera uma linha da filial B.

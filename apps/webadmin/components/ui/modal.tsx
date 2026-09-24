@@ -89,7 +89,7 @@ export function Drawer({
   );
 }
 
-// Section agrupa campos de um formulário com título e descrição opcional.
+// Section agrupa campos de um formulario com titulo e descricao opcional.
 export function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
     <section className="border-t border-zinc-100 pt-3 first:border-0 first:pt-0">

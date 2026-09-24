@@ -1,6 +1,6 @@
 -- 000016_tenant_scope_rls.down.sql
--- Reverte para as políticas anteriores a 000015 (escopo Sede sem checagem de
--- tenant). Mantido apenas para permitir rollback; NÃO use em produção, pois
+-- Reverte para as politicas anteriores a 000015 (escopo Sede sem checagem de
+-- tenant). Mantido apenas para permitir rollback; NAO use em producao, pois
 -- restaura o vazamento multi-tenant corrigido por 000016.
 
 CREATE OR REPLACE FUNCTION is_headquarters() RETURNS boolean

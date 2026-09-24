@@ -24,7 +24,7 @@ export function FrequencySection({ memberId, canWrite }: { memberId: string; can
   }, [memberId]);
 
   useEffect(() => {
-    load().catch(() => toast("Erro ao carregar a frequência", "error"));
+    load().catch(() => toast("Erro ao carregar a frequencia", "error"));
   }, [load, toast]);
 
   async function submit(e: React.FormEvent) {
@@ -34,7 +34,7 @@ export function FrequencySection({ memberId, canWrite }: { memberId: string; can
       await setMemberFrequency(memberId, { frequency: form.frequency, started_at: form.started_at, notes: form.notes });
       setForm({ frequency: form.frequency, started_at: form.started_at, notes: "" });
       await load();
-      toast("Frequência atualizada.");
+      toast("Frequencia atualizada.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao salvar", "error");
     } finally {
@@ -49,13 +49,13 @@ export function FrequencySection({ memberId, canWrite }: { memberId: string; can
       <Card className="p-4">
         <div className="flex items-center gap-2">
           <Activity className="h-4 w-4 text-sky-600" />
-          <h3 className="text-sm font-semibold">Frequência atual</h3>
+          <h3 className="text-sm font-semibold">Frequencia atual</h3>
           {atual ? (
             <Badge tone={(FREQUENCY[atual.frequency]?.tone as "green") ?? "zinc"}>
               {FREQUENCY[atual.frequency]?.label ?? atual.frequency}
             </Badge>
           ) : (
-            <span className="text-xs text-zinc-400">não classificada</span>
+            <span className="text-xs text-zinc-400">nao classificada</span>
           )}
         </div>
       </Card>
@@ -63,7 +63,7 @@ export function FrequencySection({ memberId, canWrite }: { memberId: string; can
       {canWrite && (
         <Card className="p-4">
           <form onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Field label="Nova frequência">
+            <Field label="Nova frequencia">
               <Select className="h-8 text-sm" value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value })}>
                 {Object.entries(FREQUENCY).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </Select>
@@ -71,7 +71,7 @@ export function FrequencySection({ memberId, canWrite }: { memberId: string; can
             <Field label="A partir de">
               <Input type="date" className="h-8 text-sm" value={form.started_at} onChange={(e) => setForm({ ...form, started_at: e.target.value })} />
             </Field>
-            <Field label="Observação" className="sm:col-span-3">
+            <Field label="Observacao" className="sm:col-span-3">
               <Textarea rows={2} className="text-sm" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </Field>
             <div className="sm:col-span-3">
@@ -82,11 +82,11 @@ export function FrequencySection({ memberId, canWrite }: { memberId: string; can
       )}
 
       <Card className="p-4">
-        <h3 className="mb-3 text-sm font-semibold">Histórico de frequência</h3>
+        <h3 className="mb-3 text-sm font-semibold">Historico de frequencia</h3>
         {items === null ? (
           <SkeletonRows rows={3} />
         ) : items.length === 0 ? (
-          <EmptyState icon={<Activity className="h-8 w-8" />} title="Sem histórico" description="A frequência do membro aparece aqui." />
+          <EmptyState icon={<Activity className="h-8 w-8" />} title="Sem historico" description="A frequencia do membro aparece aqui." />
         ) : (
           <ol className="relative space-y-3 border-l border-zinc-200 pl-4 dark:border-zinc-800">
             {items.map((f) => {
@@ -97,7 +97,7 @@ export function FrequencySection({ memberId, canWrite }: { memberId: string; can
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={(st.tone as "green") ?? "zinc"} className="text-[10px]">{st.label}</Badge>
                     <span className="text-xs text-zinc-400">
-                      {datePt(f.started_at)} {f.ended_at ? `→ ${datePt(f.ended_at)}` : "(vigente)"}
+                      {datePt(f.started_at)} {f.ended_at ? `-> ${datePt(f.ended_at)}` : "(vigente)"}
                     </span>
                   </div>
                   {f.notes && <p className="mt-0.5 text-sm">{f.notes}</p>}

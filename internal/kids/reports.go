@@ -6,7 +6,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// EvolutionRow é a evolução de uma criança na turma.
+// EvolutionRow e a evolucao de uma crianca na turma.
 type EvolutionRow struct {
 	EnrollmentID    string  `json:"enrollment_id"`
 	MemberID        string  `json:"member_id"`
@@ -21,7 +21,7 @@ type EvolutionRow struct {
 	LastLesson      string  `json:"last_lesson"`
 }
 
-// ClassEvolution é o relatório de evolução de uma turma.
+// ClassEvolution e o relatorio de evolucao de uma turma.
 type ClassEvolution struct {
 	ClassID       string         `json:"class_id"`
 	ClassName     string         `json:"class_name"`
@@ -31,7 +31,7 @@ type ClassEvolution struct {
 	Rows          []EvolutionRow `json:"rows"`
 }
 
-// Evolution monta o relatório de evolução da turma no período [from, to].
+// Evolution monta o relatorio de evolucao da turma no periodo [from, to].
 func (r *Repo) Evolution(ctx context.Context, tx pgx.Tx, classID, from, to string) (*ClassEvolution, error) {
 	class, err := r.GetClass(ctx, tx, classID)
 	if err != nil {

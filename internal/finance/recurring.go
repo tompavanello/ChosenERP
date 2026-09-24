@@ -11,7 +11,7 @@ import (
 	"chosenerp/internal/store"
 )
 
-// Recurring é um agendamento de doação recorrente (dízimo/oferta).
+// Recurring e um agendamento de doacao recorrente (dizimo/oferta).
 type Recurring struct {
 	ID            string     `json:"id"`
 	BranchID      string     `json:"branch_id"`
@@ -64,7 +64,7 @@ const (
 	recurringTypeIncome = "income"
 )
 
-// nextRunFor avança a data de execução até o próximo momento >= now.
+// nextRunFor avanca a data de execucao ate o proximo momento >= now.
 func nextRunFor(periodStart time.Time, frequency string, now time.Time) time.Time {
 	if periodStart.IsZero() {
 		periodStart = now
@@ -83,7 +83,7 @@ func nextRunFor(periodStart time.Time, frequency string, now time.Time) time.Tim
 	return next
 }
 
-// normalizeRecurring valida e devolve o subtype normalizado (ou "" se inválido).
+// normalizeRecurring valida e devolve o subtype normalizado (ou "" se invalido).
 func normalizeRecurring(in CreateRecurringInput) (string, bool) {
 	if in.Amount <= 0 {
 		return "", false
@@ -105,7 +105,7 @@ func normalizeRecurring(in CreateRecurringInput) (string, bool) {
 	return sub, true
 }
 
-// CreateRecurring agenda uma doação recorrente no escopo da filial.
+// CreateRecurring agenda uma doacao recorrente no escopo da filial.
 func (r *Repo) CreateRecurring(ctx context.Context, tx pgx.Tx, tenantID, branchID string, in CreateRecurringInput) (*Recurring, error) {
 	sub, ok := normalizeRecurring(in)
 	if !ok {
@@ -138,7 +138,7 @@ func (r *Repo) CreateRecurring(ctx context.Context, tx pgx.Tx, tenantID, branchI
 	return &rec, nil
 }
 
-// ListRecurring retorna os agendamentos visíveis no escopo.
+// ListRecurring retorna os agendamentos visiveis no escopo.
 func (r *Repo) ListRecurring(ctx context.Context, tx pgx.Tx) ([]Recurring, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT rd.id::text, rd.branch_id::text, rd.member_id::text, m.full_name,
@@ -234,10 +234,10 @@ type dueRecurring struct {
 	Desc      string
 }
 
-// RecurringWorker gera lançamentos automáticos para agendamentos vencidos,
-// operando dentro do contexto RLS de cada filial (receita + recibo automático).
-// Quando o doador tem contato, o recibo também é enfileirado para envio
-// (a entrega real é feita pelo worker de outbox).
+// RecurringWorker gera lancamentos automaticos para agendamentos vencidos,
+// operando dentro do contexto RLS de cada filial (receita + recibo automatico).
+// Quando o doador tem contato, o recibo tambem e enfileirado para envio
+// (a entrega real e feita pelo worker de outbox).
 type RecurringWorker struct {
 	Store     *store.Store
 	Finance   *Repo
@@ -310,10 +310,10 @@ func (w *RecurringWorker) process(ctx context.Context, d dueRecurring) error {
 	return w.Store.WithTenant(ctx, bounds, func(tx pgx.Tx) error {
 		desc := d.Desc
 		if desc == "" {
-			desc = "Doação recorrente (" + d.Subtype + ")"
+			desc = "Doacao recorrente (" + d.Subtype + ")"
 		}
-		// A conta contábil é obrigatória no lançamento. Recorrências antigas
-		// podem não ter uma vinculada; resolve pelo subtipo (dízimo/oferta/doação).
+		// A conta contabil e obrigatoria no lancamento. Recorrencias antigas
+		// podem nao ter uma vinculada; resolve pelo subtipo (dizimo/oferta/doacao).
 		catID := d.CatID
 		if catID == nil || *catID == "" {
 			cid, err := defaultIncomeCategoryID(ctx, tx, d.Subtype)
@@ -341,8 +341,8 @@ func (w *RecurringWorker) process(ctx context.Context, d dueRecurring) error {
 		if w.Documents != nil && docID != "" {
 			if channel, to := donorContact(ctx, tx, d.MemberID, d.BenID); to != "" {
 				if _, err := w.Documents.QueueDelivery(ctx, tx, d.TenantID, d.BranchID, docID, channel, to); err != nil {
-					// Falha no enfileiramento não deve desfazer o lançamento.
-					log.Printf("[recurring-worker] recibo %s não enfileirado: %v", t.ID, err)
+					// Falha no enfileiramento nao deve desfazer o lancamento.
+					log.Printf("[recurring-worker] recibo %s nao enfileirado: %v", t.ID, err)
 				}
 			}
 		}
@@ -358,7 +358,7 @@ func (w *RecurringWorker) process(ctx context.Context, d dueRecurring) error {
 }
 
 // donorContact resolve o melhor canal de contato do doador (e-mail preferencial,
-// senão WhatsApp). Retorna ("", "") quando não há contato cadastrado.
+// senao WhatsApp). Retorna ("", "") quando nao ha contato cadastrado.
 func donorContact(ctx context.Context, tx pgx.Tx, memberID, benefactorID *string) (string, string) {
 	if memberID != nil && *memberID != "" {
 		var email, whatsapp, phone *string

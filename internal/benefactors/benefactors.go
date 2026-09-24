@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Benefactor é um benfeitor externo (sem vínculo de membresia).
+// Benefactor e um benfeitor externo (sem vinculo de membresia).
 type Benefactor struct {
 	ID        string    `json:"id"`
 	BranchID  *string   `json:"branch_id,omitempty"`

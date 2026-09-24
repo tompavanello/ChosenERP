@@ -9,13 +9,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ErrInvalidInput marca erros de validação (HTTP 400).
+// ErrInvalidInput marca erros de validacao (HTTP 400).
 var ErrInvalidInput = errors.New("invalid input")
 
 type Repo struct{}
 
 // ---------------------------------------------------------------------------
-// Trilhas e lições (conteúdo)
+// Trilhas e licoes (conteudo)
 // ---------------------------------------------------------------------------
 
 type Track struct {
@@ -74,7 +74,7 @@ func (r *Repo) GetTrack(ctx context.Context, tx pgx.Tx, id string) (*Track, erro
 
 func (r *Repo) CreateTrack(ctx context.Context, tx pgx.Tx, tenantID, branchID string, in TrackInput) (*Track, error) {
 	if in.Name == nil || *in.Name == "" {
-		return nil, fmt.Errorf("%w: name é obrigatório", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: name e obrigatorio", ErrInvalidInput)
 	}
 	if err := validateAges(in.AgeMin, in.AgeMax); err != nil {
 		return nil, err
@@ -182,7 +182,7 @@ func (r *Repo) ListLessons(ctx context.Context, tx pgx.Tx, trackID string) ([]Le
 
 func (r *Repo) CreateLesson(ctx context.Context, tx pgx.Tx, tenantID, branchID, trackID string, in LessonInput) (*Lesson, error) {
 	if in.Title == nil || *in.Title == "" {
-		return nil, fmt.Errorf("%w: title é obrigatório", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: title e obrigatorio", ErrInvalidInput)
 	}
 	position := 1
 	if in.Position != nil {
@@ -262,7 +262,7 @@ type ClassInput struct {
 	LeaderID *string `json:"leader_member_id"`
 	IsActive *bool   `json:"is_active"`
 	// BranchID permite que a Sede escolha a filial da turma; sem ele usa-se a
-	// filial da sessão. É obrigatório para quem não tem filial (Sede).
+	// filial da sessao. E obrigatorio para quem nao tem filial (Sede).
 	BranchID *string `json:"branch_id"`
 }
 
@@ -307,7 +307,7 @@ func (r *Repo) GetClass(ctx context.Context, tx pgx.Tx, id string) (*Class, erro
 
 func (r *Repo) CreateClass(ctx context.Context, tx pgx.Tx, tenantID, branchID string, in ClassInput) (*Class, error) {
 	if in.Name == nil || *in.Name == "" {
-		return nil, fmt.Errorf("%w: name é obrigatório", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: name e obrigatorio", ErrInvalidInput)
 	}
 	if err := validateAges(in.AgeMin, in.AgeMax); err != nil {
 		return nil, err

@@ -35,7 +35,7 @@ export function Field({ label, required, children, className, hint }: {
   );
 }
 
-// ---- Máscaras de input ----
+// ---- Mascaras de input ----
 
 const MASK_PATTERNS: Record<string, { pattern: RegExp; placeholder: string }> = {
   cpf: { pattern: /\d/, placeholder: "000.000.000-00" },

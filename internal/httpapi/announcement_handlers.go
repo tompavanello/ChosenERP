@@ -12,9 +12,9 @@ import (
 	"chosenerp/internal/store"
 )
 
-// handleSendAnnouncement resolve o público-alvo do comunicado e enfileira
-// os envios na outbox (announcement_deliveries). O worker de anúncios processa
-// os envios de forma assíncrona respeitando o escopo RLS de cada filial.
+// handleSendAnnouncement resolve o publico-alvo do comunicado e enfileira
+// os envios na outbox (announcement_deliveries). O worker de anuncios processa
+// os envios de forma assincrona respeitando o escopo RLS de cada filial.
 func (a *App) handleSendAnnouncement(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -39,7 +39,7 @@ func (a *App) handleSendAnnouncement(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		// Sem escolha explícita no disparo, usa a segmentação salva no comunicado.
+		// Sem escolha explicita no disparo, usa a segmentacao salva no comunicado.
 		if in.Audience == "" {
 			in.Audience = ann.Audience
 		}
@@ -87,14 +87,14 @@ func (a *App) handleSendAnnouncement(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// isZeroFilter indica que a segmentação enviada não tem nenhum critério.
+// isZeroFilter indica que a segmentacao enviada nao tem nenhum criterio.
 func isZeroFilter(f announcements.AudienceFilter) bool {
 	return len(f.GroupIDs) == 0 && len(f.MinistryIDs) == 0 && len(f.BranchIDs) == 0 &&
 		len(f.Genders) == 0 && len(f.MaritalStatuses) == 0 && len(f.MembershipStatuses) == 0 &&
 		f.AgeMin == nil && f.AgeMax == nil
 }
 
-// handleUpdateAnnouncement edita o comunicado: texto, segmentação e agendamento.
+// handleUpdateAnnouncement edita o comunicado: texto, segmentacao e agendamento.
 func (a *App) handleUpdateAnnouncement(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -128,7 +128,7 @@ func (a *App) handleUpdateAnnouncement(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// handleDeleteAnnouncement exclui o comunicado (entregas e execuções caem em cascata).
+// handleDeleteAnnouncement exclui o comunicado (entregas e execucoes caem em cascata).
 func (a *App) handleDeleteAnnouncement(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -150,7 +150,7 @@ func (a *App) handleDeleteAnnouncement(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// handleListNotificationRuns lista o histórico de execuções dos agendamentos.
+// handleListNotificationRuns lista o historico de execucoes dos agendamentos.
 func (a *App) handleListNotificationRuns(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -216,8 +216,8 @@ func (a *App) handleListAnnouncementDeliveries(w http.ResponseWriter, r *http.Re
 	})
 }
 
-// handleSendTestMessage envia uma mensagem de teste para um número específico
-// de forma síncrona (para validar a configuração do provedor).
+// handleSendTestMessage envia uma mensagem de teste para um numero especifico
+// de forma sincrona (para validar a configuracao do provedor).
 func (a *App) handleSendTestMessage(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -234,7 +234,7 @@ func (a *App) handleSendTestMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Message == "" {
-		in.Message = "Teste de configuração do Chosen ERP — sua conexão WhatsApp está funcionando!"
+		in.Message = "Teste de configuracao do Chosen ERP - sua conexao WhatsApp esta funcionando!"
 	}
 
 	provider := a.Dispatch.ProviderFor(delivery.ChannelWhatsApp)

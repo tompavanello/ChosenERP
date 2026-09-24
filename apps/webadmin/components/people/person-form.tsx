@@ -14,9 +14,9 @@ export type PersonFormState = Record<string, string>;
 
 export type PersonInput = Partial<Person> & { nickname?: string; photo_url?: string };
 
-/** O que o formulário devolve além do payload JSON. */
+/** O que o formulario devolve alem do payload JSON. */
 export interface PersonSubmitContext {
-  /** Cargos marcados. Quem grava é o pai (na criação o id do membro ainda não existe). */
+  /** Cargos marcados. Quem grava e o pai (na criacao o id do membro ainda nao existe). */
   cargoIds: string[];
 }
 
@@ -71,9 +71,9 @@ export const toMemberForm = toPersonForm;
 /**
  * Descarta os campos vazios do payload.
  *
- * Não é cosmético: o backend converte as datas com `$n::date`, e string vazia
- * vira `''::date` — erro 500 no Postgres. Era essa a causa do "quebra ao salvar"
- * em cadastros sem data de nascimento. Campo ausente mantém o valor atual (PATCH).
+ * Nao e cosmetico: o backend converte as datas com `$n::date`, e string vazia
+ * vira `''::date` - erro 500 no Postgres. Era essa a causa do "quebra ao salvar"
+ * em cadastros sem data de nascimento. Campo ausente mantem o valor atual (PATCH).
  */
 export function compactPersonForm(f: PersonFormState): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -88,8 +88,8 @@ export const compactMemberForm = compactPersonForm;
 export interface PersonFormProps {
   entityType: "member" | "visitor" | "benefactor";
   /**
-   * Id do membro já salvo. Habilita foto e carregamento dos cargos atuais —
-   * ambos dependem de um id que ainda não existe na inclusão.
+   * Id do membro ja salvo. Habilita foto e carregamento dos cargos atuais -
+   * ambos dependem de um id que ainda nao existe na inclusao.
    */
   memberId?: string;
   initial?: PersonInput | null;
@@ -99,7 +99,7 @@ export interface PersonFormProps {
   loading?: boolean;
   onSubmit: (data: Record<string, unknown>, ctx: PersonSubmitContext) => Promise<void>;
   onCancel: () => void;
-  /** Notifica o pai quando a foto muda, para o avatar fora do formulário acompanhar. */
+  /** Notifica o pai quando a foto muda, para o avatar fora do formulario acompanhar. */
   onPhotoChange?: (url?: string) => void;
 }
 
@@ -140,8 +140,8 @@ export function PersonForm({
   const isSaving = saving ?? loading ?? false;
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  // UI de nome único: o backend ainda guarda first_name/last_name (NOT NULL),
-  // então a digitação é dividida aqui — primeiro token = nome, resto = sobrenome.
+  // UI de nome unico: o backend ainda guarda first_name/last_name (NOT NULL),
+  // entao a digitacao e dividida aqui - primeiro token = nome, resto = sobrenome.
   const fullName = `${form.first_name} ${form.last_name}`.trim();
   function setFullName(v: string) {
     const parts = v.trim().split(/\s+/).filter(Boolean);
@@ -149,8 +149,8 @@ export function PersonForm({
     setForm((f) => ({ ...f, first_name: first, last_name: parts.join(" ") }));
   }
 
-  // Cargos atuais do membro: só os ATIVOS entram marcados. Os encerrados vivem
-  // na aba Cargos do detalhe, que é onde o histórico completo faz sentido.
+  // Cargos atuais do membro: so os ATIVOS entram marcados. Os encerrados vivem
+  // na aba Cargos do detalhe, que e onde o historico completo faz sentido.
   useEffect(() => {
     if (entityType !== "member" || !memberId) return;
     listMemberCargos(memberId)
@@ -161,7 +161,7 @@ export function PersonForm({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const data = compactPersonForm(form);
-    // Endereço é aninhado na API (jsonb): junta os campos flat address_* num
+    // Endereco e aninhado na API (jsonb): junta os campos flat address_* num
     // objeto `address` e remove as chaves flat, que o backend recusaria.
     const address: Record<string, string> = {};
     for (const [k, v] of Object.entries(form)) {
@@ -171,7 +171,7 @@ export function PersonForm({
       if (k.startsWith("address_")) delete data[k];
     }
     if (Object.keys(address).length) data.address = address;
-    // Motivo/data de saída só valem para situações de baixa.
+    // Motivo/data de saida so valem para situacoes de baixa.
     if (!EXIT_STATUSES.includes(form.membership_status)) {
       delete data.exit_reason;
       delete data.exited_at;
@@ -196,20 +196,20 @@ export function PersonForm({
             onClick={() => setTab("dados")}
             className={`border-b-2 px-3 py-1.5 text-sm font-medium transition ${tab === "dados" ? "border-sky-600 text-sky-700 dark:text-sky-400" : "border-transparent text-zinc-500 hover:text-zinc-700"}`}
           >
-            Dados e endereço
+            Dados e endereco
           </button>
           <button
             type="button"
             onClick={() => setTab("igreja")}
             className={`border-b-2 px-3 py-1.5 text-sm font-medium transition ${tab === "igreja" ? "border-sky-600 text-sky-700 dark:text-sky-400" : "border-transparent text-zinc-500 hover:text-zinc-700"}`}
           >
-            Vida eclesiástica
+            Vida eclesiastica
           </button>
         </div>
       )}
 
-      {/* Aba "Dados e endereço". Para visitante/benfeitor é a única tela.
-          Fica montada (só oculta) para não perder a validação nativa. */}
+      {/* Aba "Dados e endereco". Para visitante/benfeitor e a unica tela.
+          Fica montada (so oculta) para nao perder a validacao nativa. */}
       <div className={isMember && tab !== "dados" ? "hidden" : undefined}>
       {isMember && (
         <Section title="Foto">
@@ -226,7 +226,7 @@ export function PersonForm({
               />
             ) : (
               <p className="text-xs text-zinc-400">
-                A foto pode ser enviada logo depois de salvar — o cadastro precisa existir
+                A foto pode ser enviada logo depois de salvar - o cadastro precisa existir
                 antes do upload.
               </p>
             )}
@@ -234,7 +234,7 @@ export function PersonForm({
         </Section>
       )}
 
-      <Section title="Identificação">
+      <Section title="Identificacao">
         <Field label="Nome completo *" required className="sm:col-span-2">
           <Input required className="h-8 text-sm" value={fullName} onChange={(e) => setFullName(e.target.value)} />
         </Field>
@@ -246,19 +246,19 @@ export function PersonForm({
         </Field>
         <Field label="Sexo">
           <Select className="h-8 text-sm" value={form.gender} onChange={(e) => set("gender", e.target.value)}>
-            <option value="">—</option>
+            <option value="">-</option>
             {Object.entries(GENDER).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
           </Select>
         </Field>
         <Field label="Estado civil">
           <Select className="h-8 text-sm" value={form.marital_status} onChange={(e) => set("marital_status", e.target.value)}>
-            <option value="">—</option>
+            <option value="">-</option>
             {Object.entries(MARITAL_STATUS).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
           </Select>
         </Field>
       </Section>
 
-      <Section title="Documentos" hint="Opcional — usado em recibos e cartas.">
+      <Section title="Documentos" hint="Opcional - usado em recibos e cartas.">
         <Field label="CPF">
           <MaskedInput
             mask="cpf"
@@ -278,7 +278,7 @@ export function PersonForm({
           />
         </Field>
         {isMember && (
-          <Field label="Profissão">
+          <Field label="Profissao">
             <Input className="h-8 text-sm" value={form.profession} onChange={(e) => set("profession", e.target.value)} />
           </Field>
         )}
@@ -307,7 +307,7 @@ export function PersonForm({
         {isVisitor && (
           <Field label="Como nos conheceu?">
             <Select className="h-8 text-sm" value={form.source} onChange={(e) => set("source", e.target.value)}>
-              <option value="">—</option>
+              <option value="">-</option>
               {VISITOR_SOURCES.map((s) => (<option key={s.value} value={s.value}>{s.label}</option>))}
             </Select>
           </Field>
@@ -315,14 +315,14 @@ export function PersonForm({
       </Section>
 
       {isMember && (
-        <Section title="Endereço" hint="Endereço do membro (requisito 1.1).">
+        <Section title="Endereco" hint="Endereco do membro (requisito 1.1).">
           <Field label="CEP">
             <MaskedInput mask="cep" className="h-8 text-sm" value={form.address_zip_code} onChange={(e) => set("address_zip_code", e.target.value)} placeholder="00000-000" />
           </Field>
           <Field label="Logradouro" className="sm:col-span-2">
             <Input className="h-8 text-sm" value={form.address_street} onChange={(e) => set("address_street", e.target.value)} />
           </Field>
-          <Field label="Número">
+          <Field label="Numero">
             <Input className="h-8 text-sm" value={form.address_number} onChange={(e) => set("address_number", e.target.value)} />
           </Field>
           <Field label="Complemento">
@@ -343,7 +343,7 @@ export function PersonForm({
 
       {isMember && (
         <div className={tab === "igreja" ? undefined : "hidden"}>
-        <Section title="Vida eclesiástica">
+        <Section title="Vida eclesiastica">
           <Field label="Status">
             <Combobox
               value={form.membership_status}
@@ -359,11 +359,11 @@ export function PersonForm({
             <>
               <Field label="Motivo da baixa" hint="Requisito 1.7.">
                 <Select className="h-8 text-sm" value={form.exit_reason} onChange={(e) => set("exit_reason", e.target.value)}>
-                  <option value="">—</option>
+                  <option value="">-</option>
                   {Object.entries(EXIT_REASONS).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
                 </Select>
               </Field>
-              <Field label="Data de saída">
+              <Field label="Data de saida">
                 <Input type="date" className="h-8 text-sm" value={form.exited_at} onChange={(e) => set("exited_at", e.target.value)} />
               </Field>
             </>
@@ -374,7 +374,7 @@ export function PersonForm({
           <Field label="Local do batismo">
             <Input className="h-8 text-sm" value={form.baptism_location} onChange={(e) => set("baptism_location", e.target.value)} placeholder="Ex: Igreja Sede Matriz" />
           </Field>
-          <Field label="Data de casamento" hint="Usada nos aniversários de casamento.">
+          <Field label="Data de casamento" hint="Usada nos aniversarios de casamento.">
             <Input type="date" className="h-8 text-sm" value={form.marriage_date} onChange={(e) => set("marriage_date", e.target.value)} />
           </Field>
           <Field label="Membro desde">
@@ -382,7 +382,7 @@ export function PersonForm({
           </Field>
         </Section>
 
-        <Section title="Observações">
+        <Section title="Observacoes">
           <Field label="Notas" className="sm:col-span-2">
             <Textarea rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
           </Field>
@@ -391,7 +391,7 @@ export function PersonForm({
       )}
 
       {isBenefactor && (
-        <Section title="Observações">
+        <Section title="Observacoes">
           <Field label="Notas" className="sm:col-span-2">
             <Textarea rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
           </Field>

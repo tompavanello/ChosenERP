@@ -10,8 +10,8 @@ import { useToast } from "@/components/ui/toast";
 import { mfaStatus, mfaSetup, mfaEnable, mfaDisable } from "@/lib/api";
 
 /**
- * Ativa/desativa o MFA (TOTP) do usuário logado. Usado tanto na tela de
- * Usuários (para admins) quanto na de perfil (qualquer usuário).
+ * Ativa/desativa o MFA (TOTP) do usuario logado. Usado tanto na tela de
+ * Usuarios (para admins) quanto na de perfil (qualquer usuario).
  */
 export function MfaCard() {
   const { toast } = useToast();
@@ -42,7 +42,7 @@ export function MfaCard() {
       setCode("");
       toast("MFA ativado.");
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Código inválido", "error");
+      toast(err instanceof Error ? err.message : "Codigo invalido", "error");
     } finally {
       setBusy(false);
     }
@@ -67,9 +67,9 @@ export function MfaCard() {
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-sm font-semibold">Autenticação em dois fatores (MFA)</p>
+            <p className="text-sm font-semibold">Autenticacao em dois fatores (MFA)</p>
             <p className="text-xs text-zinc-500">
-              {enabled ? "Ativada neste usuário. O login pedirá o código do autenticador." : "Recomendada para administradores e tesouraria."}
+              {enabled ? "Ativada neste usuario. O login pedira o codigo do autenticador." : "Recomendada para administradores e tesouraria."}
             </p>
           </div>
         </div>
@@ -90,7 +90,7 @@ export function MfaCard() {
               Leia o QR no autenticador (Google Authenticator, Authy...) ou use o segredo:
               <code className="ml-1 break-all rounded bg-zinc-100 px-1 text-[11px] dark:bg-zinc-800">{setupData.secret}</code>
             </p>
-            <Field label="Código de 6 dígitos">
+            <Field label="Codigo de 6 digitos">
               <Input
                 inputMode="numeric" maxLength={6} className="h-8 w-40 text-sm tracking-widest"
                 value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}

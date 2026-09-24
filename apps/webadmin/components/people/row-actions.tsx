@@ -29,12 +29,12 @@ export function RowActions({
     <Dropdown
       triggerAsChild
       trigger={
-        // Visível sempre (não só no hover da linha): o gatilho escondido por
-        // `opacity-0 group-hover:*` dependia de um `group` que a linha não tem —
-        // as ações ficavam invisíveis, e em telas de toque não há hover.
+        // Visivel sempre (nao so no hover da linha): o gatilho escondido por
+        // `opacity-0 group-hover:*` dependia de um `group` que a linha nao tem -
+        // as acoes ficavam invisiveis, e em telas de toque nao ha hover.
         <Button type="button" variant="ghost" size="sm" className="h-7 w-7 px-1 text-zinc-400 opacity-70 hover:opacity-100">
           <MoreHorizontal className="h-4 w-4" />
-          <span className="sr-only">Ações do membro</span>
+          <span className="sr-only">Acoes do membro</span>
         </Button>
       }
       items={dropdownItems}

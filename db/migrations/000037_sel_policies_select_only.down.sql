@@ -1,6 +1,6 @@
 -- 000037_sel_policies_select_only.down.sql
--- Reverte para o comportamento anterior (política `*_sel` como ALL). É o estado
--- legado com o defeito descrito na migração up; mantido apenas para rollback.
+-- Reverte para o comportamento anterior (politica `*_sel` como ALL). E o estado
+-- legado com o defeito descrito na migracao up; mantido apenas para rollback.
 DO $$
 DECLARE
     r record;

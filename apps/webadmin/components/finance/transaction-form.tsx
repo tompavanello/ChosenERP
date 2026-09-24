@@ -48,27 +48,27 @@ export interface TransactionFormProps {
   open: boolean;
   onClose: () => void;
   initialState?: Partial<TransactionFormState>;
-  /** Se informado, o formulário chama onSubmit com os dados e deixa o
-   *  componente pai decidir o que fazer (refetch, invalidação, etc.). */
+  /** Se informado, o formulario chama onSubmit com os dados e deixa o
+   *  componente pai decidir o que fazer (refetch, invalidacao, etc.). */
   onSubmit?: (data: Record<string, unknown>) => Promise<void>;
-  /** Se não informado, usa createTransaction e dá reload via onSaved. */
+  /** Se nao informado, usa createTransaction e da reload via onSaved. */
   onSaved?: () => void;
   submitLabel?: string;
 }
 
 /**
- * Formulário reutilizável para lançamentos financeiros.
+ * Formulario reutilizavel para lancamentos financeiros.
  *
- * Extraído de dashboard/finance/page.tsx para permitir reuso em:
- *  - Drawer de "Novo lançamento" (página financeira)
- *  - Modal de "Lançamento rápido" (dashboard overview)
- *  - Página de transferência interna
+ * Extraido de dashboard/finance/page.tsx para permitir reuso em:
+ *  - Drawer de "Novo lancamento" (pagina financeira)
+ *  - Modal de "Lancamento rapido" (dashboard overview)
+ *  - Pagina de transferencia interna
  *
- * Campos expostos (não presentes no formulário original):
- *  - occurred_at  ? backdatar lançamentos
+ * Campos expostos (nao presentes no formulario original):
+ *  - occurred_at  ? backdatar lancamentos
  *  - donor_member_id  ? associar a um membro
  *  - benefactor_id  ? associar a um benfeitor
- *  - is_anonymous  ? doação anônima
+ *  - is_anonymous  ? doacao anonima
  */
 export function TransactionForm({
   open,
@@ -76,7 +76,7 @@ export function TransactionForm({
   initialState,
   onSubmit,
   onSaved,
-  submitLabel = "Lançar",
+  submitLabel = "Lancar",
 }: TransactionFormProps) {
   const { toast } = useToast();
   const { hasPerm } = useAuth();
@@ -94,7 +94,7 @@ export function TransactionForm({
   const [benefactors, setBenefactors] = useState<Benefactor[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 
-  // Carrega dependências para os selects/comboboxes
+  // Carrega dependencias para os selects/comboboxes
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -106,7 +106,7 @@ export function TransactionForm({
         setIncomeCats(all.filter((c) => c.type === "income"));
         setExpenseCats(all.filter((c) => c.type === "expense"));
       })
-      .catch(() => { /* silencioso — usa estados vazios */ });
+      .catch(() => { /* silencioso - usa estados vazios */ });
 
     listAccounts()
       .then((r) => { if (!cancelled) setAccounts(r.accounts.filter((a) => a.is_active)); })
@@ -138,7 +138,7 @@ export function TransactionForm({
 
   const categoriesForType = form.type === "income" ? incomeCats : expenseCats;
 
-  // Validação client-side mínima: a conta contábil é obrigatória.
+  // Validacao client-side minima: a conta contabil e obrigatoria.
   const canSubmit =
     !!form.category_id && !!form.amount && Number(form.amount) > 0 &&
     (hasPerm("finance.write") || !!onSubmit);
@@ -149,11 +149,11 @@ export function TransactionForm({
 
     const amount = Number(form.amount);
     if (isNaN(amount) || amount <= 0) {
-      toast("Valor deve ser um número positivo.", "error");
+      toast("Valor deve ser um numero positivo.", "error");
       return;
     }
     if (!form.category_id) {
-      toast("Selecione a conta contábil.", "error");
+      toast("Selecione a conta contabil.", "error");
       return;
     }
 
@@ -183,25 +183,25 @@ export function TransactionForm({
         await onSubmit(payload);
       } else {
         const res = await createTransaction(payload);
-        // Anexo escolhido no próprio lançamento: sobe depois de criar (o
-        // endpoint de anexo precisa do id da transação). Falha no anexo não
-        // desfaz o lançamento.
+        // Anexo escolhido no proprio lancamento: sobe depois de criar (o
+        // endpoint de anexo precisa do id da transacao). Falha no anexo nao
+        // desfaz o lancamento.
         if (file && res.transaction?.id) {
           try {
             await uploadAttachment(res.transaction.id, file);
           } catch {
-            toast("Lançamento registrado, mas o anexo falhou.", "error");
+            toast("Lancamento registrado, mas o anexo falhou.", "error");
           }
         }
       }
-      toast("Lançamento registrado com recibo.");
+      toast("Lancamento registrado com recibo.");
       onSaved?.();
       onClose();
       setForm({ ...EMPTY, ...initialState });
       setFile(null);
       setAlloc([]);
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro ao registrar lançamento.", "error");
+      toast(err instanceof Error ? err.message : "Erro ao registrar lancamento.", "error");
     } finally {
       setSaving(false);
     }
@@ -236,7 +236,7 @@ export function TransactionForm({
             value={form.type}
             onChange={(e) => set("type", e.target.value as "income" | "expense")}
           >
-            <option value="income">Dízimo / Oferta / Doação</option>
+            <option value="income">Dizimo / Oferta / Doacao</option>
             <option value="expense">Despesa</option>
           </Select>
         </Field>
@@ -274,7 +274,7 @@ export function TransactionForm({
       </Section>
 
       <Section title="Plano de contas">
-        <Field label="Conta contábil *" required>
+        <Field label="Conta contabil *" required>
           <Select
             value={form.category_id}
             onChange={(e) => set("category_id", e.target.value)}
@@ -286,7 +286,7 @@ export function TransactionForm({
               <>
                 <option value="">Selecione...</option>
                 {categoriesForType.map((c) => (
-                  <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
+                  <option key={c.id} value={c.id}>{c.code} - {c.name}</option>
                 ))}
               </>
             )}
@@ -294,13 +294,13 @@ export function TransactionForm({
         </Field>
         <div className="flex items-end">
           <Badge tone={form.is_anonymous ? "zinc" : "green"} variant="soft" className="text-xs">
-            {form.is_anonymous ? "Anônimo" : "Identificado"}
+            {form.is_anonymous ? "Anonimo" : "Identificado"}
           </Badge>
         </div>
       </Section>
 
       {form.type === "income" && (
-        <Section title="Doação" hint="Associe a um membro ou benfeitor para emissão automática de recibo.">
+        <Section title="Doacao" hint="Associe a um membro ou benfeitor para emissao automatica de recibo.">
           <Field label="Membro doador">
             <Combobox
               value={form.donor_member_id}
@@ -333,7 +333,7 @@ export function TransactionForm({
             </Field>
           )}
           {!form.donor_member_id && !form.benefactor_id && (
-            <Field label="Anônimo">
+            <Field label="Anonimo">
               <div className="flex items-center gap-2 pt-1">
                 <input
                   type="checkbox"
@@ -344,7 +344,7 @@ export function TransactionForm({
                   className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-zinc-300 rounded"
                 />
                 <label htmlFor="anon-toggle" className="text-sm text-zinc-600">
-                  Doação sem identificação
+                  Doacao sem identificacao
                 </label>
               </div>
             </Field>
@@ -353,7 +353,7 @@ export function TransactionForm({
       )}
 
       {form.type === "expense" && (
-        <Section title="Fornecedor" hint="Opcional — associe a despesa a um fornecedor cadastrado.">
+        <Section title="Fornecedor" hint="Opcional - associe a despesa a um fornecedor cadastrado.">
           <Field label="Fornecedor" className="sm:col-span-2">
             <Combobox
               value={form.supplier_id}
@@ -368,7 +368,7 @@ export function TransactionForm({
         </Section>
       )}
 
-      <Section title="Conta bancária">
+      <Section title="Conta bancaria">
         {accounts.length > 0 ? (
           <Field label="Conta">
             <Select
@@ -376,34 +376,34 @@ export function TransactionForm({
               onChange={(e) => set("account_id", e.target.value)}
               disabled={saving}
             >
-              <option value="">Nenhuma (não informado)</option>
+              <option value="">Nenhuma (nao informado)</option>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.name} — saldo inicial {currency(a.initial_balance)}
+                  {a.name} - saldo inicial {currency(a.initial_balance)}
                 </option>
               ))}
             </Select>
           </Field>
         ) : (
           <p className="text-xs text-zinc-400">
-            Nenhuma conta bancária ativa cadastrada. Cadastre uma em{" "}
-            <span className="text-sky-600">Contas Bancárias</span>.
+            Nenhuma conta bancaria ativa cadastrada. Cadastre uma em{" "}
+            <span className="text-sky-600">Contas Bancarias</span>.
           </p>
         )}
       </Section>
 
-      <Section title="Observações">
-        <Field label="Descrição" className="sm:col-span-2" hint={`${form.description.length}/2000`}>
+      <Section title="Observacoes">
+        <Field label="Descricao" className="sm:col-span-2" hint={`${form.description.length}/2000`}>
           <Textarea
             rows={3}
             maxLength={2000}
             value={form.description}
             onChange={(e) => set("description", e.target.value)}
-            placeholder="Ex.: Dízimo de dezembro, oferta de missão..."
+            placeholder="Ex.: Dizimo de dezembro, oferta de missao..."
             disabled={saving}
           />
         </Field>
-        <Field label="Documento de referência" className="sm:col-span-2" hint="Opcional — comprovante, nota ou recibo (imagem/PDF).">
+        <Field label="Documento de referencia" className="sm:col-span-2" hint="Opcional - comprovante, nota ou recibo (imagem/PDF).">
           {file ? (
             <div className="flex items-center justify-between rounded border border-zinc-200 px-2 py-1.5 text-sm dark:border-zinc-700">
               <span className="flex items-center gap-2 truncate">
@@ -434,7 +434,7 @@ export function TransactionForm({
       )}
 
       {tab === "eventos" && (
-      <Section title="Eventos (rateio)" hint="Opcional — associe o custo a um ou mais eventos.">
+      <Section title="Eventos (rateio)" hint="Opcional - associe o custo a um ou mais eventos.">
         <div className="space-y-1 sm:col-span-2">
           {events.length === 0 ? (
             <p className="text-xs text-zinc-400">Nenhum evento cadastrado no ano.</p>
@@ -453,7 +453,7 @@ export function TransactionForm({
                     }}
                     className="h-4 w-4 rounded border-zinc-300 text-sky-600"
                   />
-                  <span className="flex-1 truncate">{datePt(ev.starts_at)} · {ev.kind_name ?? "Evento"}</span>
+                  <span className="flex-1 truncate">{datePt(ev.starts_at)} - {ev.kind_name ?? "Evento"}</span>
                   {sel && (
                     <Input
                       type="number" min="0" step="0.01" placeholder="auto"

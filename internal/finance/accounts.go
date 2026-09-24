@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Account é uma conta bancária ou caixa do tenant/filial.
+// Account e uma conta bancaria ou caixa do tenant/filial.
 type Account struct {
 	ID              string     `json:"id"`
 	BranchID        *string    `json:"branch_id,omitempty"`
@@ -23,7 +23,7 @@ type Account struct {
 	CreatedAt       time.Time  `json:"created_at"`
 }
 
-// CreateAccountInput é o payload para criar uma conta bancária.
+// CreateAccountInput e o payload para criar uma conta bancaria.
 type CreateAccountInput struct {
 	BranchID      *string `json:"branch_id,omitempty"`
 	Name           string  `json:"name"`
@@ -36,7 +36,7 @@ type CreateAccountInput struct {
 	IsActive       *bool   `json:"is_active,omitempty"`
 }
 
-// ListAccounts retorna as contas visíveis no escopo (tenant + branch ou Sede).
+// ListAccounts retorna as contas visiveis no escopo (tenant + branch ou Sede).
 func (r *Repo) ListAccounts(ctx context.Context, tx pgx.Tx) ([]Account, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT id::text, COALESCE(branch_id::text,''), name, bank, bank_code,
@@ -63,7 +63,7 @@ func (r *Repo) ListAccounts(ctx context.Context, tx pgx.Tx) ([]Account, error) {
 	return out, rows.Err()
 }
 
-// CreateAccount insere uma conta bancária no escopo.
+// CreateAccount insere uma conta bancaria no escopo.
 func (r *Repo) CreateAccount(ctx context.Context, tx pgx.Tx, tenantID, branchID string, in CreateAccountInput) (*Account, error) {
 	var a Account
 	query := `
@@ -82,7 +82,7 @@ func (r *Repo) CreateAccount(ctx context.Context, tx pgx.Tx, tenantID, branchID 
 	return &a, err
 }
 
-// UpdateAccount atualiza os dados de uma conta (PATCH: campo nil mantém).
+// UpdateAccount atualiza os dados de uma conta (PATCH: campo nil mantem).
 func (r *Repo) UpdateAccount(ctx context.Context, tx pgx.Tx, id string, in UpdateAccountInput) (*Account, error) {
 	var a Account
 	err := tx.QueryRow(ctx, `
@@ -106,10 +106,10 @@ func (r *Repo) UpdateAccount(ctx context.Context, tx pgx.Tx, id string, in Updat
 	return &a, err
 }
 
-// ErrAccountInUse indica que a conta tem lançamentos/recorrências vinculados.
+// ErrAccountInUse indica que a conta tem lancamentos/recorrencias vinculados.
 var ErrAccountInUse = errors.New("conta em uso: desative em vez de excluir")
 
-// DeleteAccount exclui uma conta sem uso (senão devolve ErrAccountInUse).
+// DeleteAccount exclui uma conta sem uso (senao devolve ErrAccountInUse).
 func (r *Repo) DeleteAccount(ctx context.Context, tx pgx.Tx, id string) error {
 	var used int
 	if err := tx.QueryRow(ctx, `
@@ -130,7 +130,7 @@ func (r *Repo) DeleteAccount(ctx context.Context, tx pgx.Tx, id string) error {
 	return nil
 }
 
-// UpdateAccountInput é o payload para atualizar uma conta bancária.
+// UpdateAccountInput e o payload para atualizar uma conta bancaria.
 type UpdateAccountInput struct {
 	Name           *string  `json:"name,omitempty"`
 	Bank           *string  `json:"bank,omitempty"`

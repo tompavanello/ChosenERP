@@ -12,7 +12,7 @@ import (
 	"chosenerp/internal/visitors"
 )
 
-// ---- Membros: edição / vínculo / árvore ----
+// ---- Membros: edicao / vinculo / arvore ----
 
 func (a *App) handleUpdateMember(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -96,7 +96,7 @@ func (a *App) handleAddRelationship(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"ok": true})
 }
 
-// ---- Famílias ----
+// ---- Familias ----
 
 func (a *App) handleListFamilies(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -196,8 +196,8 @@ func (a *App) handleFamilyMembers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"members": out})
 }
 
-// handleGetFamily devolve a família com chefe, código e contagem — a aba
-// "Família" do membro precisa dos metadados, não só da lista de pessoas.
+// handleGetFamily devolve a familia com chefe, codigo e contagem - a aba
+// "Familia" do membro precisa dos metadados, nao so da lista de pessoas.
 func (a *App) handleGetFamily(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -253,8 +253,8 @@ func (a *App) handleUpdateFamily(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, f)
 }
 
-// handleDeleteFamily apaga o agrupamento. Os vínculos de parentesco sobrevivem
-// (family_id é ON DELETE SET NULL) — some só a família, nunca o parentesco.
+// handleDeleteFamily apaga o agrupamento. Os vinculos de parentesco sobrevivem
+// (family_id e ON DELETE SET NULL) - some so a familia, nunca o parentesco.
 func (a *App) handleDeleteFamily(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -296,8 +296,8 @@ func (a *App) handleUnlinkFamilyMember(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// handleMemberFamilies lista as famílias do membro — alimenta a aba "Família"
-// do detalhe sem varrer a lista inteira de famílias do tenant.
+// handleMemberFamilies lista as familias do membro - alimenta a aba "Familia"
+// do detalhe sem varrer a lista inteira de familias do tenant.
 func (a *App) handleMemberFamilies(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -401,7 +401,7 @@ func (a *App) handleUpdateVisitorStage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, v)
 }
 
-// ---- Visitor → Member conversion ----
+// ---- Visitor -> Member conversion ----
 
 func (a *App) handleConvertVisitor(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())

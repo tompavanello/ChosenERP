@@ -38,7 +38,7 @@ export default function ProfilePage() {
   async function savePassword(e: React.FormEvent) {
     e.preventDefault();
     if (pw.next !== pw.confirm) {
-      toast("A confirmação não confere com a nova senha.", "error");
+      toast("A confirmacao nao confere com a nova senha.", "error");
       return;
     }
     if (pw.next.length < 8) {
@@ -59,7 +59,7 @@ export default function ProfilePage() {
 
   return (
     <div className="page">
-      <PageHeader title="Meu perfil" description="Seus dados de acesso e segurança da conta" />
+      <PageHeader title="Meu perfil" description="Seus dados de acesso e seguranca da conta" />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-4">
@@ -106,7 +106,7 @@ export default function ProfilePage() {
                 onChange={(e) => setPw({ ...pw, current: e.target.value })}
               />
             </Field>
-            <Field label="Nova senha" required hint="Mínimo de 8 caracteres.">
+            <Field label="Nova senha" required hint="Minimo de 8 caracteres.">
               <Input
                 required type="password" className="h-8 text-sm"
                 value={pw.next}

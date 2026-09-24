@@ -17,8 +17,8 @@ export default function MemberAppPage() {
   const [data, setData] = useState<PublicCardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  // Origem do webadmin, para o QR apontar para esta mesma página. Lida no
-  // efeito (e não no render) porque o prerender roda sem `window`.
+  // Origem do webadmin, para o QR apontar para esta mesma pagina. Lida no
+  // efeito (e nao no render) porque o prerender roda sem `window`.
   const [origem, setOrigem] = useState("");
 
   useEffect(() => setOrigem(window.location.origin), []);
@@ -29,7 +29,7 @@ export default function MemberAppPage() {
     try {
       setData(await getPublicCard(token));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Carteirinha não encontrada.");
+      setError(e instanceof Error ? e.message : "Carteirinha nao encontrada.");
     } finally {
       setLoading(false);
     }
@@ -80,8 +80,8 @@ export default function MemberAppPage() {
               </div>
             </div>
 
-            {/* QR real apontando para esta página: quem escaneia abre a
-                carteirinha e vê os avisos publicados pela igreja. */}
+            {/* QR real apontando para esta pagina: quem escaneia abre a
+                carteirinha e ve os avisos publicados pela igreja. */}
             <div className="mt-5 flex items-center gap-4 rounded-xl bg-white p-3">
               <div className="shrink-0 rounded-lg bg-white p-1">
                 {origem ? (
@@ -99,7 +99,7 @@ export default function MemberAppPage() {
               <div className="text-xs text-zinc-500">
                 <p className="font-medium text-zinc-700">Carteirinha digital</p>
                 <p className="mt-0.5">
-                  Aponte a câmera para abrir esta carteirinha e receber os avisos da igreja.
+                  Aponte a camera para abrir esta carteirinha e receber os avisos da igreja.
                 </p>
               </div>
             </div>

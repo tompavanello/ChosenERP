@@ -6,9 +6,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// BranchChannels reúne a configuração de comunicação de uma filial: WhatsApp
-// (instância Evolution conectada por QR) e SMTP de e-mail próprio. A senha do
-// SMTP nunca sai do banco — só o flag SMTPPasswordSet.
+// BranchChannels reune a configuracao de comunicacao de uma filial: WhatsApp
+// (instancia Evolution conectada por QR) e SMTP de e-mail proprio. A senha do
+// SMTP nunca sai do banco - so o flag SMTPPasswordSet.
 type BranchChannels struct {
 	BranchID         string `json:"branch_id"`
 	WhatsAppPhone    string `json:"whatsapp_phone"`
@@ -23,8 +23,8 @@ type BranchChannels struct {
 	SMTPSecure       bool   `json:"smtp_secure"`
 }
 
-// BranchChannelsInput é o corpo de edição (parcial). SMTPPassword nil mantém a
-// senha atual; string vazia também mantém (para não apagar por engano).
+// BranchChannelsInput e o corpo de edicao (parcial). SMTPPassword nil mantem a
+// senha atual; string vazia tambem mantem (para nao apagar por engano).
 type BranchChannelsInput struct {
 	WhatsAppPhone *string `json:"whatsapp_phone"`
 	SMTPHost      *string `json:"smtp_host"`
@@ -56,14 +56,14 @@ func scanChannels(row pgx.Row) (*BranchChannels, error) {
 	return &c, err
 }
 
-// GetBranchChannels lê a configuração de canais de uma filial do tenant atual.
+// GetBranchChannels le a configuracao de canais de uma filial do tenant atual.
 func (r *Repo) GetBranchChannels(ctx context.Context, tx pgx.Tx, id string) (*BranchChannels, error) {
 	return scanChannels(tx.QueryRow(ctx,
 		`SELECT `+channelsCols+` FROM branches b WHERE b.id = $1::uuid`, id))
 }
 
-// UpdateBranchChannels grava a configuração (parcial). Campos nulos são
-// preservados; a senha só é trocada quando informada (não vazia).
+// UpdateBranchChannels grava a configuracao (parcial). Campos nulos sao
+// preservados; a senha so e trocada quando informada (nao vazia).
 func (r *Repo) UpdateBranchChannels(ctx context.Context, tx pgx.Tx, id string, in BranchChannelsInput) (*BranchChannels, error) {
 	var updatedID string
 	err := tx.QueryRow(ctx, `
@@ -89,7 +89,7 @@ func (r *Repo) UpdateBranchChannels(ctx context.Context, tx pgx.Tx, id string, i
 	return r.GetBranchChannels(ctx, tx, updatedID)
 }
 
-// SetBranchWhatsApp grava a instância/estado da conexão WhatsApp da filial.
+// SetBranchWhatsApp grava a instancia/estado da conexao WhatsApp da filial.
 func (r *Repo) SetBranchWhatsApp(ctx context.Context, tx pgx.Tx, id, instance, status string) error {
 	tag, err := tx.Exec(ctx, `
 		UPDATE branches SET

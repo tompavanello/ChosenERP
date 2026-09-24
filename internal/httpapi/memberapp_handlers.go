@@ -20,9 +20,9 @@ import (
 
 // resolvePublicCard resolve a carteirinha (sem auth) e o membro dono dela.
 //
-// Existe para os três endpoints públicos compartilharem a resolução: o token
-// vem do QR impresso no cartão, então nada aqui pode assumir sessão.
-// Devolve ok=false já tendo escrito a resposta de erro.
+// Existe para os tres endpoints publicos compartilharem a resolucao: o token
+// vem do QR impresso no cartao, entao nada aqui pode assumir sessao.
+// Devolve ok=false ja tendo escrito a resposta de erro.
 func (a *App) resolvePublicCard(w http.ResponseWriter, r *http.Request, token string) (
 	*documents.CardInfo, *members.Member, []announcements.Announcement, bool,
 ) {
@@ -34,7 +34,7 @@ func (a *App) resolvePublicCard(w http.ResponseWriter, r *http.Request, token st
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "carteirinha não encontrada")
+			writeErr(w, http.StatusNotFound, "carteirinha nao encontrada")
 			return nil, nil, nil, false
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -54,7 +54,7 @@ func (a *App) resolvePublicCard(w http.ResponseWriter, r *http.Request, token st
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "membro não encontrado")
+			writeErr(w, http.StatusNotFound, "membro nao encontrado")
 			return nil, nil, nil, false
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -65,11 +65,11 @@ func (a *App) resolvePublicCard(w http.ResponseWriter, r *http.Request, token st
 
 // handlePublicCard devolve a carteirinha do membro pelo token do QR (sem auth).
 //
-// ATENÇÃO: a resposta é uma PROJEÇÃO MÍNIMA de propósito. O token que endereça
-// este endpoint está impresso no próprio cartão (o QR o carrega), então tudo o
-// que for devolvido aqui é alcançável por qualquer pessoa que fotografar uma
-// carteirinha — sem rate limit e sem rotação de token, para sempre. Antes esta
-// função devolvia o members.Member inteiro, o que vazava CPF, RG, data de
+// ATENCAO: a resposta e uma PROJECAO MINIMA de proposito. O token que endereca
+// este endpoint esta impresso no proprio cartao (o QR o carrega), entao tudo o
+// que for devolvido aqui e alcancavel por qualquer pessoa que fotografar uma
+// carteirinha - sem rate limit e sem rotacao de token, para sempre. Antes esta
+// funcao devolvia o members.Member inteiro, o que vazava CPF, RG, data de
 // nascimento, e-mail, telefone e WhatsApp de quem tivesse o link.
 func (a *App) handlePublicCard(w http.ResponseWriter, r *http.Request) {
 	card, member, anns, ok := a.resolvePublicCard(w, r, r.PathValue("token"))
@@ -92,10 +92,10 @@ func (a *App) handlePublicCard(w http.ResponseWriter, r *http.Request) {
 
 // handlePublicCardPhoto serve a foto do membro dono da carteirinha.
 //
-// Existe para a página pública e a impressão não dependerem de
-// /api/v1/attachments/{arquivo}: aquele endpoint não tem auth nenhuma e serve
-// também comprovantes financeiros, então liberá-lo atrás do Access publicaria
-// as duas coisas juntas. Aqui o acesso é amarrado ao token da carteirinha.
+// Existe para a pagina publica e a impressao nao dependerem de
+// /api/v1/attachments/{arquivo}: aquele endpoint nao tem auth nenhuma e serve
+// tambem comprovantes financeiros, entao libera-lo atras do Access publicaria
+// as duas coisas juntas. Aqui o acesso e amarrado ao token da carteirinha.
 func (a *App) handlePublicCardPhoto(w http.ResponseWriter, r *http.Request) {
 	_, member, _, ok := a.resolvePublicCard(w, r, r.PathValue("token"))
 	if !ok {
@@ -105,12 +105,12 @@ func (a *App) handlePublicCardPhoto(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "membro sem foto cadastrada")
 		return
 	}
-	// O banco guarda "/api/v1/attachments/<nome>"; filepath.Base garante que só
+	// O banco guarda "/api/v1/attachments/<nome>"; filepath.Base garante que so
 	// o nome do arquivo chegue ao disco, sem travessia de caminho.
 	filename := filepath.Base(*member.PhotoURL)
 	diskPath := filepath.Join(a.Config.UploadDir, filename)
 	if _, err := os.Stat(diskPath); err != nil {
-		writeErr(w, http.StatusNotFound, "arquivo não encontrado")
+		writeErr(w, http.StatusNotFound, "arquivo nao encontrado")
 		return
 	}
 	ct := mime.TypeByExtension(filepath.Ext(filename))
@@ -183,12 +183,12 @@ func (a *App) handleMemberCardHTML(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(memberCardHTML(card, a.Config.AppBaseURL)))
 }
 
-// memberCardHTML monta a carteirinha para impressão. A foto é opcional: quando
-// o membro não tem foto cadastrada, o bloco dela simplesmente não é renderizado
-// (antes a carteirinha saía sem foto e sem número de identificação).
+// memberCardHTML monta a carteirinha para impressao. A foto e opcional: quando
+// o membro nao tem foto cadastrada, o bloco dela simplesmente nao e renderizado
+// (antes a carteirinha saia sem foto e sem numero de identificacao).
 //
-// A foto vem de /api/v1/public/card/{token}/photo, e não de /api/v1/attachments:
-// o caminho público acompanha o token da carteirinha e é o único que pode ficar
+// A foto vem de /api/v1/public/card/{token}/photo, e nao de /api/v1/attachments:
+// o caminho publico acompanha o token da carteirinha e e o unico que pode ficar
 // liberado no Access sem arrastar os anexos do financeiro junto.
 func memberCardHTML(c *documents.CardInfo, baseURL string) string {
 	foto := ""
@@ -200,19 +200,19 @@ func memberCardHTML(c *documents.CardInfo, baseURL string) string {
 	if c.BranchName != nil && *c.BranchName != "" {
 		filial = `<div class="linha"><span>Filial</span><strong>` + htmlEscape(*c.BranchName) + `</strong></div>`
 	}
-	// O QR é o que liga o cartão físico ao link público. Antes esta folha dizia
-	// "Validação: QR Code" sem desenhar QR nenhum — o cartão impresso não levava
+	// O QR e o que liga o cartao fisico ao link publico. Antes esta folha dizia
+	// "Validacao: QR Code" sem desenhar QR nenhum - o cartao impresso nao levava
 	// a lugar nenhum. Usamos delivery.PublicLink (o mesmo helper do e-mail) para
 	// o QR e o link enviado por WhatsApp nunca apontarem para lugares diferentes.
 	qr := ""
 	if link := delivery.PublicLink(baseURL, documents.KindMembershipCard, c.Token); link != "" {
 		if uri := qrDataURI(link, 240); uri != "" {
-			qr = `<div class="qr"><img src="` + uri + `" alt="QR Code da carteirinha" width="104" height="104"><span>Aponte a câmera para abrir a<br>carteirinha digital e ver os avisos</span></div>`
+			qr = `<div class="qr"><img src="` + uri + `" alt="QR Code da carteirinha" width="104" height="104"><span>Aponte a camera para abrir a<br>carteirinha digital e ver os avisos</span></div>`
 		}
 	}
-	// O token em texto saiu daqui: ele é a credencial da carteirinha e já viaja
-	// no QR; imprimi-lo em claro só facilitava copiá-lo de uma foto do cartão.
-	return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Carteirinha · ` + htmlEscape(c.MemberName) + `</title>
+	// O token em texto saiu daqui: ele e a credencial da carteirinha e ja viaja
+	// no QR; imprimi-lo em claro so facilitava copia-lo de uma foto do cartao.
+	return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Carteirinha - ` + htmlEscape(c.MemberName) + `</title>
 <style>body{font-family:ui-sans-serif,system-ui,sans-serif;background:#f1f5f9;margin:0;padding:24px;color:#0b1020}.card{max-width:460px;margin:0 auto;background:linear-gradient(135deg,#0369a1,#0ea5e9);color:#fff;border-radius:20px;padding:26px;box-shadow:0 12px 32px rgba(3,105,161,.35)}.brand{font-size:12px;letter-spacing:.1em;text-transform:uppercase;opacity:.85;margin-bottom:18px}.top{display:flex;gap:18px;align-items:center}.foto{width:96px;height:96px;border-radius:14px;object-fit:cover;border:3px solid rgba(255,255,255,.55);background:rgba(255,255,255,.18)}.nome{font-size:24px;font-weight:700;line-height:1.15}.num{margin-top:6px;font-size:13px;font-family:ui-monospace,SFMono-Regular,monospace;letter-spacing:.08em;background:rgba(255,255,255,.18);display:inline-block;padding:3px 9px;border-radius:999px}.linhas{margin-top:20px;border-top:1px solid rgba(255,255,255,.28);padding-top:14px;font-size:13px}.linha{display:flex;justify-content:space-between;gap:12px;padding:3px 0}.linha span{opacity:.8}.qr{display:flex;align-items:center;gap:14px;margin-top:14px;background:#fff;border-radius:14px;padding:12px}.qr img{display:block;border-radius:6px}.qr span{color:#475569;font-size:11px;line-height:1.45}@media print{body{background:#fff;padding:0}.card{box-shadow:none}}</style></head><body>
 <div class="card"><div class="brand">Carteirinha de Membro</div>
 <div class="top">` + foto + `<div><div class="nome">` + htmlEscape(c.MemberName) + `</div><div class="num">` + htmlEscape(c.Ref) + `</div></div></div>
@@ -222,11 +222,11 @@ func memberCardHTML(c *documents.CardInfo, baseURL string) string {
 }
 
 // qrDataURI gera o QR em PNG e devolve como data: URI, para a folha impressa
-// não depender de rede nem de serviço externo — um gerador remoto receberia o
-// token da carteirinha, que é justamente a credencial que o QR carrega.
+// nao depender de rede nem de servico externo - um gerador remoto receberia o
+// token da carteirinha, que e justamente a credencial que o QR carrega.
 //
-// Devolve "" se a geração falhar: um QR ausente é melhor que uma carteirinha
-// que não renderiza (o chamador simplesmente omite o bloco).
+// Devolve "" se a geracao falhar: um QR ausente e melhor que uma carteirinha
+// que nao renderiza (o chamador simplesmente omite o bloco).
 func qrDataURI(conteudo string, tamanho int) string {
 	png, err := qrcode.Encode(conteudo, qrcode.Medium, tamanho)
 	if err != nil {

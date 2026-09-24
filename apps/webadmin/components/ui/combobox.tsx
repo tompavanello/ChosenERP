@@ -31,7 +31,7 @@ export function Combobox({
   onChange,
   className,
   searchPlaceholder = "Buscar...",
-  emptyMessage = "Nenhuma opção encontrada",
+  emptyMessage = "Nenhuma opcao encontrada",
   maxHeight = "max-h-60",
   showSearch = true,
 }: ComboboxProps) {

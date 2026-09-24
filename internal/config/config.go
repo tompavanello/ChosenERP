@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Config agrega as variáveis de ambiente da API.
+// Config agrega as variaveis de ambiente da API.
 type Config struct {
 	HTTPPort         string
 	DatabaseURL      string
@@ -15,12 +15,12 @@ type Config struct {
 	JWTAccessExpiry  time.Duration
 	JWTRefreshExpiry time.Duration
 
-	// Notificação de documentos (recibos/carteirinhas) — envio real
+	// Notificacao de documentos (recibos/carteirinhas) - envio real
 	AppBaseURL string
 	UploadDir  string
-	// MemberPhotoMaxBytes limita o upload de foto do membro. É separado do limite
-	// de anexos do financeiro (50 MB) porque a foto é uma imagem pequena e vai
-	// trafegar em rede móvel.
+	// MemberPhotoMaxBytes limita o upload de foto do membro. E separado do limite
+	// de anexos do financeiro (50 MB) porque a foto e uma imagem pequena e vai
+	// trafegar em rede movel.
 	MemberPhotoMaxBytes int64
 	SmtpHost            string
 	SmtpPort            int
@@ -37,10 +37,10 @@ type Config struct {
 	EvolutionInstance   string
 	DeliveryInterval    time.Duration
 	RecurringInterval   time.Duration
-	// NotificationInterval é o intervalo da varredura das automações de
-	// WhatsApp (aniversários, escalas, visitantes). O padrão é horário.
+	// NotificationInterval e o intervalo da varredura das automacoes de
+	// WhatsApp (aniversarios, escalas, visitantes). O padrao e horario.
 	NotificationInterval time.Duration
-	// ScheduleInterval é o intervalo da varredura dos comunicados agendados.
+	// ScheduleInterval e o intervalo da varredura dos comunicados agendados.
 	ScheduleInterval time.Duration
 }
 

@@ -1,26 +1,26 @@
 -- 000024_users_roles_mfa.up.sql
--- Etapa 3 — Usuários e Acessos:
---   1) permissões de gestão de usuários (users.read/users.write);
+-- Etapa 3 - Usuarios e Acessos:
+--   1) permissoes de gestao de usuarios (users.read/users.write);
 --   2) perfis que faltavam no seed (lider, pastor, contador, visitante) e
---      permissões-base para tesoureiro/secretario/admin_sede;
+--      permissoes-base para tesoureiro/secretario/admin_sede;
 --   3) auth_lookup_user passa a devolver mfa_enabled/mfa_secret (login com MFA).
 
 -- ---------------------------------------------------------------------------
--- 1) Permissões de gestão de usuários
+-- 1) Permissoes de gestao de usuarios
 -- ---------------------------------------------------------------------------
 INSERT INTO permissions (key, module, name) VALUES
-    ('users.read',  'admin', 'Ler usuários'),
-    ('users.write', 'admin', 'Gerir usuários')
+    ('users.read',  'admin', 'Ler usuarios'),
+    ('users.write', 'admin', 'Gerir usuarios')
 ON CONFLICT (key) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
--- 2) Perfis faltantes (PRD §3), por tenant
+-- 2) Perfis faltantes (PRD 3), por tenant
 -- ---------------------------------------------------------------------------
 INSERT INTO roles (tenant_id, key, name, is_system)
 SELECT t.id, v.key, v.name, true
 FROM tenants t
 CROSS JOIN (VALUES
-    ('lider',     'Líder de Ministério/Célula'),
+    ('lider',     'Lider de Ministerio/Celula'),
     ('pastor',    'Pastor/Conselheiro'),
     ('contador',  'Contador Externo'),
     ('visitante', 'Visitante')
@@ -28,7 +28,7 @@ CROSS JOIN (VALUES
 ON CONFLICT (tenant_id, key) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
--- 3) Permissões-base dos perfis
+-- 3) Permissoes-base dos perfis
 -- ---------------------------------------------------------------------------
 -- admin_sede: acesso total do tenant (mesmo conjunto do super_admin).
 INSERT INTO role_permissions (role_id, permission_id)
@@ -37,14 +37,14 @@ FROM roles r CROSS JOIN permissions p
 WHERE r.key = 'admin_sede'
 ON CONFLICT DO NOTHING;
 
--- super_admin: garante as permissões novas (users.read/write).
+-- super_admin: garante as permissoes novas (users.read/write).
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r CROSS JOIN permissions p
 WHERE r.key = 'super_admin'
 ON CONFLICT DO NOTHING;
 
--- Demais perfis: conjunto curado por função.
+-- Demais perfis: conjunto curado por funcao.
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r
@@ -61,7 +61,7 @@ WHERE r.key = v.role_key
 ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
--- 4) auth_lookup_user devolve MFA (o tipo de retorno muda => recria a função)
+-- 4) auth_lookup_user devolve MFA (o tipo de retorno muda => recria a funcao)
 -- ---------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS auth_lookup_user(citext);
 

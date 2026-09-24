@@ -22,7 +22,7 @@ export function age(s?: string | null): number | null {
 }
 
 export function datePt(s?: string | null) {
-  if (!s) return "—";
+  if (!s) return "-";
   try {
     return format(parseISO(s), "dd/MM/yyyy", { locale: ptBR });
   } catch {
@@ -31,16 +31,16 @@ export function datePt(s?: string | null) {
 }
 
 export function dateTimePt(s?: string | null) {
-  if (!s) return "—";
+  if (!s) return "-";
   try {
-    return format(parseISO(s), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+    return format(parseISO(s), "dd/MM/yyyy 'as' HH:mm", { locale: ptBR });
   } catch {
     return s;
   }
 }
 
 export function relativePt(s?: string | null) {
-  if (!s) return "—";
+  if (!s) return "-";
   try {
     return formatDistanceToNow(parseISO(s), { addSuffix: true, locale: ptBR });
   } catch {

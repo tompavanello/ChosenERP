@@ -41,11 +41,11 @@ func (a *App) handleCreateMinute(w http.ResponseWriter, r *http.Request) {
 	}
 	var in governance.MinuteInput
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	if in.Title == "" || in.MeetingAt == "" {
-		writeErr(w, http.StatusBadRequest, "title e meeting_at são obrigatórios")
+		writeErr(w, http.StatusBadRequest, "title e meeting_at sao obrigatorios")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -80,7 +80,7 @@ func (a *App) handleGetMinute(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "ata não encontrada")
+			writeErr(w, http.StatusNotFound, "ata nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -97,7 +97,7 @@ func (a *App) handleUpdateMinute(w http.ResponseWriter, r *http.Request) {
 	}
 	var in governance.MinuteInput
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -112,7 +112,7 @@ func (a *App) handleUpdateMinute(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, governance.ErrMinuteSigned):
 			writeErr(w, http.StatusConflict, err.Error())
 		case store.IsNotFound(err):
-			writeErr(w, http.StatusNotFound, "ata não encontrada")
+			writeErr(w, http.StatusNotFound, "ata nao encontrada")
 		default:
 			writeErr(w, http.StatusBadRequest, err.Error())
 		}
@@ -136,7 +136,7 @@ func (a *App) handleDeleteMinute(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, governance.ErrMinuteSigned):
 			writeErr(w, http.StatusConflict, err.Error())
 		case store.IsNotFound(err):
-			writeErr(w, http.StatusNotFound, "ata não encontrada")
+			writeErr(w, http.StatusNotFound, "ata nao encontrada")
 		default:
 			writeErr(w, http.StatusInternalServerError, err.Error())
 		}
@@ -168,7 +168,7 @@ func (a *App) handleSignMinute(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, governance.ErrMinuteSigned):
 			writeErr(w, http.StatusConflict, err.Error())
 		case store.IsNotFound(err):
-			writeErr(w, http.StatusNotFound, "ata não encontrada")
+			writeErr(w, http.StatusNotFound, "ata nao encontrada")
 		default:
 			writeErr(w, http.StatusBadRequest, err.Error())
 		}
@@ -197,7 +197,7 @@ func (a *App) handleListSignatures(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"signatures": out})
 }
 
-// ---- Votações (G2/G3) ----
+// ---- Votacoes (G2/G3) ----
 
 func (a *App) handleListVotes(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -227,11 +227,11 @@ func (a *App) handleCreateVote(w http.ResponseWriter, r *http.Request) {
 	}
 	var in governance.VoteInput
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	if in.Title == "" {
-		writeErr(w, http.StatusBadRequest, "title é obrigatório")
+		writeErr(w, http.StatusBadRequest, "title e obrigatorio")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -266,7 +266,7 @@ func (a *App) handleGetVote(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "votação não encontrada")
+			writeErr(w, http.StatusNotFound, "votacao nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -283,7 +283,7 @@ func (a *App) handleUpdateVote(w http.ResponseWriter, r *http.Request) {
 	}
 	var in governance.VoteInput
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -298,7 +298,7 @@ func (a *App) handleUpdateVote(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, governance.ErrVoteClosed):
 			writeErr(w, http.StatusConflict, err.Error())
 		case store.IsNotFound(err):
-			writeErr(w, http.StatusNotFound, "votação não encontrada")
+			writeErr(w, http.StatusNotFound, "votacao nao encontrada")
 		default:
 			writeErr(w, http.StatusBadRequest, err.Error())
 		}
@@ -319,7 +319,7 @@ func (a *App) handleDeleteVote(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if errors.Is(err, governance.ErrVoteClosed) {
-			writeErr(w, http.StatusConflict, "só é possível excluir uma votação em rascunho")
+			writeErr(w, http.StatusConflict, "so e possivel excluir uma votacao em rascunho")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -343,7 +343,7 @@ func (a *App) handleOpenVote(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if errors.Is(err, governance.ErrVoteClosed) || store.IsNotFound(err) {
-			writeErr(w, http.StatusConflict, "a votação não está em rascunho")
+			writeErr(w, http.StatusConflict, "a votacao nao esta em rascunho")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -367,11 +367,11 @@ func (a *App) handleCloseVote(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "votação não encontrada")
+			writeErr(w, http.StatusNotFound, "votacao nao encontrada")
 			return
 		}
 		if errors.Is(err, governance.ErrVoteClosed) {
-			writeErr(w, http.StatusConflict, "votação cancelada")
+			writeErr(w, http.StatusConflict, "votacao cancelada")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -390,7 +390,7 @@ func (a *App) handleCastBallot(w http.ResponseWriter, r *http.Request) {
 		OptionID string `json:"option_id"`
 	}
 	if err := readJSON(r, &in); err != nil || in.OptionID == "" {
-		writeErr(w, http.StatusBadRequest, "option_id é obrigatório")
+		writeErr(w, http.StatusBadRequest, "option_id e obrigatorio")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -409,13 +409,13 @@ func (a *App) handleCastBallot(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, governance.ErrOptionInvalid):
 			writeErr(w, http.StatusBadRequest, err.Error())
 		case store.IsNotFound(err):
-			writeErr(w, http.StatusNotFound, "votação não encontrada")
+			writeErr(w, http.StatusNotFound, "votacao nao encontrada")
 		default:
 			writeErr(w, http.StatusBadRequest, err.Error())
 		}
 		return
 	}
-	// A resposta devolve só a apuração agregada — nunca o vínculo voto↔eleitor.
+	// A resposta devolve so a apuracao agregada - nunca o vinculo votoeleitor.
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -434,7 +434,7 @@ func (a *App) handleVoteResult(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "votação não encontrada")
+			writeErr(w, http.StatusNotFound, "votacao nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -443,7 +443,7 @@ func (a *App) handleVoteResult(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
-// ---- Convênios e documentação legal (G6) ----
+// ---- Convenios e documentacao legal (G6) ----
 
 func (a *App) handleListLegalDocuments(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -473,7 +473,7 @@ func (a *App) handleCreateLegalDocument(w http.ResponseWriter, r *http.Request) 
 	}
 	var in governance.LegalInput
 	if err := readJSON(r, &in); err != nil || in.Title == "" {
-		writeErr(w, http.StatusBadRequest, "title é obrigatório")
+		writeErr(w, http.StatusBadRequest, "title e obrigatorio")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -501,7 +501,7 @@ func (a *App) handleUpdateLegalDocument(w http.ResponseWriter, r *http.Request) 
 	}
 	var in governance.LegalInput
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -513,7 +513,7 @@ func (a *App) handleUpdateLegalDocument(w http.ResponseWriter, r *http.Request) 
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "documento não encontrado")
+			writeErr(w, http.StatusNotFound, "documento nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -534,7 +534,7 @@ func (a *App) handleDeleteLegalDocument(w http.ResponseWriter, r *http.Request) 
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "documento não encontrado")
+			writeErr(w, http.StatusNotFound, "documento nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())

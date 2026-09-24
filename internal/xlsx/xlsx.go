@@ -1,10 +1,10 @@
-// Package xlsx gera planilhas .xlsx válidas (OOXML) sem depender de bibliotecas
-// externas — o binário da API é FROM scratch e o projeto evita new deps.
+// Package xlsx gera planilhas .xlsx validas (OOXML) sem depender de bibliotecas
+// externas - o binario da API e FROM scratch e o projeto evita new deps.
 //
-// Implementa o subconjunto mínimo do formato: um único worksheet com células de
-// texto inline (inlineStr). Números vão como texto de propósito: os relatórios
-// já formatam valores (R$ / percentuais) e a planilha é para leitura, não para
-// recálculo.
+// Implementa o subconjunto minimo do formato: um unico worksheet com celulas de
+// texto inline (inlineStr). Numeros vao como texto de proposito: os relatorios
+// ja formatam valores (R$ / percentuais) e a planilha e para leitura, nao para
+// recalculo.
 package xlsx
 
 import (
@@ -54,7 +54,7 @@ const workbookRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
 	`</Relationships>`
 
 // Write monta o arquivo .xlsx a partir das linhas de texto.
-// sheetName é o nome da aba (até 31 caracteres no Excel).
+// sheetName e o nome da aba (ate 31 caracteres no Excel).
 func Write(sheetName string, rows [][]string) ([]byte, error) {
 	if sheetName == "" {
 		sheetName = "Relatorio"
@@ -107,7 +107,7 @@ func Write(sheetName string, rows [][]string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// colName converte o índice 0-based da coluna em referência (0->A, 26->AA).
+// colName converte o indice 0-based da coluna em referencia (0->A, 26->AA).
 func colName(n int) string {
 	var s []byte
 	for n >= 0 {

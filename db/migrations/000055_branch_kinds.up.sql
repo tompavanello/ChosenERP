@@ -1,8 +1,8 @@
 -- 000055_branch_kinds.up.sql
 -- Reclassifica o tipo de filial para a estrutura de governo da igreja:
---   * matriz — Sede Administrativa (templo principal; controla as demais).
---   * filial — Igreja Local / Congregação (estabelecida, caixa próprio).
---   * pae    — Ponto de Atendimento de Evangelização (núcleo inicial, sem
+--   * matriz - Sede Administrativa (templo principal; controla as demais).
+--   * filial - Igreja Local / Congregacao (estabelecida, caixa proprio).
+--   * pae    - Ponto de Atendimento de Evangelizacao (nucleo inicial, sem
 --              autonomia; OBRIGATORIAMENTE vinculado a uma Matriz ou Filial).
 --
 -- Mapeamento dos valores antigos:
@@ -10,9 +10,9 @@
 --   branch + com pai            -> filial
 --   congregation                -> filial
 --   sub_congregation + com pai  -> pae
---   sub_congregation + sem pai  -> filial (não pode ser PAE sem supervisor)
+--   sub_congregation + sem pai  -> filial (nao pode ser PAE sem supervisor)
 
--- 1) Normalização dos dados existentes (antes de fechar o domínio).
+-- 1) Normalizacao dos dados existentes (antes de fechar o dominio).
 UPDATE branches SET kind = CASE
     WHEN kind = 'matriz' THEN 'matriz'
     WHEN kind = 'filial' THEN 'filial'
@@ -25,10 +25,10 @@ UPDATE branches SET kind = CASE
     ELSE CASE WHEN parent_id IS NULL THEN 'matriz' ELSE 'filial' END
 END;
 
--- 2) O tipo padrão de uma nova unidade passa a ser Filial.
+-- 2) O tipo padrao de uma nova unidade passa a ser Filial.
 ALTER TABLE branches ALTER COLUMN kind SET DEFAULT 'filial';
 
--- 3) Domínio fechado + regras estruturais declarativas.
+-- 3) Dominio fechado + regras estruturais declarativas.
 ALTER TABLE branches DROP CONSTRAINT IF EXISTS branches_kind_check;
 ALTER TABLE branches ADD CONSTRAINT branches_kind_check
     CHECK (kind IN ('matriz', 'filial', 'pae'));
@@ -41,14 +41,14 @@ ALTER TABLE branches DROP CONSTRAINT IF EXISTS branches_pae_parent_check;
 ALTER TABLE branches ADD CONSTRAINT branches_pae_parent_check
     CHECK (kind <> 'pae' OR parent_id IS NOT NULL);
 
--- 4) PAE só pode ser supervisionado por Matriz ou Filial (regra entre linhas).
+-- 4) PAE so pode ser supervisionado por Matriz ou Filial (regra entre linhas).
 CREATE OR REPLACE FUNCTION branches_validate_hierarchy() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
     parent_kind text;
 BEGIN
     IF NEW.kind = 'matriz' AND NEW.parent_id IS NOT NULL THEN
-        RAISE EXCEPTION 'Matriz não pode ter filial superior' USING ERRCODE = '23514';
+        RAISE EXCEPTION 'Matriz nao pode ter filial superior' USING ERRCODE = '23514';
     END IF;
 
     IF NEW.kind = 'pae' THEN
@@ -60,7 +60,7 @@ BEGIN
             RAISE EXCEPTION 'Superior do PAE inexistente' USING ERRCODE = '23514';
         END IF;
         IF parent_kind NOT IN ('matriz', 'filial') THEN
-            RAISE EXCEPTION 'PAE só pode ser supervisionado por Matriz ou Filial' USING ERRCODE = '23514';
+            RAISE EXCEPTION 'PAE so pode ser supervisionado por Matriz ou Filial' USING ERRCODE = '23514';
         END IF;
     END IF;
 

@@ -26,27 +26,27 @@ import { datePt, dateTimePt } from "@/lib/format";
 
 const MINUTE_KINDS = [
   { v: "assembleia", l: "Assembleia geral" },
-  { v: "ordinaria", l: "Reunião ordinária" },
-  { v: "extraordinaria", l: "Reunião extraordinária" },
-  { v: "diretoria", l: "Reunião de diretoria" },
-  { v: "reuniao", l: "Reunião" },
+  { v: "ordinaria", l: "Reuniao ordinaria" },
+  { v: "extraordinaria", l: "Reuniao extraordinaria" },
+  { v: "diretoria", l: "Reuniao de diretoria" },
+  { v: "reuniao", l: "Reuniao" },
   { v: "outra", l: "Outra" },
 ];
 const VOTE_KINDS = [
   { v: "assembleia", l: "Assembleia" },
   { v: "diretoria", l: "Diretoria" },
-  { v: "orcamento", l: "Orçamento" },
-  { v: "mocao", l: "Moção" },
-  { v: "eleicao", l: "Eleição" },
+  { v: "orcamento", l: "Orcamento" },
+  { v: "mocao", l: "Mocao" },
+  { v: "eleicao", l: "Eleicao" },
   { v: "outra", l: "Outra" },
 ];
 const LEGAL_KINDS = [
   { v: "escritura", l: "Escritura" },
-  { v: "alvara", l: "Alvará" },
+  { v: "alvara", l: "Alvara" },
   { v: "contrato", l: "Contrato" },
   { v: "seguro", l: "Seguro" },
-  { v: "convenio", l: "Convênio" },
-  { v: "certidao", l: "Certidão" },
+  { v: "convenio", l: "Convenio" },
+  { v: "certidao", l: "Certidao" },
   { v: "outro", l: "Outro" },
 ];
 
@@ -84,7 +84,7 @@ export default function GovernancePage() {
   const [voteDrawer, setVoteDrawer] = useState<{ open: boolean; editing?: Vote }>({ open: false });
   const [voteForm, setVoteForm] = useState({
     title: "", kind: "assembleia", minute_id: "", secret: "true",
-    quorum_required: "0", min_attendance: "0", description: "", options: "Sim\nNão\nAbstenção",
+    quorum_required: "0", min_attendance: "0", description: "", options: "Sim\nNao\nAbstencao",
   });
 
   const [legalDrawer, setLegalDrawer] = useState<{ open: boolean; editing?: LegalDocument }>({ open: false });
@@ -104,7 +104,7 @@ export default function GovernancePage() {
       setLegal(l.documents);
       setMandates(md.mandates);
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro ao carregar governança", "error");
+      toast(err instanceof Error ? err.message : "Erro ao carregar governanca", "error");
       setMinutes([]); setVotes([]); setLegal([]); setMandates([]);
     }
   }, [toast]);
@@ -152,11 +152,11 @@ export default function GovernancePage() {
   }
   async function removeMinute(m: Minute) {
     if (!confirm(`Excluir a ata "${m.title}"?`)) return;
-    try { await deleteMinute(m.id); toast("Ata excluída."); await load(); }
+    try { await deleteMinute(m.id); toast("Ata excluida."); await load(); }
     catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
   async function doSign(m: Minute) {
-    if (!confirm(`Assinar internamente a ata "${m.title}"? Depois de assinada ela não pode mais ser editada.`)) return;
+    if (!confirm(`Assinar internamente a ata "${m.title}"? Depois de assinada ela nao pode mais ser editada.`)) return;
     try { await signMinute(m.id); toast("Ata assinada."); await load(); }
     catch (err) { toast(err instanceof Error ? err.message : "Erro ao assinar", "error"); }
   }
@@ -169,9 +169,9 @@ export default function GovernancePage() {
     } catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); setSignatures([]); }
   }
 
-  // ---- Votações ----
+  // ---- Votacoes ----
   function openVoteCreate() {
-    setVoteForm({ title: "", kind: "assembleia", minute_id: "", secret: "true", quorum_required: "0", min_attendance: "0", description: "", options: "Sim\nNão\nAbstenção" });
+    setVoteForm({ title: "", kind: "assembleia", minute_id: "", secret: "true", quorum_required: "0", min_attendance: "0", description: "", options: "Sim\nNao\nAbstencao" });
     setVoteDrawer({ open: true });
   }
   function openVoteEdit(v: Vote) {
@@ -200,24 +200,24 @@ export default function GovernancePage() {
       };
       if (voteDrawer.editing) await updateVote(voteDrawer.editing.id, payload);
       else await createVote(payload);
-      toast("Votação salva.");
+      toast("Votacao salva.");
       setVoteDrawer({ open: false });
       await load();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro ao salvar votação", "error");
+      toast(err instanceof Error ? err.message : "Erro ao salvar votacao", "error");
     } finally {
       setSaving(false);
     }
   }
   async function doOpen(v: Vote) {
-    try { await openVote(v.id); toast("Votação aberta."); await load(); }
+    try { await openVote(v.id); toast("Votacao aberta."); await load(); }
     catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
   async function doClose(v: Vote) {
-    if (!confirm(`Encerrar e apurar a votação "${v.title}"?`)) return;
+    if (!confirm(`Encerrar e apurar a votacao "${v.title}"?`)) return;
     try {
       const closed = await closeVote(v.id);
-      toast("Votação encerrada e apurada.");
+      toast("Votacao encerrada e apurada.");
       await load();
       setResultFor({ vote: closed, result: closed.result });
     } catch (err) { toast(err instanceof Error ? err.message : "Erro ao encerrar", "error"); }
@@ -237,12 +237,12 @@ export default function GovernancePage() {
     } catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
   async function removeVote(v: Vote) {
-    if (!confirm(`Excluir a votação "${v.title}"?`)) return;
-    try { await deleteVote(v.id); toast("Votação excluída."); await load(); }
+    if (!confirm(`Excluir a votacao "${v.title}"?`)) return;
+    try { await deleteVote(v.id); toast("Votacao excluida."); await load(); }
     catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
 
-  // ---- Convênios ----
+  // ---- Convenios ----
   function openLegalCreate() {
     setLegalForm({ kind: "convenio", title: "", reference: "", issued_at: "", expires_at: "", description: "" });
     setLegalDrawer({ open: true });
@@ -278,7 +278,7 @@ export default function GovernancePage() {
   }
   async function removeLegal(d: LegalDocument) {
     if (!confirm(`Excluir o documento "${d.title}"?`)) return;
-    try { await deleteLegalDocument(d.id); toast("Documento excluído."); await load(); }
+    try { await deleteLegalDocument(d.id); toast("Documento excluido."); await load(); }
     catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
 
@@ -294,8 +294,8 @@ export default function GovernancePage() {
   return (
     <div className="page">
       <PageHeader
-        title="Governança"
-        description="Atas digitais, votações com quórum e voto secreto, mandatos e convênios"
+        title="Governanca"
+        description="Atas digitais, votacoes com quorum e voto secreto, mandatos e convenios"
         actions={canWrite ? (
           <Button onClick={tab === "atas" ? openMinuteCreate : tab === "votacoes" ? openVoteCreate : tab === "convenios" ? openLegalCreate : undefined}>
             <Plus className="h-4 w-4" /> Novo
@@ -306,9 +306,9 @@ export default function GovernancePage() {
       <Tabs
         tabs={[
           { key: "atas", label: "Atas", icon: <ScrollText className="h-4 w-4" /> },
-          { key: "votacoes", label: "Votações", icon: <VoteIcon className="h-4 w-4" /> },
+          { key: "votacoes", label: "Votacoes", icon: <VoteIcon className="h-4 w-4" /> },
           { key: "mandatos", label: "Mandatos", icon: <Gavel className="h-4 w-4" /> },
-          { key: "convenios", label: "Convênios", icon: <ShieldCheck className="h-4 w-4" /> },
+          { key: "convenios", label: "Convenios", icon: <ShieldCheck className="h-4 w-4" /> },
         ]}
         active={tab}
         onChange={setTab}
@@ -319,20 +319,20 @@ export default function GovernancePage() {
           {minutes === null ? (
             <div className="p-4"><SkeletonRows rows={5} /></div>
           ) : minutes.length === 0 ? (
-            <EmptyState icon={<ScrollText className="h-10 w-10" />} title="Nenhuma ata" description="Registre a pauta e as deliberações das assembleias e reuniões." />
+            <EmptyState icon={<ScrollText className="h-10 w-10" />} title="Nenhuma ata" description="Registre a pauta e as deliberacoes das assembleias e reunioes." />
           ) : (
             <Table>
-              <THead><TRow><TH>Data</TH><TH>Título</TH><TH>Tipo</TH><TH>Quórum</TH><TH>Assinaturas</TH><TH>Situação</TH><TH className="text-right">Ações</TH></TRow></THead>
+              <THead><TRow><TH>Data</TH><TH>Titulo</TH><TH>Tipo</TH><TH>Quorum</TH><TH>Assinaturas</TH><TH>Situacao</TH><TH className="text-right">Acoes</TH></TRow></THead>
               <TBody>
                 {minutes.map((m) => (
                   <TRow key={m.id}>
                     <TD className="whitespace-nowrap text-sm">{dateTimePt(m.meeting_at)}</TD>
                     <TD className="font-medium">
                       {m.title}
-                      {m.vote_count > 0 && <span className="ml-2 text-xs text-zinc-400">{m.vote_count} votação(ões)</span>}
+                      {m.vote_count > 0 && <span className="ml-2 text-xs text-zinc-400">{m.vote_count} votacao(oes)</span>}
                     </TD>
                     <TD><Badge tone="zinc">{MINUTE_KINDS.find((k) => k.v === m.kind)?.l ?? m.kind}</Badge></TD>
-                    <TD className="text-sm tabular-nums">{m.attendance_count}/{m.quorum_required || "—"}</TD>
+                    <TD className="text-sm tabular-nums">{m.attendance_count}/{m.quorum_required || "-"}</TD>
                     <TD>
                       <button type="button" className="text-sm text-sky-600 hover:underline" onClick={() => viewSignatures(m)}>
                         {m.signature_count}
@@ -359,10 +359,10 @@ export default function GovernancePage() {
           {votes === null ? (
             <div className="p-4"><SkeletonRows rows={5} /></div>
           ) : votes.length === 0 ? (
-            <EmptyState icon={<VoteIcon className="h-10 w-10" />} title="Nenhuma votação" description="Crie uma votação com quórum e voto secreto para a assembleia." />
+            <EmptyState icon={<VoteIcon className="h-10 w-10" />} title="Nenhuma votacao" description="Crie uma votacao com quorum e voto secreto para a assembleia." />
           ) : (
             <Table>
-              <THead><TRow><TH>Título</TH><TH>Tipo</TH><TH>Ata</TH><TH>Quórum</TH><TH>Votos</TH><TH>Situação</TH><TH className="text-right">Ações</TH></TRow></THead>
+              <THead><TRow><TH>Titulo</TH><TH>Tipo</TH><TH>Ata</TH><TH>Quorum</TH><TH>Votos</TH><TH>Situacao</TH><TH className="text-right">Acoes</TH></TRow></THead>
               <TBody>
                 {votes.map((v) => (
                   <TRow key={v.id}>
@@ -371,9 +371,9 @@ export default function GovernancePage() {
                       {v.secret && <span title="Voto secreto"><ShieldCheck className="ml-1 inline h-3.5 w-3.5 text-emerald-600" /></span>}
                     </TD>
                     <TD><Badge tone="zinc">{VOTE_KINDS.find((k) => k.v === v.kind)?.l ?? v.kind}</Badge></TD>
-                    <TD className="text-sm text-zinc-500">{v.minute_title ?? "—"}</TD>
+                    <TD className="text-sm text-zinc-500">{v.minute_title ?? "-"}</TD>
                     <TD className={`text-sm tabular-nums ${v.quorum_met ? "text-emerald-600" : "text-amber-600"}`}>
-                      {v.participant_count}/{v.quorum_required || "—"}
+                      {v.participant_count}/{v.quorum_required || "-"}
                     </TD>
                     <TD className="text-sm tabular-nums">{v.ballot_count}</TD>
                     <TD><Badge tone={voteStatusTone(v.status)}>{v.status}</Badge></TD>
@@ -399,28 +399,28 @@ export default function GovernancePage() {
         <>
           {expiringMandates.length > 0 && (
             <Card className="mb-4 border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
-              <Gavel className="mr-1 inline h-4 w-4" /> {expiringMandates.length} mandato(s) vencendo nos próximos 60 dias.
+              <Gavel className="mr-1 inline h-4 w-4" /> {expiringMandates.length} mandato(s) vencendo nos proximos 60 dias.
             </Card>
           )}
           <Card className="overflow-hidden p-0">
             {mandates === null ? (
               <div className="p-4"><SkeletonRows rows={5} /></div>
             ) : mandates.length === 0 ? (
-              <EmptyState icon={<Gavel className="h-10 w-10" />} title="Nenhum mandato" description="Os mandatos vêm dos cargos atribuídos aos membros." />
+              <EmptyState icon={<Gavel className="h-10 w-10" />} title="Nenhum mandato" description="Os mandatos vem dos cargos atribuidos aos membros." />
             ) : (
               <Table>
-                <THead><TRow><TH>Membro</TH><TH>Cargo</TH><TH>Início</TH><TH>Vencimento</TH><TH>Dias p/ vencer</TH><TH>Situação</TH></TRow></THead>
+                <THead><TRow><TH>Membro</TH><TH>Cargo</TH><TH>Inicio</TH><TH>Vencimento</TH><TH>Dias p/ vencer</TH><TH>Situacao</TH></TRow></THead>
                 <TBody>
                   {mandates.map((m) => (
                     <TRow key={m.id}>
                       <TD className="font-medium">{m.member_name}</TD>
                       <TD>{m.cargo_name}</TD>
-                      <TD className="text-sm text-zinc-500">{m.started_at ? datePt(m.started_at) : "—"}</TD>
-                      <TD className="text-sm text-zinc-500">{m.ends_at ? datePt(m.ends_at) : "—"}</TD>
+                      <TD className="text-sm text-zinc-500">{m.started_at ? datePt(m.started_at) : "-"}</TD>
+                      <TD className="text-sm text-zinc-500">{m.ends_at ? datePt(m.ends_at) : "-"}</TD>
                       <TD className="text-sm tabular-nums">
-                        {m.days_to_expiry == null ? "—" : (
+                        {m.days_to_expiry == null ? "-" : (
                           <span className={m.days_to_expiry < 0 ? "text-red-600" : m.expiring ? "text-amber-600" : ""}>
-                            {m.days_to_expiry < 0 ? `${Math.abs(m.days_to_expiry)} atrás` : m.days_to_expiry}
+                            {m.days_to_expiry < 0 ? `${Math.abs(m.days_to_expiry)} atras` : m.days_to_expiry}
                           </span>
                         )}
                       </TD>
@@ -438,29 +438,29 @@ export default function GovernancePage() {
         <>
           {expiringLegal.length > 0 && (
             <Card className="mb-4 border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
-              <ShieldCheck className="mr-1 inline h-4 w-4" /> {expiringLegal.length} documento(s) vencido(s) ou vencendo nos próximos 60 dias.
+              <ShieldCheck className="mr-1 inline h-4 w-4" /> {expiringLegal.length} documento(s) vencido(s) ou vencendo nos proximos 60 dias.
             </Card>
           )}
           <Card className="overflow-hidden p-0">
             {legal === null ? (
               <div className="p-4"><SkeletonRows rows={5} /></div>
             ) : legal.length === 0 ? (
-              <EmptyState icon={<ShieldCheck className="h-10 w-10" />} title="Nenhum documento" description="Cadastre escrituras, alvarás, contratos e seguros com alerta de vencimento." />
+              <EmptyState icon={<ShieldCheck className="h-10 w-10" />} title="Nenhum documento" description="Cadastre escrituras, alvaras, contratos e seguros com alerta de vencimento." />
             ) : (
               <Table>
-                <THead><TRow><TH>Título</TH><TH>Tipo</TH><TH>Referência</TH><TH>Vencimento</TH><TH>Situação</TH><TH className="text-right">Ações</TH></TRow></THead>
+                <THead><TRow><TH>Titulo</TH><TH>Tipo</TH><TH>Referencia</TH><TH>Vencimento</TH><TH>Situacao</TH><TH className="text-right">Acoes</TH></TRow></THead>
                 <TBody>
                   {legal.map((d) => (
                     <TRow key={d.id}>
                       <TD className="font-medium">{d.title}</TD>
                       <TD><Badge tone="zinc">{LEGAL_KINDS.find((k) => k.v === d.kind)?.l ?? d.kind}</Badge></TD>
-                      <TD className="text-sm text-zinc-500">{d.reference ?? "—"}</TD>
-                      <TD className="text-sm text-zinc-500">{d.expires_at ? datePt(d.expires_at) : "—"}</TD>
+                      <TD className="text-sm text-zinc-500">{d.reference ?? "-"}</TD>
+                      <TD className="text-sm text-zinc-500">{d.expires_at ? datePt(d.expires_at) : "-"}</TD>
                       <TD>
                         {!d.expires_at ? <Badge tone="zinc">sem prazo</Badge>
                           : d.expired ? <Badge tone="red">vencido</Badge>
                           : (d.days_to_expiry ?? 999) <= 60 ? <Badge tone="amber">vence em {d.days_to_expiry}d</Badge>
-                          : <Badge tone="green">válido</Badge>}
+                          : <Badge tone="green">valido</Badge>}
                       </TD>
                       <TD>
                         <div className="flex justify-end gap-1">
@@ -481,7 +481,7 @@ export default function GovernancePage() {
       <Drawer open={minuteDrawer.open} onClose={() => setMinuteDrawer({ open: false })} size="2xl" title={minuteDrawer.editing ? "Editar ata" : "Nova ata"}>
         <form onSubmit={saveMinute} className="space-y-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Título" required className="sm:col-span-2">
+            <Field label="Titulo" required className="sm:col-span-2">
               <Input required className="h-8 text-sm" value={minuteForm.title} onChange={(e) => setMinuteForm({ ...minuteForm, title: e.target.value })} />
             </Field>
             <Field label="Data e hora" required>
@@ -495,10 +495,10 @@ export default function GovernancePage() {
             <Field label="Presentes" hint="Total declarado de presentes.">
               <Input type="number" min="0" className="h-8 text-sm" value={minuteForm.attendance_count} onChange={(e) => setMinuteForm({ ...minuteForm, attendance_count: e.target.value })} />
             </Field>
-            <Field label="Quórum exigido" hint="0 = não exigido.">
+            <Field label="Quorum exigido" hint="0 = nao exigido.">
               <Input type="number" min="0" className="h-8 text-sm" value={minuteForm.quorum_required} onChange={(e) => setMinuteForm({ ...minuteForm, quorum_required: e.target.value })} />
             </Field>
-            <Field label="Pauta e deliberações" className="sm:col-span-2">
+            <Field label="Pauta e deliberacoes" className="sm:col-span-2">
               <Textarea rows={10} className="text-sm" value={minuteForm.body} onChange={(e) => setMinuteForm({ ...minuteForm, body: e.target.value })} />
             </Field>
           </div>
@@ -510,14 +510,14 @@ export default function GovernancePage() {
       </Drawer>
 
       {/* Drawer de assinaturas */}
-      <Drawer open={signatureFor !== null} onClose={() => setSignatureFor(null)} title={`Assinaturas — ${signatureFor?.title ?? ""}`}>
+      <Drawer open={signatureFor !== null} onClose={() => setSignatureFor(null)} title={`Assinaturas - ${signatureFor?.title ?? ""}`}>
         {signatures === null ? <SkeletonRows rows={3} /> : signatures.length === 0 ? (
-          <p className="text-sm text-zinc-500">Ainda não há assinaturas. A ata é congelada na primeira assinatura.</p>
+          <p className="text-sm text-zinc-500">Ainda nao ha assinaturas. A ata e congelada na primeira assinatura.</p>
         ) : (
           <ul className="space-y-3">
             {signatures.map((s) => (
               <li key={s.id} className="rounded border border-zinc-200 p-3 text-sm dark:border-zinc-800">
-                <p className="font-medium">{s.signer_name} <span className="text-zinc-400">· {s.signer_role}</span></p>
+                <p className="font-medium">{s.signer_name} <span className="text-zinc-400">- {s.signer_role}</span></p>
                 <p className="text-xs text-zinc-500">{dateTimePt(s.signed_at)}</p>
                 <p className="mt-1 truncate font-mono text-[11px] text-zinc-400" title={s.hash}>hash: {s.hash}</p>
               </li>
@@ -526,12 +526,12 @@ export default function GovernancePage() {
         )}
       </Drawer>
 
-      {/* Drawer da votação */}
-      <Drawer open={voteDrawer.open} onClose={() => setVoteDrawer({ open: false })} size="2xl" title={voteDrawer.editing ? "Votação" : "Nova votação"}>
+      {/* Drawer da votacao */}
+      <Drawer open={voteDrawer.open} onClose={() => setVoteDrawer({ open: false })} size="2xl" title={voteDrawer.editing ? "Votacao" : "Nova votacao"}>
         {voteDrawer.editing && voteDrawer.editing.status === "aberta" && voteDrawer.editing.options && voteDrawer.editing.options.length > 0 ? (
           <div className="space-y-4">
             <p className="text-sm text-zinc-500">
-              Quórum: {voteDrawer.editing.participant_count}/{voteDrawer.editing.quorum_required || "—"} · o voto é registrado em segredo.
+              Quorum: {voteDrawer.editing.participant_count}/{voteDrawer.editing.quorum_required || "-"} - o voto e registrado em segredo.
             </p>
             <div className="space-y-2">
               {voteDrawer.editing.options.map((o) => (
@@ -544,7 +544,7 @@ export default function GovernancePage() {
         ) : (
           <form onSubmit={saveVote} className="space-y-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Título" required className="sm:col-span-2">
+              <Field label="Titulo" required className="sm:col-span-2">
                 <Input required className="h-8 text-sm" value={voteForm.title} onChange={(e) => setVoteForm({ ...voteForm, title: e.target.value })} />
               </Field>
               <Field label="Tipo">
@@ -554,26 +554,26 @@ export default function GovernancePage() {
               </Field>
               <Field label="Ata vinculada">
                 <Select className="h-8 text-sm" value={voteForm.minute_id} onChange={(e) => setVoteForm({ ...voteForm, minute_id: e.target.value })}>
-                  <option value="">—</option>
-                  {(minutes ?? []).map((m) => <option key={m.id} value={m.id}>{datePt(m.meeting_at)} · {m.title}</option>)}
+                  <option value="">-</option>
+                  {(minutes ?? []).map((m) => <option key={m.id} value={m.id}>{datePt(m.meeting_at)} - {m.title}</option>)}
                 </Select>
               </Field>
-              <Field label="Quórum obrigatório" hint="Mínimo de participantes para a votação valer.">
+              <Field label="Quorum obrigatorio" hint="Minimo de participantes para a votacao valer.">
                 <Input type="number" min="0" className="h-8 text-sm" value={voteForm.quorum_required} onChange={(e) => setVoteForm({ ...voteForm, quorum_required: e.target.value })} />
               </Field>
-              <Field label="Presença mínima">
+              <Field label="Presenca minima">
                 <Input type="number" min="0" className="h-8 text-sm" value={voteForm.min_attendance} onChange={(e) => setVoteForm({ ...voteForm, min_attendance: e.target.value })} />
               </Field>
               <Field label="Voto secreto">
                 <Select className="h-8 text-sm" value={voteForm.secret} onChange={(e) => setVoteForm({ ...voteForm, secret: e.target.value })}>
                   <option value="true">Sim (recomendado)</option>
-                  <option value="false">Não</option>
+                  <option value="false">Nao</option>
                 </Select>
               </Field>
-              <Field label="Descrição" className="sm:col-span-2">
+              <Field label="Descricao" className="sm:col-span-2">
                 <Textarea rows={2} className="text-sm" value={voteForm.description} onChange={(e) => setVoteForm({ ...voteForm, description: e.target.value })} />
               </Field>
-              <Field label="Opções" hint="Uma por linha. Só podem ser alteradas antes de haver votos." className="sm:col-span-2">
+              <Field label="Opcoes" hint="Uma por linha. So podem ser alteradas antes de haver votos." className="sm:col-span-2">
                 <Textarea rows={4} className="text-sm" value={voteForm.options} onChange={(e) => setVoteForm({ ...voteForm, options: e.target.value })} />
               </Field>
             </div>
@@ -586,14 +586,14 @@ export default function GovernancePage() {
       </Drawer>
 
       {/* Drawer de resultado */}
-      <Drawer open={resultFor !== null} onClose={() => setResultFor(null)} title={`Apuração — ${resultFor?.vote.title ?? ""}`}>
+      <Drawer open={resultFor !== null} onClose={() => setResultFor(null)} title={`Apuracao - ${resultFor?.vote.title ?? ""}`}>
         {resultFor?.result ? (
           <div className="space-y-4">
             <div className={`rounded border p-3 text-sm ${resultFor.result.quorum_met ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300" : "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300"}`}>
-              {resultFor.result.quorum_met ? "Quórum atingido." : "Quórum NÃO atingido."} {resultFor.result.participants} participante(s) de {resultFor.result.quorum_required || "—"} exigido(s).
+              {resultFor.result.quorum_met ? "Quorum atingido." : "Quorum NAO atingido."} {resultFor.result.participants} participante(s) de {resultFor.result.quorum_required || "-"} exigido(s).
             </div>
             <Table>
-              <THead><TRow><TH>Opção</TH><TH className="text-right">Votos</TH></TRow></THead>
+              <THead><TRow><TH>Opcao</TH><TH className="text-right">Votos</TH></TRow></THead>
               <TBody>
                 {resultFor.result.options.map((o) => (
                   <TRow key={o.id}>
@@ -603,15 +603,15 @@ export default function GovernancePage() {
                 ))}
               </TBody>
             </Table>
-            <p className="text-xs text-zinc-400">Total de votos: {resultFor.result.total}. O resultado só traz contagens — o vínculo voto↔eleitor não é armazenado.</p>
+            <p className="text-xs text-zinc-400">Total de votos: {resultFor.result.total}. O resultado so traz contagens - o vinculo votoeleitor nao e armazenado.</p>
           </div>
         ) : <SkeletonRows rows={3} />}
       </Drawer>
 
-      {/* Drawer de convênio */}
+      {/* Drawer de convenio */}
       <Drawer open={legalDrawer.open} onClose={() => setLegalDrawer({ open: false })} title={legalDrawer.editing ? "Editar documento" : "Novo documento legal"}>
         <form onSubmit={saveLegal} className="space-y-3">
-          <Field label="Título" required>
+          <Field label="Titulo" required>
             <Input required className="h-8 text-sm" value={legalForm.title} onChange={(e) => setLegalForm({ ...legalForm, title: e.target.value })} />
           </Field>
           <Field label="Tipo">
@@ -619,18 +619,18 @@ export default function GovernancePage() {
               {LEGAL_KINDS.map((k) => <option key={k.v} value={k.v}>{k.l}</option>)}
             </Select>
           </Field>
-          <Field label="Referência" hint="Nº do documento/processo.">
+          <Field label="Referencia" hint="No do documento/processo.">
             <Input className="h-8 text-sm" value={legalForm.reference} onChange={(e) => setLegalForm({ ...legalForm, reference: e.target.value })} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Emissão">
+            <Field label="Emissao">
               <Input type="date" className="h-8 text-sm" value={legalForm.issued_at} onChange={(e) => setLegalForm({ ...legalForm, issued_at: e.target.value })} />
             </Field>
             <Field label="Vencimento" hint="Gera alerta na tela.">
               <Input type="date" className="h-8 text-sm" value={legalForm.expires_at} onChange={(e) => setLegalForm({ ...legalForm, expires_at: e.target.value })} />
             </Field>
           </div>
-          <Field label="Descrição">
+          <Field label="Descricao">
             <Textarea rows={3} className="text-sm" value={legalForm.description} onChange={(e) => setLegalForm({ ...legalForm, description: e.target.value })} />
           </Field>
           <div className="flex justify-end gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">

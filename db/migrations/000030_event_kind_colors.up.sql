@@ -1,5 +1,5 @@
 -- 000030_event_kind_colors.up.sql
--- Cor por tipo de evento (exibida no calendário).
+-- Cor por tipo de evento (exibida no calendario).
 
 ALTER TABLE event_kinds ADD COLUMN color text;
 

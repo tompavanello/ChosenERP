@@ -1,5 +1,5 @@
 // Package lgpd cobre o compliance de dados (consentimento, portabilidade e
-// anonimização). O isolamento é do RLS; a autorização é do handler.
+// anonimizacao). O isolamento e do RLS; a autorizacao e do handler.
 package lgpd
 
 import (
@@ -92,7 +92,7 @@ func (r *Repo) ListConsents(ctx context.Context, tx pgx.Tx, subjectType, subject
 	return out, rows.Err()
 }
 
-// RecordConsent grava um consentimento (ou revogação) para uma pessoa.
+// RecordConsent grava um consentimento (ou revogacao) para uma pessoa.
 func (r *Repo) RecordConsent(ctx context.Context, tx pgx.Tx, tenantID, branchID, subjectType, subjectID, termID string, consented bool, ip, userAgent string) (*Consent, error) {
 	var c Consent
 	var consentedAt *time.Time
@@ -112,7 +112,7 @@ func (r *Repo) RecordConsent(ctx context.Context, tx pgx.Tx, tenantID, branchID,
 	return &c, nil
 }
 
-// ---- Portabilidade (exportação dos dados do titular) ----
+// ---- Portabilidade (exportacao dos dados do titular) ----
 
 // ExportMember devolve, em JSON, tudo que o sistema guarda sobre o membro.
 func (r *Repo) ExportMember(ctx context.Context, tx pgx.Tx, memberID string) ([]byte, error) {
@@ -201,10 +201,10 @@ func (r *Repo) ExportMember(ctx context.Context, tx pgx.Tx, memberID string) ([]
 	return json.MarshalIndent(out, "", "  ")
 }
 
-// ---- Anonimização ----
+// ---- Anonimizacao ----
 
 // AnonymizeMember apaga os dados pessoais do membro mantendo o id (integridade
-// referencial e retenção fiscal dos lançamentos). Registra a ação no histórico.
+// referencial e retencao fiscal dos lancamentos). Registra a acao no historico.
 func (r *Repo) AnonymizeMember(ctx context.Context, tx pgx.Tx, memberID, actorID string) error {
 	tag, err := tx.Exec(ctx, `
 		UPDATE members SET

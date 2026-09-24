@@ -1,6 +1,6 @@
 -- 000017_announcement_deliveries.up.sql
 -- Fila/outbox de envio de comunicados por WhatsApp (e futuro e-mail).
--- Cada envio real é feito pelo worker de anúncios, operando dentro do
+-- Cada envio real e feito pelo worker de anuncios, operando dentro do
 -- contexto RLS de cada filial/tenant para preservar o isolamento multi-tenant.
 
 CREATE TABLE announcement_deliveries (

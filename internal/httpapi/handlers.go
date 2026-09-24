@@ -13,14 +13,14 @@ import (
 	"chosenerp/internal/store"
 )
 
-// Config é a fatia da config global usada pelos handlers HTTP.
+// Config e a fatia da config global usada pelos handlers HTTP.
 type Config struct {
 	JWTSecret  string
 	AppBaseURL string
 	UploadDir  string
 	// MemberPhotoMaxBytes limita o upload da foto do membro (0 = sem limite).
 	MemberPhotoMaxBytes int64
-	// Evolution API (WhatsApp): servidor global; a instância é por filial.
+	// Evolution API (WhatsApp): servidor global; a instancia e por filial.
 	EvolutionAPIURL string
 	EvolutionAPIKey string
 }
@@ -30,7 +30,7 @@ func boundsFromClaims(c *auth.Claims) store.Bounds {
 	return store.Bounds{TenantID: c.TenantID, BranchID: c.BranchID, Role: c.Role, UserID: c.UserID}
 }
 
-// profilePayload padroniza a resposta de perfil (login, /me e edição de perfil).
+// profilePayload padroniza a resposta de perfil (login, /me e edicao de perfil).
 func profilePayload(p *auth.Profile) map[string]any {
 	ms := p.Memberships
 	if ms == nil {
@@ -47,30 +47,30 @@ func profilePayload(p *auth.Profile) map[string]any {
 	}
 }
 
-// writeBranchID devolve a filial para gravação dentro de uma transação. Usuário
-// de filial usa a própria; a Sede (branch vazio) cai na filial raiz do tenant
-// (Sede Matriz), porque várias tabelas têm branch_id NOT NULL. O escopo RLS
-// continua sendo o da sessão (Sede), e rls_write já admite is_headquarters().
+// writeBranchID devolve a filial para gravacao dentro de uma transacao. Usuario
+// de filial usa a propria; a Sede (branch vazio) cai na filial raiz do tenant
+// (Sede Matriz), porque varias tabelas tem branch_id NOT NULL. O escopo RLS
+// continua sendo o da sessao (Sede), e rls_write ja admite is_headquarters().
 func (a *App) writeBranchID(ctx context.Context, tx pgx.Tx, c *auth.Claims) (string, error) {
 	if c.BranchID != "" {
 		return c.BranchID, nil
 	}
 	id, err := store.DefaultBranchID(ctx, tx, c.TenantID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", errors.New("nenhuma filial cadastrada: crie uma filial antes de lançar")
+		return "", errors.New("nenhuma filial cadastrada: crie uma filial antes de lancar")
 	}
 	return id, err
 }
 
-// handleLogin autentica e retorna tokens — ou pede a escolha da igreja.
+// handleLogin autentica e retorna tokens - ou pede a escolha da igreja.
 //
-// `tenant_slug` é enviado pelo subdomínio (igreja.dominio) ou pelo domínio
-// central, para já entrar na igreja certa.
+// `tenant_slug` e enviado pelo subdominio (igreja.dominio) ou pelo dominio
+// central, para ja entrar na igreja certa.
 func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Email      string `json:"email"`
 		Password   string `json:"password"`
-		Code       string `json:"code"` // código TOTP quando o usuário tem MFA
+		Code       string `json:"code"` // codigo TOTP quando o usuario tem MFA
 		TenantSlug string `json:"tenant_slug"`
 	}
 	if err := readJSON(r, &in); err != nil {
@@ -127,7 +127,7 @@ func (a *App) handleSelectTenant(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"tokens": tokens, "user": profilePayload(prof)})
 }
 
-// handleSwitchTenant troca a igreja ativa de uma sessão autenticada.
+// handleSwitchTenant troca a igreja ativa de uma sessao autenticada.
 func (a *App) handleSwitchTenant(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -185,7 +185,7 @@ func (a *App) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"tokens": tokens})
 }
 
-// handleMe retorna o perfil e permissões do usuário autenticado.
+// handleMe retorna o perfil e permissoes do usuario autenticado.
 func (a *App) handleMe(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -198,12 +198,12 @@ func (a *App) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Mesma forma do payload de login: o frontend usa este GET para reidratar a
-	// sessão depois de um reload, e depende de `permissions` para montar o menu.
+	// sessao depois de um reload, e depende de `permissions` para montar o menu.
 	writeJSON(w, http.StatusOK, profilePayload(prof))
 }
 
-// handleListMembers lista membros no escopo da sessão (RLS).
-// Opcionalmente filtra por nome quando o query param `q` é informado.
+// handleListMembers lista membros no escopo da sessao (RLS).
+// Opcionalmente filtra por nome quando o query param `q` e informado.
 func (a *App) handleListMembers(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -225,7 +225,7 @@ func (a *App) handleListMembers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"members": out})
 }
 
-// handleCreateMember cria um membro no escopo da sessão.
+// handleCreateMember cria um membro no escopo da sessao.
 func (a *App) handleCreateMember(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -262,7 +262,7 @@ func (a *App) handleCreateMember(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, created)
 }
 
-// handleGetMember retorna um membro por ID no escopo da sessão.
+// handleGetMember retorna um membro por ID no escopo da sessao.
 func (a *App) handleGetMember(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {

@@ -1,6 +1,6 @@
 -- 000014_recurring_donations.up.sql
--- Agendamentos de doações recorrentes (dízimo/oferta) + worker que gera
--- lançamentos automáticos com recibo a cada período.
+-- Agendamentos de doacoes recorrentes (dizimo/oferta) + worker que gera
+-- lancamentos automaticos com recibo a cada periodo.
 
 CREATE TABLE recurring_donations (
     id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),

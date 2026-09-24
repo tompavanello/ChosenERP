@@ -26,9 +26,9 @@ const (
 	ChannelWhatsApp = "whatsapp"
 )
 
-// Message é o conteúdo a ser entregue por um canal específico.
+// Message e o conteudo a ser entregue por um canal especifico.
 // TenantID/BranchID identificam o remetente quando a filial tem canais
-// próprios (WhatsApp/SMTP); sem eles, usa-se a configuração global.
+// proprios (WhatsApp/SMTP); sem eles, usa-se a configuracao global.
 type Message struct {
 	Channel    string
 	Recipient  string
@@ -51,14 +51,14 @@ type Dispatcher struct {
 	senders   map[string]Sender
 	providers map[string]string
 	// Store (opcional) permite resolver canais POR FILIAL em branco. Quando
-	// ausente ou sem configuração, usa-se o sender global.
+	// ausente ou sem configuracao, usa-se o sender global.
 	Store *store.Store
-	// Credenciais do servidor Evolution (instâncias são por filial).
+	// Credenciais do servidor Evolution (instancias sao por filial).
 	EvolutionBaseURL string
 	EvolutionAPIKey  string
 }
 
-// Config reúne as credenciais dos provedores de envio.
+// Config reune as credenciais dos provedores de envio.
 type Config struct {
 	SMTP             SMTPConfig
 	WhatsApp         WhatsAppConfig
@@ -90,8 +90,8 @@ type EvolutionConfig struct {
 	HTTP     *http.Client
 }
 
-// NewDispatcher monta os senders reais quando configurados; caso contrário cai
-// no modo simulado (mantém o comportamento de dev sem quebrar o fluxo).
+// NewDispatcher monta os senders reais quando configurados; caso contrario cai
+// no modo simulado (mantem o comportamento de dev sem quebrar o fluxo).
 func NewDispatcher(cfg Config) *Dispatcher {
 	d := &Dispatcher{senders: map[string]Sender{}, providers: map[string]string{}}
 	d.senders[ChannelEmail] = newEmailSender(cfg)
@@ -138,7 +138,7 @@ func newWhatsAppSender(cfg Config) Sender {
 	}
 }
 
-// DisabledFor indica se o canal não está configurado (deve ser simulado).
+// DisabledFor indica se o canal nao esta configurado (deve ser simulado).
 func (c Config) DisabledFor(channel string) bool {
 	if c.DisableRealSend {
 		return true
@@ -156,7 +156,7 @@ func (c Config) DisabledFor(channel string) bool {
 }
 
 // Send roteia a mensagem para o sender do canal. Se a filial informada tiver
-// canais próprios configurados (SMTP/Evolution), usa-os; senão, cai no global.
+// canais proprios configurados (SMTP/Evolution), usa-os; senao, cai no global.
 func (d *Dispatcher) Send(ctx context.Context, m Message) error {
 	if d.Store != nil && m.TenantID != "" && m.BranchID != "" {
 		if s := d.branchSender(ctx, m); s != nil {
@@ -170,7 +170,7 @@ func (d *Dispatcher) Send(ctx context.Context, m Message) error {
 	return s.Send(ctx, m)
 }
 
-// branchSender devolve um sender específico da filial, ou nil para usar o global.
+// branchSender devolve um sender especifico da filial, ou nil para usar o global.
 func (d *Dispatcher) branchSender(ctx context.Context, m Message) Sender {
 	var host, user, pass, from, fromName, instance *string
 	var port *int
@@ -206,8 +206,8 @@ func (d *Dispatcher) branchSender(ctx context.Context, m Message) Sender {
 			From: *from, FromName: fn,
 		}
 	case ChannelWhatsApp:
-		// Se a filial tem instância Evolution e o servidor está configurado,
-		// ela vence o provedor global (o WhatsApp da filial é o remetente).
+		// Se a filial tem instancia Evolution e o servidor esta configurado,
+		// ela vence o provedor global (o WhatsApp da filial e o remetente).
 		if instance == nil || *instance == "" || d.EvolutionBaseURL == "" || d.EvolutionAPIKey == "" {
 			return nil
 		}
@@ -243,7 +243,7 @@ type simulatedSender struct{ channel, provider string }
 func (s *simulatedSender) Channel() string  { return s.channel }
 func (s *simulatedSender) Provider() string { return s.provider }
 func (s *simulatedSender) Send(_ context.Context, m Message) error {
-	log.Printf("[envio:simulado] canal=%s provedor=%s destino=%q (provedor não configurado)", m.Channel, s.provider, m.Recipient)
+	log.Printf("[envio:simulado] canal=%s provedor=%s destino=%q (provedor nao configurado)", m.Channel, s.provider, m.Recipient)
 	return nil
 }
 
@@ -265,7 +265,7 @@ func (s *EmailSender) Provider() string { return "smtp" }
 
 func (s *EmailSender) Send(ctx context.Context, m Message) error {
 	if m.Recipient == "" {
-		return errors.New("destinatário de e-mail vazio")
+		return errors.New("destinatario de e-mail vazio")
 	}
 	var auth smtp.Auth
 	if s.User != "" {
@@ -294,7 +294,7 @@ func buildEmail(from string, m Message) ([]byte, error) {
 	boundary := "boundary-" + time.Now().UTC().Format("20060102150405.000000000")
 	writeHeader("Content-Type", fmt.Sprintf(`multipart/alternative; boundary="%s"`, boundary))
 	writeHeader("", "")
-	fmt.Fprintf(&buf, "Este é um e-mail multipart/mixed.\r\n")
+	fmt.Fprintf(&buf, "Este e um e-mail multipart/mixed.\r\n")
 
 	fmt.Fprintf(&buf, "--%s\r\n", boundary)
 	writeHeader("Content-Type", "text/plain; charset=utf-8")
@@ -352,7 +352,7 @@ func base64Encode(b []byte) string {
 }
 
 // sendSMTP entrega um e-mail via SMTP com suporte a STARTTLS (587) e TLS
-// implícito (465). O contexto permite cancelamento da escrita.
+// implicito (465). O contexto permite cancelamento da escrita.
 func sendSMTP(ctx context.Context, host string, port int, auth smtp.Auth, from string, to []string, body []byte, tlsCfg *tls.Config) error {
 	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	var c *smtp.Client
@@ -440,7 +440,7 @@ func (s *WhatsAppSender) Provider() string { return "meta" }
 
 func (s *WhatsAppSender) Send(ctx context.Context, m Message) error {
 	if m.Recipient == "" {
-		return errors.New("destinatário de WhatsApp vazio")
+		return errors.New("destinatario de WhatsApp vazio")
 	}
 	body := m.Text
 	if m.Link != "" {
@@ -482,7 +482,7 @@ func (s *WhatsAppSender) Send(ctx context.Context, m Message) error {
 }
 
 // ---------------------------------------------------------------------------
-// Evolution API (WhatsApp Web alternativo — API aberta self-hosted)
+// Evolution API (WhatsApp Web alternativo - API aberta self-hosted)
 // ---------------------------------------------------------------------------
 
 type EvolutionSender struct {
@@ -497,7 +497,7 @@ func (s *EvolutionSender) Provider() string { return "evolution" }
 
 func (s *EvolutionSender) Send(ctx context.Context, m Message) error {
 	if m.Recipient == "" {
-		return errors.New("destinatário de WhatsApp vazio")
+		return errors.New("destinatario de WhatsApp vazio")
 	}
 	body := m.Text
 	if m.Link != "" {

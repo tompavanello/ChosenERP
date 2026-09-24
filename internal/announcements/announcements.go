@@ -10,11 +10,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ErrInvalidInput marca erros de validação do input (viram HTTP 400).
+// ErrInvalidInput marca erros de validacao do input (viram HTTP 400).
 var ErrInvalidInput = errors.New("invalid input")
 
-// Announcement é um aviso/publicação do app do membro. A partir da migração
-// 000041 também guarda a segmentação e o agendamento do disparo.
+// Announcement e um aviso/publicacao do app do membro. A partir da migracao
+// 000041 tambem guarda a segmentacao e o agendamento do disparo.
 type Announcement struct {
 	ID                    string         `json:"id"`
 	TenantID              string         `json:"-"`
@@ -36,8 +36,8 @@ type Announcement struct {
 	CreatedAt             time.Time      `json:"created_at"`
 }
 
-// UpsertInput é o corpo de criação/edição. Campos nulos (ponteiro nil) não são
-// alterados — permite PATCH parcial.
+// UpsertInput e o corpo de criacao/edicao. Campos nulos (ponteiro nil) nao sao
+// alterados - permite PATCH parcial.
 type UpsertInput struct {
 	Title                 *string         `json:"title"`
 	Body                  *string         `json:"body"`
@@ -54,7 +54,7 @@ type UpsertInput struct {
 
 type Repo struct{}
 
-// announcementSelect é a lista de colunas usada por todas as leituras.
+// announcementSelect e a lista de colunas usada por todas as leituras.
 const announcementSelect = `
 	id::text, tenant_id::text, COALESCE(branch_id::text,''), title, body, audience,
 	audience_filter::text, channel, schedule_type, schedule_at,
@@ -79,7 +79,7 @@ func scanAnnouncement(s rowScanner) (*Announcement, error) {
 	return &a, nil
 }
 
-// List retorna avisos ativos e publicados do escopo (RLS) da sessão.
+// List retorna avisos ativos e publicados do escopo (RLS) da sessao.
 func (r *Repo) List(ctx context.Context, tx pgx.Tx) ([]Announcement, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT `+announcementSelect+`
@@ -101,13 +101,13 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx) ([]Announcement, error) {
 	return out, rows.Err()
 }
 
-// GetByID retorna um comunicado pelo ID no escopo RLS da sessão.
+// GetByID retorna um comunicado pelo ID no escopo RLS da sessao.
 func (r *Repo) GetByID(ctx context.Context, tx pgx.Tx, id string) (*Announcement, error) {
 	return scanAnnouncement(tx.QueryRow(ctx, `
 		SELECT `+announcementSelect+` FROM announcements WHERE id = $1::uuid`, id))
 }
 
-// Delete remove o comunicado (as entregas e execuções caem em cascata).
+// Delete remove o comunicado (as entregas e execucoes caem em cascata).
 func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
 	tag, err := tx.Exec(ctx, `DELETE FROM announcements WHERE id = $1::uuid`, id)
 	if err != nil {
@@ -119,7 +119,7 @@ func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
 	return nil
 }
 
-// Create insere um aviso no escopo RLS da sessão.
+// Create insere um aviso no escopo RLS da sessao.
 func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string, in UpsertInput) (*Announcement, error) {
 	a := &Announcement{
 		TenantID:       tenantID,
@@ -171,8 +171,8 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpsertInput)
 		a.ScheduleOffsetMinutes, a.IsActive))
 }
 
-// apply valida e mescla o input. `requireTitle` existe para a criação, onde o
-// título é obrigatório.
+// apply valida e mescla o input. `requireTitle` existe para a criacao, onde o
+// titulo e obrigatorio.
 func (a *Announcement) apply(in UpsertInput, requireTitle bool) error {
 	if in.Title != nil {
 		a.Title = *in.Title
@@ -208,13 +208,13 @@ func (a *Announcement) apply(in UpsertInput, requireTitle bool) error {
 			if *in.ScheduleAt != "" {
 				t, err := time.Parse(time.RFC3339, *in.ScheduleAt)
 				if err != nil {
-					return fmt.Errorf("%w: schedule_at inválido: use RFC3339", ErrInvalidInput)
+					return fmt.Errorf("%w: schedule_at invalido: use RFC3339", ErrInvalidInput)
 				}
 				a.ScheduleAt = &t
 			}
 		}
 		if a.ScheduleAt == nil {
-			return fmt.Errorf("%w: schedule_at é obrigatório para agendamento único", ErrInvalidInput)
+			return fmt.Errorf("%w: schedule_at e obrigatorio para agendamento unico", ErrInvalidInput)
 		}
 		a.ScheduleTime, a.ScheduleEventID = nil, nil
 	case "daily":
@@ -222,14 +222,14 @@ func (a *Announcement) apply(in UpsertInput, requireTitle bool) error {
 			a.ScheduleTime = nil
 			if *in.ScheduleTime != "" {
 				if _, err := time.Parse("15:04", *in.ScheduleTime); err != nil {
-					return fmt.Errorf("%w: schedule_time inválido: use HH:MM", ErrInvalidInput)
+					return fmt.Errorf("%w: schedule_time invalido: use HH:MM", ErrInvalidInput)
 				}
 				s := *in.ScheduleTime
 				a.ScheduleTime = &s
 			}
 		}
 		if a.ScheduleTime == nil {
-			return fmt.Errorf("%w: schedule_time é obrigatório para agendamento diário", ErrInvalidInput)
+			return fmt.Errorf("%w: schedule_time e obrigatorio para agendamento diario", ErrInvalidInput)
 		}
 		a.ScheduleAt, a.ScheduleEventID = nil, nil
 	case "event":
@@ -241,15 +241,15 @@ func (a *Announcement) apply(in UpsertInput, requireTitle bool) error {
 			}
 		}
 		if a.ScheduleEventID == nil {
-			return fmt.Errorf("%w: schedule_event_id é obrigatório para agendamento por evento", ErrInvalidInput)
+			return fmt.Errorf("%w: schedule_event_id e obrigatorio para agendamento por evento", ErrInvalidInput)
 		}
 		a.ScheduleAt, a.ScheduleTime = nil, nil
 	default:
-		return fmt.Errorf("%w: schedule_type inválido: %q", ErrInvalidInput, a.ScheduleType)
+		return fmt.Errorf("%w: schedule_type invalido: %q", ErrInvalidInput, a.ScheduleType)
 	}
 
 	if requireTitle && a.Title == "" {
-		return fmt.Errorf("%w: title é obrigatório", ErrInvalidInput)
+		return fmt.Errorf("%w: title e obrigatorio", ErrInvalidInput)
 	}
 	return nil
 }
@@ -261,8 +261,8 @@ func strOrEmpty(s *string) string {
 	return *s
 }
 
-// ScheduledAnnouncement é o comunicado agendado visto pelo scheduler, já com os
-// dados da igreja e (quando for o caso) o início do evento vinculado.
+// ScheduledAnnouncement e o comunicado agendado visto pelo scheduler, ja com os
+// dados da igreja e (quando for o caso) o inicio do evento vinculado.
 type ScheduledAnnouncement struct {
 	Announcement
 	TenantName    string
@@ -307,9 +307,9 @@ func (r *Repo) ListScheduled(ctx context.Context, tx pgx.Tx) ([]ScheduledAnnounc
 	return out, rows.Err()
 }
 
-// CreateScheduledDelivery enfileira o comunicado para um destinatário do
+// CreateScheduledDelivery enfileira o comunicado para um destinatario do
 // agendamento. A chave de dedupe evita reenviar o mesmo disparo no mesmo
-// período (dia/evento); devolve false quando já existia.
+// periodo (dia/evento); devolve false quando ja existia.
 func (r *Repo) CreateScheduledDelivery(ctx context.Context, tx pgx.Tx, a *Announcement, provider, recipient, recipientName, dedupeKey string) (bool, error) {
 	var id string
 	err := tx.QueryRow(ctx, `

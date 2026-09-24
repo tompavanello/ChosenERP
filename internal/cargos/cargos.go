@@ -1,10 +1,10 @@
-// Package cargos gerencia o catálogo de cargos (funções/ministérios) da igreja
-// e o vínculo dos membros com eles, com controle de mandato.
+// Package cargos gerencia o catalogo de cargos (funcoes/ministerios) da igreja
+// e o vinculo dos membros com eles, com controle de mandato.
 //
 // Requisitos do cliente (CAD100):
 //
-//	1.3 Função/Ministério — um mesmo membro pode ter MAIS DE UMA função.
-//	1.4 Controle de mandato — data de início, vencimento e situação
+//	1.3 Funcao/Ministerio - um mesmo membro pode ter MAIS DE UMA funcao.
+//	1.4 Controle de mandato - data de inicio, vencimento e situacao
 //	    (Ativo / Encerrado).
 package cargos
 
@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Cargo é uma função/ministério do catálogo personalizável da igreja.
+// Cargo e uma funcao/ministerio do catalogo personalizavel da igreja.
 type Cargo struct {
 	ID           string    `json:"id"`
 	BranchID     *string   `json:"branch_id,omitempty"` // vazio => global do tenant
@@ -29,7 +29,7 @@ type Cargo struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
-// MemberCargo é o mandato de um membro em um cargo.
+// MemberCargo e o mandato de um membro em um cargo.
 type MemberCargo struct {
 	ID        string  `json:"id"`
 	MemberID  string  `json:"member_id"`
@@ -66,7 +66,7 @@ type AssignInput struct {
 	Notes     *string `json:"notes"`
 }
 
-// UpdateAssignmentInput edita um mandato (PATCH: nil mantém o valor atual).
+// UpdateAssignmentInput edita um mandato (PATCH: nil mantem o valor atual).
 type UpdateAssignmentInput struct {
 	StartedAt *string `json:"started_at"`
 	EndsAt    *string `json:"ends_at"`
@@ -74,12 +74,12 @@ type UpdateAssignmentInput struct {
 	Notes     *string `json:"notes"`
 }
 
-// Kinds são os agrupamentos aceitos (espelham o CHECK da migração 000020).
+// Kinds sao os agrupamentos aceitos (espelham o CHECK da migracao 000020).
 var Kinds = map[string]bool{
 	"eclesiastico": true, "lideranca": true, "ensino": true, "apoio": true, "outro": true,
 }
 
-// StatusValidos são as situações de mandato (requisito 1.4).
+// StatusValidos sao as situacoes de mandato (requisito 1.4).
 var StatusValidos = map[string]bool{"ativo": true, "encerrado": true}
 
 type Repo struct{}
@@ -97,8 +97,8 @@ func scanCargo(row pgx.Row) (*Cargo, error) {
 	return &c, nil
 }
 
-// List devolve o catálogo do escopo (globais do tenant + da filial), ativos e
-// inativos — a UI precisa dos dois para permitir reativar.
+// List devolve o catalogo do escopo (globais do tenant + da filial), ativos e
+// inativos - a UI precisa dos dois para permitir reativar.
 func (r *Repo) List(ctx context.Context, tx pgx.Tx) ([]Cargo, error) {
 	rows, err := tx.Query(ctx, `SELECT `+cargoCols+` FROM cargos c ORDER BY c.sort_order, c.name`)
 	if err != nil {
@@ -162,8 +162,8 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput)
 }
 
 // InUse conta quantos mandatos (inclusive encerrados) referenciam o cargo.
-// O cargo não é apagável enquanto houver histórico: ON DELETE CASCADE apagaria
-// o histórico de mandato, que é justamente o que o requisito 1.4 preserva.
+// O cargo nao e apagavel enquanto houver historico: ON DELETE CASCADE apagaria
+// o historico de mandato, que e justamente o que o requisito 1.4 preserva.
 func (r *Repo) InUse(ctx context.Context, tx pgx.Tx, id string) (int64, error) {
 	var n int64
 	err := tx.QueryRow(ctx,
@@ -195,7 +195,7 @@ func scanMemberCargo(row pgx.Row) (*MemberCargo, error) {
 	return &mc, nil
 }
 
-// ListByMember devolve os cargos de um membro — ativos primeiro, depois os
+// ListByMember devolve os cargos de um membro - ativos primeiro, depois os
 // encerrados, cada grupo pelo mandato mais recente.
 func (r *Repo) ListByMember(ctx context.Context, tx pgx.Tx, memberID string) ([]MemberCargo, error) {
 	rows, err := tx.Query(ctx, `
@@ -221,8 +221,8 @@ func (r *Repo) ListByMember(ctx context.Context, tx pgx.Tx, memberID string) ([]
 
 // Assign vincula um cargo ao membro.
 //
-// ON CONFLICT DO NOTHING sem alvo é obrigatório: a tabela tem dois índices
-// únicos parciais (com e sem data de início) e o alvo inferido não cobre ambos.
+// ON CONFLICT DO NOTHING sem alvo e obrigatorio: a tabela tem dois indices
+// unicos parciais (com e sem data de inicio) e o alvo inferido nao cobre ambos.
 func (r *Repo) Assign(ctx context.Context, tx pgx.Tx, memberID string, in AssignInput) (*MemberCargo, error) {
 	status := in.Status
 	if status == "" {
@@ -241,15 +241,15 @@ func (r *Repo) Assign(ctx context.Context, tx pgx.Tx, memberID string, in Assign
 	return r.getAssignment(ctx, tx, memberID, id)
 }
 
-// UpdateAssignment edita o mandato. Distingue três casos por data, porque o
+// UpdateAssignment edita o mandato. Distingue tres casos por data, porque o
 // PATCH precisa poder LIMPAR uma data (ex.: reabrir um mandato encerrado):
 //
-//	ausente (NULL)  => mantém o valor atual
+//	ausente (NULL)  => mantem o valor atual
 //	"" (string vazia) => grava NULL
 //	"2024-01-31"    => grava a data
 //
-// Sem o caso da string vazia não haveria como desfazer um vencimento: com
-// COALESCE($::date, ...) a única alternativa seria mandar uma data falsa.
+// Sem o caso da string vazia nao haveria como desfazer um vencimento: com
+// COALESCE($::date, ...) a unica alternativa seria mandar uma data falsa.
 func (r *Repo) UpdateAssignment(ctx context.Context, tx pgx.Tx, memberID, id string, in UpdateAssignmentInput) (*MemberCargo, error) {
 	_, err := tx.Exec(ctx, `
 		UPDATE member_cargos SET
@@ -289,7 +289,7 @@ func (r *Repo) getAssignment(ctx context.Context, tx pgx.Tx, memberID, id string
 		WHERE mc.member_id = $1::uuid AND mc.id = $2::uuid`, memberID, id))
 }
 
-// slugify espelha o de ministries: sem acentos, minúsculo, com hífens.
+// slugify espelha o de ministries: sem acentos, minusculo, com hifens.
 func slugify(s string) string {
 	out := make([]rune, 0, len(s))
 	lastDash := false

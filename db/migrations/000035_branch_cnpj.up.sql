@@ -1,7 +1,7 @@
 -- 000035_branch_cnpj.up.sql
--- CNPJ das filiais/congregações. O tenant já tem `cnpj` (matriz); cada filial
--- pode ter o próprio CNPJ. Único por tenant (dois tenants distintos podem ter
--- o mesmo número? não, mas o índice é por tenant para não vazar a checagem).
+-- CNPJ das filiais/congregacoes. O tenant ja tem `cnpj` (matriz); cada filial
+-- pode ter o proprio CNPJ. Unico por tenant (dois tenants distintos podem ter
+-- o mesmo numero? nao, mas o indice e por tenant para nao vazar a checagem).
 
 ALTER TABLE branches ADD COLUMN cnpj text;
 

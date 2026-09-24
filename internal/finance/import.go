@@ -13,13 +13,13 @@ import (
 	"chosenerp/internal/xlsx"
 )
 
-// ImportError aponta a linha e o motivo de um lançamento rejeitado na importação.
+// ImportError aponta a linha e o motivo de um lancamento rejeitado na importacao.
 type ImportError struct {
 	Line  int    `json:"line"`
 	Error string `json:"error"`
 }
 
-// ImportResult resume uma importação em lote.
+// ImportResult resume uma importacao em lote.
 type ImportResult struct {
 	Imported int           `json:"imported"`
 	Skipped  int           `json:"skipped"`
@@ -31,7 +31,7 @@ type catInfo struct {
 	Type string
 }
 
-// ParseSheet lê CSV ou XLSX e devolve as linhas como texto.
+// ParseSheet le CSV ou XLSX e devolve as linhas como texto.
 func ParseSheet(data []byte, filename string) ([][]string, error) {
 	if len(data) >= 2 && data[0] == 'P' && data[1] == 'K' {
 		return xlsx.Read(data)
@@ -58,11 +58,11 @@ func parseCSV(body string) ([][]string, error) {
 	return rd.ReadAll()
 }
 
-// ImportCSV importa lançamentos a partir de um CSV com cabeçalho padrão:
+// ImportCSV importa lancamentos a partir de um CSV com cabecalho padrao:
 //
 //	data;tipo;conta;valor;forma_pagamento;descricao;anonimo;conta_bancaria
 //
-// Linhas inválidas são ignoradas e devolvidas em `errors`.
+// Linhas invalidas sao ignoradas e devolvidas em `errors`.
 func (r *Repo) ImportCSV(ctx context.Context, tx pgx.Tx, tenantID, branchID, actorID, body string) (ImportResult, error) {
 	empty := ImportResult{Errors: []ImportError{}}
 	records, err := parseCSV(body)
@@ -70,20 +70,20 @@ func (r *Repo) ImportCSV(ctx context.Context, tx pgx.Tx, tenantID, branchID, act
 		return empty, err
 	}
 	if len(records) < 2 {
-		return empty, fmt.Errorf("CSV não tem linhas de dados")
+		return empty, fmt.Errorf("CSV nao tem linhas de dados")
 	}
 	idx := headerIndex(records[0])
 	for _, req := range []string{"data", "tipo", "conta", "valor"} {
 		if _, ok := idx[req]; !ok {
-			return empty, fmt.Errorf("coluna obrigatória ausente: %s", req)
+			return empty, fmt.Errorf("coluna obrigatoria ausente: %s", req)
 		}
 	}
 	return r.ImportRecords(ctx, tx, tenantID, branchID, actorID, records, 1, idx)
 }
 
-// ImportRecords importa linhas já extraídas (CSV ou XLSX). `startRow` é o índice
-// (0-based) da primeira linha de dados e `mapping` mapeia campo -> índice da
-// coluna. Não emite recibo (carga em lote); o hash-chain é do trigger.
+// ImportRecords importa linhas ja extraidas (CSV ou XLSX). `startRow` e o indice
+// (0-based) da primeira linha de dados e `mapping` mapeia campo -> indice da
+// coluna. Nao emite recibo (carga em lote); o hash-chain e do trigger.
 func (r *Repo) ImportRecords(ctx context.Context, tx pgx.Tx, tenantID, branchID, actorID string, records [][]string, startRow int, mapping map[string]int) (ImportResult, error) {
 	res := ImportResult{Errors: []ImportError{}}
 	if startRow < 0 {
@@ -127,16 +127,16 @@ func (r *Repo) ImportRecords(ctx context.Context, tx pgx.Tx, tenantID, branchID,
 			cat, ok = catByName[strings.ToLower(key)]
 		}
 		if !ok {
-			addErr(line, "conta %q não encontrada", key)
+			addErr(line, "conta %q nao encontrada", key)
 			continue
 		}
 		if cat.Type != typ {
-			addErr(line, "conta %q é de %s, mas o lançamento é de %s", key, cat.Type, typ)
+			addErr(line, "conta %q e de %s, mas o lancamento e de %s", key, cat.Type, typ)
 			continue
 		}
 		amount, err := parseValor(get(rec, "valor"))
 		if err != nil || amount <= 0 {
-			addErr(line, "valor inválido: %q", get(rec, "valor"))
+			addErr(line, "valor invalido: %q", get(rec, "valor"))
 			continue
 		}
 		when, err := parseData(get(rec, "data"))
@@ -182,7 +182,7 @@ func emptyRecord(rec []string) bool {
 	return true
 }
 
-// headerIndex mapeia as colunas do cabeçalho para nomes canônicos.
+// headerIndex mapeia as colunas do cabecalho para nomes canonicos.
 func headerIndex(header []string) map[string]int {
 	idx := map[string]int{}
 	for i, h := range header {
@@ -208,26 +208,44 @@ func headerIndex(header []string) map[string]int {
 	return idx
 }
 
-// normalizeHeader deixa minúsculo, sem acento e com espaços/traços virando '_'.
+// normalizeHeader deixa minusculo, sem acento e com espacos/tracos virando '_'.
 func normalizeHeader(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
-	s = strings.NewReplacer(
-		"á", "a", "à", "a", "â", "a", "ã", "a", "ä", "a",
-		"é", "e", "ê", "e", "í", "i", "ó", "o", "ô", "o", "õ", "o",
-		"ú", "u", "ç", "c",
-	).Replace(s)
+	s = strings.Map(deaccentRune, s)
 	s = strings.NewReplacer(" ", "_", "-", "_", ".", "").Replace(s)
 	return s
 }
 
+// deaccentRune remove o acento de uma letra acentuada (ASCII equivalente). Usa
+// escapes de codepoint para o arquivo permanecer 100% ASCII.
+func deaccentRune(r rune) rune {
+	switch r {
+	case '\u00e1', '\u00e0', '\u00e2', '\u00e3', '\u00e4', '\u00e5':
+		return 'a'
+	case '\u00e9', '\u00e8', '\u00ea', '\u00eb':
+		return 'e'
+	case '\u00ed', '\u00ec', '\u00ee', '\u00ef':
+		return 'i'
+	case '\u00f3', '\u00f2', '\u00f4', '\u00f5', '\u00f6':
+		return 'o'
+	case '\u00fa', '\u00f9', '\u00fb', '\u00fc':
+		return 'u'
+	case '\u00e7':
+		return 'c'
+	case '\u00f1':
+		return 'n'
+	}
+	return r
+}
+
 func parseTipo(s string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "entrada", "receita", "income", "credito", "crédito":
+	case "entrada", "receita", "income", "credito":
 		return "income", nil
-	case "saida", "saída", "despesa", "expense", "debito", "débito":
+	case "saida", "despesa", "expense", "debito":
 		return "expense", nil
 	}
-	return "", fmt.Errorf("tipo inválido: %q (use entrada/saida)", s)
+	return "", fmt.Errorf("tipo invalido: %q (use entrada/saida)", s)
 }
 
 // parseValor aceita 1234.56, 1.234,56 e "R$ 1.234,56".
@@ -258,20 +276,20 @@ func parseData(s string) (time.Time, error) {
 			return t, nil
 		}
 	}
-	return time.Time{}, fmt.Errorf("data inválida: %q (use AAAA-MM-DD ou DD/MM/AAAA)", s)
+	return time.Time{}, fmt.Errorf("data invalida: %q (use AAAA-MM-DD ou DD/MM/AAAA)", s)
 }
 
 func normalizePayment(s string) string {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "pix":
 		return "pix"
-	case "cartao", "cartão", "card":
+	case "cartao", "card":
 		return "card"
 	case "boleto":
 		return "boleto"
-	case "dinheiro", "cash", "especie", "espécie":
+	case "dinheiro", "cash", "especie":
 		return "cash"
-	case "transferencia", "transferência", "transfer":
+	case "transferencia", "transfer":
 		return "transfer"
 	}
 	return ""

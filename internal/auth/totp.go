@@ -13,8 +13,8 @@ import (
 	"time"
 )
 
-// TOTP (RFC 6238) implementado com a stdlib — sem dependência externa para o
-// binário FROM scratch. Usa SHA1/6 dígitos/30s, o padrão dos apps autenticadores.
+// TOTP (RFC 6238) implementado com a stdlib - sem dependencia externa para o
+// binario FROM scratch. Usa SHA1/6 digitos/30s, o padrao dos apps autenticadores.
 
 const (
 	totpPeriod = 30
@@ -44,7 +44,7 @@ func TOTPURL(secret, account, issuer string) string {
 	return "otpauth://totp/" + label + "?" + q.Encode()
 }
 
-// ValidateTOTP confere o código aceitando ±1 janela de 30s (relógios defasados).
+// ValidateTOTP confere o codigo aceitando 1 janela de 30s (relogios defasados).
 func ValidateTOTP(secret, code string) bool {
 	code = strings.TrimSpace(code)
 	if len(code) != totpDigits {
@@ -60,7 +60,7 @@ func ValidateTOTP(secret, code string) bool {
 	return false
 }
 
-// totpAt calcula o código de uma janela de tempo.
+// totpAt calcula o codigo de uma janela de tempo.
 func totpAt(secret string, t int64) string {
 	key, err := b32.DecodeString(strings.ToUpper(strings.ReplaceAll(secret, " ", "")))
 	if err != nil {

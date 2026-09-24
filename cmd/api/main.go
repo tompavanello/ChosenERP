@@ -92,7 +92,7 @@ func main() {
 	}
 	go worker.Run(ctx)
 
-	// Worker de comunicados (disparo assíncrono de avisos por WhatsApp/e-mail)
+	// Worker de comunicados (disparo assincrono de avisos por WhatsApp/e-mail)
 	annWorker := &delivery.AnnouncementWorker{
 		Store:         st,
 		Announcements: &announcements.Repo{},
@@ -101,7 +101,7 @@ func main() {
 	}
 	go annWorker.Run(ctx)
 
-	// Worker das automações de WhatsApp (#31): enfileira aniversários, lembretes
+	// Worker das automacoes de WhatsApp (#31): enfileira aniversarios, lembretes
 	// de escala e boas-vindas a visitantes; o worker de comunicados faz o envio.
 	notifWorker := &delivery.NotificationWorker{
 		Store:         st,
@@ -111,7 +111,7 @@ func main() {
 	}
 	go notifWorker.Run(ctx)
 
-	// Worker dos comunicados agendados (uma vez, diário ou relativo a evento).
+	// Worker dos comunicados agendados (uma vez, diario ou relativo a evento).
 	scheduleWorker := &delivery.ScheduleWorker{
 		Store:         st,
 		Announcements: &announcements.Repo{},
@@ -120,7 +120,7 @@ func main() {
 	}
 	go scheduleWorker.Run(ctx)
 
-	// Worker de doações recorrentes (gera lançamentos + recibos automáticos)
+	// Worker de doacoes recorrentes (gera lancamentos + recibos automaticos)
 	recWorker := &finance.RecurringWorker{
 		Store:     st,
 		Finance:   finRepo,
@@ -132,8 +132,8 @@ func main() {
 	srv := &http.Server{
 		Addr:    ":" + cfg.HTTPPort,
 		Handler: router,
-		// ReadTimeout cobre o corpo INTEIRO da requisição. Com 15s, um upload de
-		// foto em rede móvel lenta era cortado no meio; 60s acomoda o limite de
+		// ReadTimeout cobre o corpo INTEIRO da requisicao. Com 15s, um upload de
+		// foto em rede movel lenta era cortado no meio; 60s acomoda o limite de
 		// MEMBER_PHOTO_MAX_KB sem afetar as rotas JSON.
 		ReadTimeout:  60 * time.Second,
 		WriteTimeout: 30 * time.Second,

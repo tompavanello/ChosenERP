@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Supplier é um fornecedor (PF ou PJ). CPF e CNPJ são opcionais.
+// Supplier e um fornecedor (PF ou PJ). CPF e CNPJ sao opcionais.
 type Supplier struct {
 	ID        string    `json:"id"`
 	BranchID  *string   `json:"branch_id,omitempty"`
@@ -106,7 +106,7 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 	return r.Get(ctx, tx, id)
 }
 
-// Update aplica semântica de PATCH: campo nil mantém o valor atual.
+// Update aplica semantica de PATCH: campo nil mantem o valor atual.
 func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput) (*Supplier, error) {
 	var updatedID string
 	err := tx.QueryRow(ctx, `

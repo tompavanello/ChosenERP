@@ -13,8 +13,8 @@ import (
 	"chosenerp/internal/users"
 )
 
-// isAdmin restringe a gestão de usuários à Sede do tenant. O RLS já isola o
-// tenant; aqui é autorização por papel (o banco não distingue quem pode gerir).
+// isAdmin restringe a gestao de usuarios a Sede do tenant. O RLS ja isola o
+// tenant; aqui e autorizacao por papel (o banco nao distingue quem pode gerir).
 func isAdmin(role string) bool { return role == "super_admin" || role == "admin_sede" }
 
 func (a *App) adminClaims(w http.ResponseWriter, r *http.Request) (*auth.Claims, bool) {
@@ -62,7 +62,7 @@ func (a *App) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	in.Email = strings.TrimSpace(in.Email)
 	in.FullName = strings.TrimSpace(in.FullName)
 	if in.Email == "" || in.FullName == "" || in.RoleKey == "" {
-		writeErr(w, http.StatusBadRequest, "email, full_name e role são obrigatórios")
+		writeErr(w, http.StatusBadRequest, "email, full_name e role sao obrigatorios")
 		return
 	}
 	if len(in.Password) < 8 {
@@ -78,17 +78,17 @@ func (a *App) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusBadRequest, "perfil (role) inválido")
+			writeErr(w, http.StatusBadRequest, "perfil (role) invalido")
 			return
 		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			switch pgErr.Code {
 			case "P0002": // perfil inexistente no tenant (user_attach_to_tenant)
-				writeErr(w, http.StatusBadRequest, "perfil (role) inválido")
+				writeErr(w, http.StatusBadRequest, "perfil (role) invalido")
 				return
-			case "23505": // e-mail já existe OU vínculo duplicado na igreja
-				writeErr(w, http.StatusConflict, "e-mail já cadastrado nesta igreja")
+			case "23505": // e-mail ja existe OU vinculo duplicado na igreja
+				writeErr(w, http.StatusConflict, "e-mail ja cadastrado nesta igreja")
 				return
 			}
 		}
@@ -118,7 +118,7 @@ func (a *App) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "usuário não encontrado")
+			writeErr(w, http.StatusNotFound, "usuario nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -146,7 +146,7 @@ func (a *App) handleResetUserPassword(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "usuário não encontrado")
+			writeErr(w, http.StatusNotFound, "usuario nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -193,7 +193,7 @@ func (a *App) handleListPermissions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"permissions": out})
 }
 
-// ---- MFA (TOTP) do próprio usuário ----
+// ---- MFA (TOTP) do proprio usuario ----
 
 func (a *App) handleMFAStatus(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -251,7 +251,7 @@ func (a *App) handleMFAEnable(w http.ResponseWriter, r *http.Request) {
 	b := boundsFromClaims(claims)
 	if err := a.Auth.EnableMFA(r.Context(), b, claims.UserID, in.Code); err != nil {
 		if errors.Is(err, auth.ErrMFAInvalid) {
-			writeErr(w, http.StatusBadRequest, "código inválido")
+			writeErr(w, http.StatusBadRequest, "codigo invalido")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())

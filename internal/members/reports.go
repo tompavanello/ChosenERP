@@ -6,9 +6,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ---- Aniversariantes (requisito do módulo de relatórios) ----
+// ---- Aniversariantes (requisito do modulo de relatorios) ----
 
-// Birthday é um membro que faz aniversário no mês consultado.
+// Birthday e um membro que faz aniversario no mes consultado.
 type Birthday struct {
 	ID        string  `json:"id"`
 	FullName  string  `json:"full_name"`
@@ -20,8 +20,8 @@ type Birthday struct {
 	BranchID  string  `json:"branch_id"`
 }
 
-// MarriageAnniversary é um aniversário de casamento. Quando os dois cônjuges
-// têm a mesma data, só um registro é devolvido (com o nome do cônjuge).
+// MarriageAnniversary e um aniversario de casamento. Quando os dois conjuges
+// tem a mesma data, so um registro e devolvido (com o nome do conjuge).
 type MarriageAnniversary struct {
 	ID           string  `json:"id"`
 	FullName     string  `json:"full_name"`
@@ -31,7 +31,7 @@ type MarriageAnniversary struct {
 	Years        int     `json:"years"`
 }
 
-// Birthdays lista os aniversariantes (nascimento) do mês.
+// Birthdays lista os aniversariantes (nascimento) do mes.
 func (r *Repo) Birthdays(ctx context.Context, tx pgx.Tx, month int) ([]Birthday, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT m.id::text, m.full_name, m.birth_date::text,
@@ -58,8 +58,8 @@ func (r *Repo) Birthdays(ctx context.Context, tx pgx.Tx, month int) ([]Birthday,
 	return out, rows.Err()
 }
 
-// Marriages lista os aniversários de casamento do mês, deduplicando casais que
-// compartilham a data (só a ponta de menor id entra).
+// Marriages lista os aniversarios de casamento do mes, deduplicando casais que
+// compartilham a data (so a ponta de menor id entra).
 func (r *Repo) Marriages(ctx context.Context, tx pgx.Tx, month int) ([]MarriageAnniversary, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT m.id::text, m.full_name, m.marriage_date::text,
@@ -101,9 +101,9 @@ func (r *Repo) Marriages(ctx context.Context, tx pgx.Tx, month int) ([]MarriageA
 	return out, rows.Err()
 }
 
-// ---- Demográficos ----
+// ---- Demograficos ----
 
-// PyramidRow é uma faixa etária da pirâmide.
+// PyramidRow e uma faixa etaria da piramide.
 type PyramidRow struct {
 	Bucket string `json:"bucket"`
 	Male   int    `json:"male"`
@@ -111,13 +111,13 @@ type PyramidRow struct {
 	Total  int    `json:"total"`
 }
 
-// CountRow é uma contagem genérica por chave.
+// CountRow e uma contagem generica por chave.
 type CountRow struct {
 	Key   string `json:"key"`
 	Count int    `json:"count"`
 }
 
-// Demographics agrega o perfil da base de membros no escopo da sessão (RLS).
+// Demographics agrega o perfil da base de membros no escopo da sessao (RLS).
 type Demographics struct {
 	Total           int          `json:"total"`
 	AgePyramid      []PyramidRow `json:"age_pyramid"`
@@ -131,14 +131,14 @@ type Demographics struct {
 // ageBuckets define a ordem fixa das faixas (inclusive as vazias).
 var ageBuckets = []string{"0-12", "13-17", "18-25", "26-35", "36-45", "46-55", "56-65", "66+"}
 
-// Demographics monta o painel demográfico.
+// Demographics monta o painel demografico.
 func (r *Repo) Demographics(ctx context.Context, tx pgx.Tx) (Demographics, error) {
 	var d Demographics
 	if err := tx.QueryRow(ctx, `SELECT count(*) FROM members`).Scan(&d.Total); err != nil {
 		return d, err
 	}
 
-	// Pirâmide etária (por sexo).
+	// Piramide etaria (por sexo).
 	rows, err := tx.Query(ctx, `
 		WITH base AS (
 			SELECT

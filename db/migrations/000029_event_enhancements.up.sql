@@ -1,10 +1,10 @@
 -- 000029_event_enhancements.up.sql
 -- Melhorias no registro de eventos:
---   * attendance_mode: como a presença é registrada (chamada nominal OU total digitado);
+--   * attendance_mode: como a presenca e registrada (chamada nominal OU total digitado);
 --   * estimated_cost: custo estimado (opcional);
---   * event_invitees: pessoas e/ou ministérios CONVOCADOS (obrigados a participar);
---   * multi-dia já é suportado por starts_at/ends_at (retiro, acampamento) — o
---     frontend passou a ter data de término.
+--   * event_invitees: pessoas e/ou ministerios CONVOCADOS (obrigados a participar);
+--   * multi-dia ja e suportado por starts_at/ends_at (retiro, acampamento) - o
+--     frontend passou a ter data de termino.
 
 ALTER TABLE church_events
     ADD COLUMN attendance_mode text NOT NULL DEFAULT 'nominal'
@@ -13,7 +13,7 @@ ALTER TABLE church_events
         CHECK (estimated_cost IS NULL OR estimated_cost >= 0);
 
 -- ---------------------------------------------------------------------------
--- Convocados (pessoas e/ou ministérios)
+-- Convocados (pessoas e/ou ministerios)
 -- ---------------------------------------------------------------------------
 CREATE TABLE event_invitees (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -23,7 +23,7 @@ CREATE TABLE event_invitees (
     member_id   uuid REFERENCES members(id) ON DELETE CASCADE,
     ministry_id uuid REFERENCES ministries(id) ON DELETE CASCADE,
     created_at  timestamptz NOT NULL DEFAULT now(),
-    -- Exatamente um dos dois: pessoa OU ministério.
+    -- Exatamente um dos dois: pessoa OU ministerio.
     CONSTRAINT event_invitees_target_check CHECK (
         (member_id IS NOT NULL AND ministry_id IS NULL) OR
         (member_id IS NULL AND ministry_id IS NOT NULL)

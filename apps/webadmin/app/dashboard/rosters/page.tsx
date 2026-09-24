@@ -126,7 +126,7 @@ export default function RostersPage() {
   async function removeRoster(r: Roster, deleteEvent: boolean) {
     try {
       await deleteRoster(r.id, deleteEvent);
-      toast(deleteEvent ? "Escala e evento excluídos." : "Escala excluída.");
+      toast(deleteEvent ? "Escala e evento excluidos." : "Escala excluida.");
       setDeleteTarget(null);
       await load();
     } catch (err) {
@@ -195,15 +195,15 @@ export default function RostersPage() {
     <div className="page">
       <PageHeader
         title="Escalas"
-        description="Convocação de voluntários, confirmação de presença e conflito de agenda"
+        description="Convocacao de voluntarios, confirmacao de presenca e conflito de agenda"
         actions={canWrite ? <Button onClick={openCreate}><Plus className="h-4 w-4" /> Nova escala</Button> : undefined}
       />
 
       <Card className="mb-4 flex flex-wrap items-end gap-3">
         <div><label className="label">De</label><Input type="date" className="h-8 text-sm" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} /></div>
-        <div><label className="label">Até</label><Input type="date" className="h-8 text-sm" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} /></div>
+        <div><label className="label">Ate</label><Input type="date" className="h-8 text-sm" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} /></div>
         <div>
-          <label className="label">Ministério</label>
+          <label className="label">Ministerio</label>
           <Select className="h-8 w-56 text-sm" value={filters.ministry} onChange={(e) => setFilters({ ...filters, ministry: e.target.value })}>
             <option value="">Todos</option>
             {ministries.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -215,18 +215,18 @@ export default function RostersPage() {
         {rosters === null ? (
           <div className="p-4"><SkeletonRows rows={5} /></div>
         ) : rosters.length === 0 ? (
-          <EmptyState icon={<CalendarClock className="h-10 w-10" />} title="Nenhuma escala" description="Crie escalas para cultos, eventos e ministérios." />
+          <EmptyState icon={<CalendarClock className="h-10 w-10" />} title="Nenhuma escala" description="Crie escalas para cultos, eventos e ministerios." />
         ) : (
           <Table>
-            <THead><TRow><TH>Início</TH><TH>Título</TH><TH>Ministério</TH><TH>Evento</TH><TH>Confirmados</TH><TH>Situação</TH><TH className="text-right">Ações</TH></TRow></THead>
+            <THead><TRow><TH>Inicio</TH><TH>Titulo</TH><TH>Ministerio</TH><TH>Evento</TH><TH>Confirmados</TH><TH>Situacao</TH><TH className="text-right">Acoes</TH></TRow></THead>
             <TBody>
               {rosters.map((r) => (
                 <TRow key={r.id}>
                   <TD className="whitespace-nowrap text-sm">{dateTimePt(r.starts_at)}</TD>
                   <TD className="font-medium">{r.title}</TD>
-                  <TD className="text-sm text-zinc-500">{r.ministry_name ?? "—"}</TD>
+                  <TD className="text-sm text-zinc-500">{r.ministry_name ?? "-"}</TD>
                   <TD className="text-sm text-zinc-500">
-                    {r.event_name ?? r.event_kind_name ?? "—"}
+                    {r.event_name ?? r.event_kind_name ?? "-"}
                     {r.generated_event && <span className="ml-1 text-[10px] uppercase text-sky-600" title="Evento gerado pela escala">auto</span>}
                   </TD>
                   <TD className="text-sm tabular-nums">{r.confirmed_count}/{r.assignment_count}</TD>
@@ -248,25 +248,25 @@ export default function RostersPage() {
       {/* Drawer criar/editar */}
       <Drawer open={drawer.open} onClose={() => setDrawer({ open: false })} size="xl" title={drawer.editing ? "Editar escala" : "Nova escala"}>
         <form onSubmit={saveRoster} className="space-y-3">
-          <Field label="Título" required>
+          <Field label="Titulo" required>
             <Input required className="h-8 text-sm" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           </Field>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Ministério">
+            <Field label="Ministerio">
               <Select className="h-8 text-sm" value={form.ministry_id} onChange={(e) => setForm({ ...form, ministry_id: e.target.value })}>
-                <option value="">—</option>
+                <option value="">-</option>
                 {ministries.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </Select>
             </Field>
-            <Field label="Evento existente" hint="Vincule a escala a um evento já cadastrado.">
+            <Field label="Evento existente" hint="Vincule a escala a um evento ja cadastrado.">
               <Select className="h-8 text-sm" value={form.event_id} onChange={(e) => setForm({ ...form, event_id: e.target.value })}>
-                <option value="">—</option>
-                {events.map((ev) => <option key={ev.id} value={ev.id}>{dateTimePt(ev.starts_at)} · {ev.kind_name ?? "Evento"}</option>)}
+                <option value="">-</option>
+                {events.map((ev) => <option key={ev.id} value={ev.id}>{dateTimePt(ev.starts_at)} - {ev.kind_name ?? "Evento"}</option>)}
               </Select>
             </Field>
-            <Field label="Tipo de evento" hint="Só a escala, ou a base do evento automático.">
+            <Field label="Tipo de evento" hint="So a escala, ou a base do evento automatico.">
               <Select className="h-8 text-sm" value={form.event_kind_id} onChange={(e) => setForm({ ...form, event_kind_id: e.target.value })}>
-                <option value="">—</option>
+                <option value="">-</option>
                 {kinds.filter((k) => k.is_active).map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
               </Select>
             </Field>
@@ -279,31 +279,31 @@ export default function RostersPage() {
                 className="h-4 w-4 rounded border-zinc-300 text-sky-600"
               />
               <span>
-                Gerar evento automático
+                Gerar evento automatico
                 <span className="block text-xs text-zinc-400">
-                  Cria o evento na grade e sincroniza os escalados como convocados/responsáveis. Requer um tipo de evento e nenhum evento vinculado.
+                  Cria o evento na grade e sincroniza os escalados como convocados/responsaveis. Requer um tipo de evento e nenhum evento vinculado.
                 </span>
               </span>
             </label>
-            <Field label="Início" required>
+            <Field label="Inicio" required>
               <Input required type="datetime-local" className="h-8 text-sm" value={form.starts_at} onChange={(e) => setForm({ ...form, starts_at: e.target.value })} />
             </Field>
-            <Field label="Término">
+            <Field label="Termino">
               <Input type="datetime-local" className="h-8 text-sm" value={form.ends_at} onChange={(e) => setForm({ ...form, ends_at: e.target.value })} />
             </Field>
             <Field label="Local">
               <Input className="h-8 text-sm" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
             </Field>
-            <Field label="Situação">
+            <Field label="Situacao">
               <Select className="h-8 text-sm" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                 <option value="rascunho">Rascunho</option>
                 <option value="publicada">Publicada</option>
-                <option value="concluida">Concluída</option>
+                <option value="concluida">Concluida</option>
                 <option value="cancelada">Cancelada</option>
               </Select>
             </Field>
           </div>
-          <Field label="Observações">
+          <Field label="Observacoes">
             <Textarea rows={2} className="text-sm" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </Field>
           <div className="flex justify-end gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
@@ -314,7 +314,7 @@ export default function RostersPage() {
       </Drawer>
 
       {/* Drawer gerenciar escalados */}
-      <Drawer open={manage !== null} onClose={() => setManage(null)} size="2xl" title={`Escalados — ${manage?.title ?? ""}`}>
+      <Drawer open={manage !== null} onClose={() => setManage(null)} size="2xl" title={`Escalados - ${manage?.title ?? ""}`}>
         {conflicts.length > 0 && (
           <div className="mb-3 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
             <AlertTriangle className="mr-1 inline h-4 w-4" />
@@ -326,7 +326,7 @@ export default function RostersPage() {
             <div className="border-b border-zinc-100 p-2 text-sm font-semibold dark:border-zinc-800">
               Escalados ({Object.keys(selected).length})
               <span className="ml-1 block text-xs font-normal text-zinc-400">
-                Pessoas além do ministério{manage?.ministry_name ? ` · ${manage.ministry_name}` : ""}
+                Pessoas alem do ministerio{manage?.ministry_name ? ` - ${manage.ministry_name}` : ""}
               </span>
             </div>
             <ul className="max-h-96 space-y-1 overflow-y-auto p-2">
@@ -340,7 +340,7 @@ export default function RostersPage() {
                       <button type="button" title="Remover" onClick={() => setSelected((s) => { const n = { ...s }; delete n[mid]; return n; })} className="text-zinc-400 hover:text-red-600"><X className="h-4 w-4" /></button>
                     </div>
                     <div className="mt-1 flex items-center gap-2">
-                      <Input className="h-7 text-xs" placeholder="Função (vocal, diaconia...)" value={role}
+                      <Input className="h-7 text-xs" placeholder="Funcao (vocal, diaconia...)" value={role}
                         onChange={(e) => setSelected((s) => ({ ...s, [mid]: e.target.value }))} />
                       {asg && asg.status !== "confirmado" && <Button variant="ghost" className="h-7 px-2 text-emerald-600" title="Confirmar" onClick={() => respond(asg.id, "confirmado")}><Check className="h-4 w-4" /></Button>}
                       {asg && asg.status !== "recusado" && <Button variant="ghost" className="h-7 px-2 text-red-600" title="Recusar" onClick={() => respond(asg.id, "recusado")}><X className="h-4 w-4" /></Button>}
@@ -348,7 +348,7 @@ export default function RostersPage() {
                   </li>
                 );
               })}
-              {Object.keys(selected).length === 0 && <li className="p-2 text-xs text-zinc-400">Ninguém escalado ainda.</li>}
+              {Object.keys(selected).length === 0 && <li className="p-2 text-xs text-zinc-400">Ninguem escalado ainda.</li>}
             </ul>
             <div className="flex justify-end gap-2 border-t border-zinc-100 p-2 dark:border-zinc-800">
               <Button className="h-8 text-sm" onClick={saveAssignments} disabled={!canWrite}>Salvar escalados</Button>
@@ -361,19 +361,19 @@ export default function RostersPage() {
             </div>
             {manage?.ministry_id && (
               <div className="border-b border-zinc-100 p-2 dark:border-zinc-800">
-                <p className="mb-1 text-xs font-medium uppercase text-zinc-400">Sugeridos pelo ministério</p>
+                <p className="mb-1 text-xs font-medium uppercase text-zinc-400">Sugeridos pelo ministerio</p>
                 <ul className="max-h-32 space-y-0.5 overflow-y-auto">
                   {suggestions.filter((s) => !selected[s.member_id]).map((s) => (
                     <li key={s.member_id} className="flex items-center justify-between gap-2 rounded px-1 py-1 text-sm">
                       <span className="truncate">
                         {s.member_name}
                         {s.busy && <span className="ml-1 text-xs text-amber-600">(ocupado)</span>}
-                        {s.frequency && <span className="ml-1 text-xs text-zinc-400">· {s.frequency.replace("_", " ")}</span>}
+                        {s.frequency && <span className="ml-1 text-xs text-zinc-400">- {s.frequency.replace("_", " ")}</span>}
                       </span>
                       <Button variant="ghost" className="h-7 px-2" title="Adicionar" onClick={() => setSelected((prev) => ({ ...prev, [s.member_id]: prev[s.member_id] ?? "" }))}><UserPlus className="h-4 w-4" /></Button>
                     </li>
                   ))}
-                  {suggestions.length === 0 && <li className="px-1 py-2 text-xs text-zinc-400">Sem sugestões. Vincule voluntários ao ministério.</li>}
+                  {suggestions.length === 0 && <li className="px-1 py-2 text-xs text-zinc-400">Sem sugestoes. Vincule voluntarios ao ministerio.</li>}
                 </ul>
               </div>
             )}
@@ -402,7 +402,7 @@ export default function RostersPage() {
               <>
                 <p>
                   A escala <strong>{deleteTarget.title}</strong> gerou um evento na grade de eventos.
-                  Deseja excluir a escala da grade também?
+                  Deseja excluir a escala da grade tambem?
                 </p>
                 <div className="flex flex-wrap justify-end gap-2">
                   <Button variant="ghost" onClick={() => setDeleteTarget(null)}>Cancelar</Button>

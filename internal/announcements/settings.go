@@ -7,14 +7,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Templates padrão das automações (podem ser editados pela igreja).
+// Templates padrao das automacoes (podem ser editados pela igreja).
 const (
-	DefaultBirthdayTemplate = "Feliz aniversário, {primeiro_nome}! A {igreja} celebra a sua vida hoje. Que Deus o(a) abençoe ricamente!"
-	DefaultRosterTemplate   = "Olá, {primeiro_nome}! Lembrete: você está escalado(a) em \"{titulo}\" no dia {data}. Conte com você!"
-	DefaultVisitorTemplate  = "Olá, {primeiro_nome}! Foi uma alegria receber você na {igreja}. Esperamos ver você novamente em breve!"
+	DefaultBirthdayTemplate = "Feliz aniversario, {primeiro_nome}! A {igreja} celebra a sua vida hoje. Que Deus o(a) abencoe ricamente!"
+	DefaultRosterTemplate   = "Ola, {primeiro_nome}! Lembrete: voce esta escalado(a) em \"{titulo}\" no dia {data}. Conte com voce!"
+	DefaultVisitorTemplate  = "Ola, {primeiro_nome}! Foi uma alegria receber voce na {igreja}. Esperamos ver voce novamente em breve!"
 )
 
-// NotificationSettings é a configuração de automações de WhatsApp do tenant (#31).
+// NotificationSettings e a configuracao de automacoes de WhatsApp do tenant (#31).
 type NotificationSettings struct {
 	TenantID                 string    `json:"tenant_id"`
 	BirthdaysEnabled         bool      `json:"birthdays_enabled"`
@@ -61,8 +61,8 @@ func defaultNotificationSettings(tenantID string) *NotificationSettings {
 	}
 }
 
-// GetNotificationSettings lê a configuração do tenant; sem linha, devolve os
-// padrões (as automações nascem desligadas).
+// GetNotificationSettings le a configuracao do tenant; sem linha, devolve os
+// padroes (as automacoes nascem desligadas).
 func (r *Repo) GetNotificationSettings(ctx context.Context, tx pgx.Tx, tenantID string) (*NotificationSettings, error) {
 	s := defaultNotificationSettings(tenantID)
 	err := tx.QueryRow(ctx, `
@@ -84,7 +84,7 @@ func (r *Repo) GetNotificationSettings(ctx context.Context, tx pgx.Tx, tenantID 
 	return s, nil
 }
 
-// UpsertNotificationSettings grava a configuração, aplicando só os campos
+// UpsertNotificationSettings grava a configuracao, aplicando so os campos
 // enviados sobre o valor atual (PATCH parcial).
 func (r *Repo) UpsertNotificationSettings(ctx context.Context, tx pgx.Tx, tenantID string, in NotificationSettingsInput) (*NotificationSettings, error) {
 	cur, err := r.GetNotificationSettings(ctx, tx, tenantID)
@@ -141,7 +141,7 @@ func (r *Repo) UpsertNotificationSettings(ctx context.Context, tx pgx.Tx, tenant
 	return r.GetNotificationSettings(ctx, tx, tenantID)
 }
 
-// ListNotificationSettings devolve os tenants com ao menos uma automação ligada
+// ListNotificationSettings devolve os tenants com ao menos uma automacao ligada
 // (usada pelo worker em escopo de sistema).
 func (r *Repo) ListNotificationSettings(ctx context.Context, tx pgx.Tx) ([]TenantNotificationSettings, error) {
 	rows, err := tx.Query(ctx, `
@@ -172,10 +172,10 @@ func (r *Repo) ListNotificationSettings(ctx context.Context, tx pgx.Tx) ([]Tenan
 }
 
 // ---------------------------------------------------------------------------
-// Resolução dos destinatários das automações
+// Resolucao dos destinatarios das automacoes
 // ---------------------------------------------------------------------------
 
-// BirthdayRecipient é um aniversariante do dia.
+// BirthdayRecipient e um aniversariante do dia.
 type BirthdayRecipient struct {
 	MemberID  string
 	BranchID  string
@@ -183,8 +183,8 @@ type BirthdayRecipient struct {
 	FirstName string
 }
 
-// BirthdayRecipients devolve os membros que fazem aniversário no mês/dia dados.
-// Baixados, transferidos e falecidos não recebem. O `tenantID` é explícito
+// BirthdayRecipients devolve os membros que fazem aniversario no mes/dia dados.
+// Baixados, transferidos e falecidos nao recebem. O `tenantID` e explicito
 // porque o worker roda com role 'system' (a RLS libera todos os tenants).
 func (r *Repo) BirthdayRecipients(ctx context.Context, tx pgx.Tx, tenantID string, month, day int) ([]BirthdayRecipient, error) {
 	rows, err := tx.Query(ctx, `
@@ -213,7 +213,7 @@ func (r *Repo) BirthdayRecipients(ctx context.Context, tx pgx.Tx, tenantID strin
 	return out, rows.Err()
 }
 
-// RosterReminderRecipient é um voluntário convidado cuja escala se aproxima.
+// RosterReminderRecipient e um voluntario convidado cuja escala se aproxima.
 type RosterReminderRecipient struct {
 	AssignmentID string
 	BranchID     string
@@ -223,8 +223,8 @@ type RosterReminderRecipient struct {
 	StartsAt     time.Time
 }
 
-// RosterReminderRecipients devolve os escalados ainda "convidados" (não
-// confirmaram) cuja escala começa dentro da janela [from, to].
+// RosterReminderRecipients devolve os escalados ainda "convidados" (nao
+// confirmaram) cuja escala comeca dentro da janela [from, to].
 func (r *Repo) RosterReminderRecipients(ctx context.Context, tx pgx.Tx, tenantID string, from, to time.Time) ([]RosterReminderRecipient, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT ra.id::text, ra.branch_id::text, m.whatsapp,
@@ -254,7 +254,7 @@ func (r *Repo) RosterReminderRecipients(ctx context.Context, tx pgx.Tx, tenantID
 	return out, rows.Err()
 }
 
-// VisitorWelcomeRecipient é um visitante a ser acolhido.
+// VisitorWelcomeRecipient e um visitante a ser acolhido.
 type VisitorWelcomeRecipient struct {
 	VisitorID string
 	BranchID  string
@@ -263,9 +263,9 @@ type VisitorWelcomeRecipient struct {
 }
 
 // VisitorWelcomeRecipients devolve visitantes criados entre `since` e `until`
-// (normalmente [config.atualizacao, agora - atraso]) que ainda não são membros.
-// Limitar pelo `since` evita disparar boas-vindas para o cadastro histórico no
-// momento em que a automação é ligada.
+// (normalmente [config.atualizacao, agora - atraso]) que ainda nao sao membros.
+// Limitar pelo `since` evita disparar boas-vindas para o cadastro historico no
+// momento em que a automacao e ligada.
 func (r *Repo) VisitorWelcomeRecipients(ctx context.Context, tx pgx.Tx, tenantID string, since, until time.Time) ([]VisitorWelcomeRecipient, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT id::text, COALESCE(branch_id::text,''), whatsapp,

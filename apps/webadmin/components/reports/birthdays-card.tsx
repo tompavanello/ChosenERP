@@ -7,13 +7,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getBirthdays, type BirthdaysResult } from "@/lib/api";
 
 const MONTHS = [
-  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "janeiro", "fevereiro", "marco", "abril", "maio", "junho",
   "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
 ];
 
 /**
- * Widget de aniversariantes do mês (membros e casamentos). Carrega sozinho para
- * poder ser pendurado no dashboard sem acoplar à Visão Geral.
+ * Widget de aniversariantes do mes (membros e casamentos). Carrega sozinho para
+ * poder ser pendurado no dashboard sem acoplar a Visao Geral.
  */
 export function BirthdaysCard({ className }: { className?: string }) {
   const [data, setData] = useState<BirthdaysResult | null>(null);
@@ -40,7 +40,7 @@ export function BirthdaysCard({ className }: { className?: string }) {
       </h3>
 
       {vazio ? (
-        <p className="text-sm text-zinc-500">Nenhum aniversariante neste mês.</p>
+        <p className="text-sm text-zinc-500">Nenhum aniversariante neste mes.</p>
       ) : (
         <div className="grid gap-6 sm:grid-cols-2">
           <div>
@@ -48,14 +48,14 @@ export function BirthdaysCard({ className }: { className?: string }) {
               <Cake className="h-3.5 w-3.5" /> Nascimento
             </p>
             {data.birthdays.length === 0 ? (
-              <p className="text-sm text-zinc-400">—</p>
+              <p className="text-sm text-zinc-400">-</p>
             ) : (
               <ul className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
                 {data.birthdays.map((b) => (
                   <li key={b.id} className="flex items-center justify-between gap-2 text-sm">
                     <span className="truncate">{b.full_name}</span>
                     <span className="shrink-0 text-xs text-zinc-400">
-                      dia {b.day} · {b.age} anos
+                      dia {b.day} - {b.age} anos
                     </span>
                   </li>
                 ))}
@@ -68,7 +68,7 @@ export function BirthdaysCard({ className }: { className?: string }) {
               <Heart className="h-3.5 w-3.5" /> Casamento
             </p>
             {data.marriages.length === 0 ? (
-              <p className="text-sm text-zinc-400">—</p>
+              <p className="text-sm text-zinc-400">-</p>
             ) : (
               <ul className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
                 {data.marriages.map((m) => (
@@ -78,7 +78,7 @@ export function BirthdaysCard({ className }: { className?: string }) {
                       {m.spouse_name ? ` & ${m.spouse_name}` : ""}
                     </span>
                     <span className="shrink-0 text-xs text-zinc-400">
-                      dia {m.day} · {m.years} anos
+                      dia {m.day} - {m.years} anos
                     </span>
                   </li>
                 ))}

@@ -1,7 +1,7 @@
 -- db/init/setup.sql
--- Configura os papéis do Chosen ERP no database chosenerp.
--- - migrator (postgres): dono do schema; executa as migrações.
--- - chosenerp_app: papel da aplicação (NÃO é dono nem superuser) => sujeito a RLS.
+-- Configura os papeis do Chosen ERP no database chosenerp.
+-- - migrator (postgres): dono do schema; executa as migracoes.
+-- - chosenerp_app: papel da aplicacao (NAO e dono nem superuser) => sujeito a RLS.
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='chosenerp_app') THEN
@@ -11,7 +11,7 @@ END $$;
 
 GRANT USAGE ON SCHEMA public TO chosenerp_app;
 
--- Objetos futuros criados pelo migrador (postgres) herdam os privilégios abaixo.
+-- Objetos futuros criados pelo migrador (postgres) herdam os privilegios abaixo.
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO chosenerp_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public

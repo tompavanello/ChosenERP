@@ -47,14 +47,14 @@ export default function BenefactorsPage() {
     <div className="page">
       <PageHeader
         title="Benfeitores"
-        description="Apoiadores sem vínculo de membresia"
+        description="Apoiadores sem vinculo de membresia"
         actions={<Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Novo Benfeitor</Button>}
       />
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <StatCard label="Benfeitores" value={items ? String(items.length) : "…"} icon={HeartHandshake} />
-        <StatCard label="Com e-mail" value={items ? String(items.filter((b) => b.email).length) : "…"} tone="green" />
-        <StatCard label="Com telefone" value={items ? String(items.filter((b) => b.phone).length) : "…"} tone="sky" />
+        <StatCard label="Benfeitores" value={items ? String(items.length) : "..."} icon={HeartHandshake} />
+        <StatCard label="Com e-mail" value={items ? String(items.filter((b) => b.email).length) : "..."} tone="green" />
+        <StatCard label="Com telefone" value={items ? String(items.filter((b) => b.phone).length) : "..."} tone="sky" />
       </div>
 
       <div className="mb-4 relative max-w-sm">
@@ -70,17 +70,17 @@ export default function BenefactorsPage() {
         ) : (
           <Table>
             <THead>
-              <TRow><TH>Nome</TH><TH>Contato</TH><TH>Observações</TH><TH>Cadastrado</TH></TRow>
+              <TRow><TH>Nome</TH><TH>Contato</TH><TH>Observacoes</TH><TH>Cadastrado</TH></TRow>
             </THead>
             <TBody>
               {filtered.map((b) => (
                 <TRow key={b.id}>
                   <TD className="font-medium">{b.name}</TD>
                   <TD>
-                    <p>{b.email ?? "—"}</p>
+                    <p>{b.email ?? "-"}</p>
                     <p className="text-xs text-zinc-400">{b.phone ?? ""}</p>
                   </TD>
-                  <TD className="text-zinc-500">{b.notes ?? "—"}</TD>
+                  <TD className="text-zinc-500">{b.notes ?? "-"}</TD>
                   <TD className="text-zinc-500">{datePt(b.created_at)}</TD>
                 </TRow>
               ))}
@@ -95,7 +95,7 @@ export default function BenefactorsPage() {
           <Field label="CPF"><Input value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} placeholder="000.000.000-00" /></Field>
           <Field label="Telefone"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
           <Field label="E-mail" className="col-span-2"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-          <Field label="Observações" className="col-span-2">
+          <Field label="Observacoes" className="col-span-2">
             <Textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </Field>
           <div className="col-span-2 flex justify-end gap-2 pt-2">

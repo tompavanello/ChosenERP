@@ -1,7 +1,7 @@
 -- 000018_finance_restructure.down.sql
 DROP FUNCTION IF EXISTS fin_tx_hash();
 DROP TRIGGER IF EXISTS fin_tx_hash ON financial_transactions;
--- Recria a função original (sem account_id) para restaurar o estado anterior.
+-- Recria a funcao original (sem account_id) para restaurar o estado anterior.
 CREATE OR REPLACE FUNCTION fin_tx_hash() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE

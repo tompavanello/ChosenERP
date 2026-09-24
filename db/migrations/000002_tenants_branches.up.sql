@@ -1,5 +1,5 @@
 -- 000002_tenants_branches.up.sql
--- Núcleo multi-tenant: tenants (sedes/convenções) e branches (filiais/congregações)
+-- Nucleo multi-tenant: tenants (sedes/convencoes) e branches (filiais/congregacoes)
 
 CREATE TABLE tenants (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -18,7 +18,7 @@ CREATE TABLE tenants (
 CREATE TABLE branches (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id     uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    parent_id     uuid REFERENCES branches(id) ON DELETE SET NULL, -- hierarquia Sede > Congregações
+    parent_id     uuid REFERENCES branches(id) ON DELETE SET NULL, -- hierarquia Sede > Congregacoes
     name          text NOT NULL,
     slug          text NOT NULL,
     kind          text NOT NULL DEFAULT 'branch', -- branch | congregation | sub_congregation

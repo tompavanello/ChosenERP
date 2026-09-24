@@ -13,7 +13,7 @@ type ctxKey string
 
 const claimsKey ctxKey = "claims"
 
-// withClaims injeta as claims decodificadas no contexto da requisição.
+// withClaims injeta as claims decodificadas no contexto da requisicao.
 func withClaims(ctx context.Context, c *auth.Claims) context.Context {
 	return context.WithValue(ctx, claimsKey, c)
 }
@@ -48,10 +48,10 @@ func (a *App) Authenticator(next http.Handler) http.Handler {
 	})
 }
 
-// applyTenantContext permite fixar a igreja ativa por requisição, via
-// `X-Tenant-Id` (uuid) ou `X-Tenant-Slug`. Só honra quando a identidade tem um
-// vínculo ATIVO correspondente — a validação é feita no banco. Ignorado quando
-// nenhum header é enviado (o tenant ativo do token prevalece).
+// applyTenantContext permite fixar a igreja ativa por requisicao, via
+// `X-Tenant-Id` (uuid) ou `X-Tenant-Slug`. So honra quando a identidade tem um
+// vinculo ATIVO correspondente - a validacao e feita no banco. Ignorado quando
+// nenhum header e enviado (o tenant ativo do token prevalece).
 func (a *App) applyTenantContext(r *http.Request, claims *auth.Claims) {
 	tid := strings.TrimSpace(r.Header.Get("X-Tenant-Id"))
 	slug := strings.TrimSpace(r.Header.Get("X-Tenant-Slug"))
@@ -76,14 +76,14 @@ func (a *App) applyTenantContext(r *http.Request, claims *auth.Claims) {
 }
 
 // applyBranchContext permite que a Sede (super_admin/admin_sede) troque o
-// contexto de filial por requisição, via header `X-Branch-Id`:
-//   - ausente           -> mantém o contexto do token (Sede = branch vazio);
+// contexto de filial por requisicao, via header `X-Branch-Id`:
+//   - ausente           -> mantem o contexto do token (Sede = branch vazio);
 //   - "all"             -> volta ao escopo Sede (todas as filiais do tenant);
-//   - um uuid de filial -> opera como aquela filial (leitura e gravação).
+//   - um uuid de filial -> opera como aquela filial (leitura e gravacao).
 //
-// O papel é checado aqui; a filial é validada pelo próprio RLS (tenant do
-// contexto), então um id de outro tenant simplesmente não devolve/grava nada.
-// Usuário de filial não troca de contexto — o header é ignorado.
+// O papel e checado aqui; a filial e validada pelo proprio RLS (tenant do
+// contexto), entao um id de outro tenant simplesmente nao devolve/grava nada.
+// Usuario de filial nao troca de contexto - o header e ignorado.
 func applyBranchContext(r *http.Request, claims *auth.Claims) {
 	if claims.Role != "super_admin" && claims.Role != "admin_sede" {
 		return
@@ -91,13 +91,13 @@ func applyBranchContext(r *http.Request, claims *auth.Claims) {
 	bid := strings.TrimSpace(r.Header.Get("X-Branch-Id"))
 	switch {
 	case bid == "":
-		// sem header: mantém o escopo do token
+		// sem header: mantem o escopo do token
 	case bid == "all":
 		claims.BranchID = ""
 	case uuidRe.MatchString(bid):
 		claims.BranchID = bid
 	default:
-		// valor inválido (evita quebrar o cast de current_branch()::uuid)
+		// valor invalido (evita quebrar o cast de current_branch()::uuid)
 	}
 }
 

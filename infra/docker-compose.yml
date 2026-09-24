@@ -1,4 +1,4 @@
-# Chosen ERP — Infraestrutura local (Docker Compose)
+# Chosen ERP - Infraestrutura local (Docker Compose)
 # Sobe: PostgreSQL 17, Redis, RabbitMQ + Observabilidade (Prometheus/Grafana)
 
 name: chosen-erp
@@ -40,7 +40,7 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - uploads:/uploads
 
-  ### Chosen ERP API (Go) — monolito modular
+  ### Chosen ERP API (Go) - monolito modular
   api:
     build:
       context: ..
@@ -77,20 +77,20 @@ services:
     ports:
       - "${API_HTTP_PORT:-38080}:8080"
     volumes:
-      # Volume NOMEADO (e não tmpfs): anexos e fotos de membro precisam
+      # Volume NOMEADO (e nao tmpfs): anexos e fotos de membro precisam
       # sobreviver ao restart do container. Como tmpfs, todo `docker compose
       # down/up` apagava as imagens e o banco continuava apontando para URLs
-      # mortas, sem nenhum erro visível na tela.
+      # mortas, sem nenhum erro visivel na tela.
       - uploads:/uploads
 
-  ### Webadmin (Next.js 15) — UI do ERP. Build standalone; sobe junto com o stack.
+  ### Webadmin (Next.js 15) - UI do ERP. Build standalone; sobe junto com o stack.
   webadmin:
     build:
       context: ../apps/webadmin
       dockerfile: Dockerfile
       args:
         # Lido pelo rewrites() do next.config.ts em tempo de build. Na rede do
-        # Compose a API é "api:8080" (não localhost:38080).
+        # Compose a API e "api:8080" (nao localhost:38080).
         API_ORIGIN: http://api:8080
     image: chosenerp/webadmin:local
     container_name: chosen-webadmin

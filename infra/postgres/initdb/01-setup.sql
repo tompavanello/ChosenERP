@@ -1,6 +1,6 @@
 -- infra/postgres/initdb/01-setup.sql
--- Executado na primeira criação do volume do Postgres (empty data dir).
--- Cria o papel da aplicação e privilégios padrão para objetos criados pelo migrador.
+-- Executado na primeira criacao do volume do Postgres (empty data dir).
+-- Cria o papel da aplicacao e privilegios padrao para objetos criados pelo migrador.
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='chosenerp_app') THEN

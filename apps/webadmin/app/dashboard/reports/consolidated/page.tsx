@@ -48,25 +48,25 @@ export default function ConsolidatedReportPage() {
     return (
       <div className="page">
         <PageHeader title="Consolidado Sede > Filiais" />
-        <EmptyState icon={<Building2 className="h-10 w-10" />} title="Sem permissão" description="Você não tem acesso a este relatório." />
+        <EmptyState icon={<Building2 className="h-10 w-10" />} title="Sem permissao" description="Voce nao tem acesso a este relatorio." />
       </div>
     );
   }
 
   const chartData = (data?.branches ?? []).map((b) => ({
-    name: b.name, Entradas: b.income, Saídas: b.expense,
+    name: b.name, Entradas: b.income, Saidas: b.expense,
   }));
 
   return (
     <div className="page">
       <PageHeader
         title="Consolidado Sede > Filiais"
-        description="Membros, visitantes e movimentação por filial (inclui sub-congregações)"
+        description="Membros, visitantes e movimentacao por filial (inclui sub-congregacoes)"
       />
 
       <Card className="mb-4 flex flex-wrap items-end gap-3">
         <div><label className="label">De</label><Input type="date" className="h-8 text-sm" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-        <div><label className="label">Até</label><Input type="date" className="h-8 text-sm" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+        <div><label className="label">Ate</label><Input type="date" className="h-8 text-sm" value={to} onChange={(e) => setTo(e.target.value)} /></div>
         <Button variant="outline" className="h-8 text-sm" onClick={load}><RefreshCw className="h-4 w-4" /> Atualizar</Button>
       </Card>
 
@@ -84,7 +84,7 @@ export default function ConsolidatedReportPage() {
 
           {chartData.length > 0 && (
             <Card className="mb-4 p-4">
-              <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Entradas × Saídas por filial</h3>
+              <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Entradas x Saidas por filial</h3>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
@@ -93,7 +93,7 @@ export default function ConsolidatedReportPage() {
                   <Tooltip formatter={(v) => currency(Number(v))} />
                   <Legend />
                   <Bar dataKey="Entradas" fill="#0ea5e9" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="Saídas" fill="#f97316" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="Saidas" fill="#f97316" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -101,15 +101,15 @@ export default function ConsolidatedReportPage() {
 
           <Card className="overflow-hidden p-0">
             {data.branches.length === 0 ? (
-              <EmptyState icon={<Building2 className="h-10 w-10" />} title="Nenhuma filial no escopo" description="Não há filiais visíveis para o seu usuário." />
+              <EmptyState icon={<Building2 className="h-10 w-10" />} title="Nenhuma filial no escopo" description="Nao ha filiais visiveis para o seu usuario." />
             ) : (
               <Table>
-                <THead><TRow><TH>Filial</TH><TH>Tipo</TH><TH className="text-right">Membros</TH><TH className="text-right">Visitantes</TH><TH className="text-right">Entradas</TH><TH className="text-right">Saídas</TH><TH className="text-right">Saldo</TH></TRow></THead>
+                <THead><TRow><TH>Filial</TH><TH>Tipo</TH><TH className="text-right">Membros</TH><TH className="text-right">Visitantes</TH><TH className="text-right">Entradas</TH><TH className="text-right">Saidas</TH><TH className="text-right">Saldo</TH></TRow></THead>
                 <TBody>
                   {data.branches.map((b) => (
                     <TRow key={b.id}>
                       <TD className="font-medium">
-                        {b.kind === "pae" && <span className="mr-1 text-zinc-400">↳</span>}
+                        {b.kind === "pae" && <span className="mr-1 text-zinc-400">{"->"}</span>}
                         {b.name}
                       </TD>
                       <TD><Badge tone="zinc">{KIND_LABEL[b.kind] ?? b.kind}</Badge></TD>

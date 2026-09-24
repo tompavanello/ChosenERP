@@ -50,7 +50,7 @@ func (a *App) handleConsolidatedReport(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ---- Perfil do próprio usuário ----
+// ---- Perfil do proprio usuario ----
 
 func (a *App) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -71,12 +71,12 @@ func (a *App) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	b := boundsFromClaims(claims)
 	if err := a.Auth.UpdateProfile(r.Context(), b, claims.UserID, in.FullName, in.Email); err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "usuário não encontrado")
+			writeErr(w, http.StatusNotFound, "usuario nao encontrado")
 			return
 		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			writeErr(w, http.StatusConflict, "e-mail já cadastrado")
+			writeErr(w, http.StatusConflict, "e-mail ja cadastrado")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -117,7 +117,7 @@ func (a *App) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// ---- Configuração do tenant ----
+// ---- Configuracao do tenant ----
 
 func (a *App) handleGetTenant(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -163,10 +163,10 @@ func (a *App) handleUpdateTenant(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, t)
 }
 
-// ---- Branding público do tenant (sem auth) ----
+// ---- Branding publico do tenant (sem auth) ----
 
 // handlePublicTenant devolve o branding da igreja pelo slug, para a tela de
-// login do subdomínio. Resposta genérica e sem listagem — evita enumeração.
+// login do subdominio. Resposta generica e sem listagem - evita enumeracao.
 func (a *App) handlePublicTenant(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	var t struct {
@@ -198,7 +198,7 @@ func (a *App) handleCreateBranch(w http.ResponseWriter, r *http.Request) {
 	}
 	var in org.BranchInput
 	if err := readJSON(r, &in); err != nil || strings.TrimSpace(in.Name) == "" {
-		writeErr(w, http.StatusBadRequest, "name é obrigatório")
+		writeErr(w, http.StatusBadRequest, "name e obrigatorio")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -211,7 +211,7 @@ func (a *App) handleCreateBranch(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			writeErr(w, http.StatusConflict, "já existe uma filial com este identificador (slug)")
+			writeErr(w, http.StatusConflict, "ja existe uma filial com este identificador (slug)")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -239,12 +239,12 @@ func (a *App) handleUpdateBranch(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "filial não encontrada")
+			writeErr(w, http.StatusNotFound, "filial nao encontrada")
 			return
 		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			writeErr(w, http.StatusConflict, "já existe uma filial com este identificador (slug)")
+			writeErr(w, http.StatusConflict, "ja existe uma filial com este identificador (slug)")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -267,7 +267,7 @@ func (a *App) handleDeleteBranch(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, org.ErrBranchInUse):
 			writeErr(w, http.StatusConflict, err.Error())
 		case store.IsNotFound(err):
-			writeErr(w, http.StatusNotFound, "filial não encontrada")
+			writeErr(w, http.StatusNotFound, "filial nao encontrada")
 		default:
 			writeErr(w, http.StatusInternalServerError, err.Error())
 		}

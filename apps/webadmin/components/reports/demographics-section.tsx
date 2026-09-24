@@ -10,9 +10,9 @@ import { getDemographics, type Demographics } from "@/lib/api";
 import { MEMBERSHIP_STATUS, MARITAL_STATUS, GENDER } from "@/lib/constants";
 
 const rotulo = (map: Record<string, string>, key: string) =>
-  key === "nao_informado" ? "Não informado" : map[key] ?? key;
+  key === "nao_informado" ? "Nao informado" : map[key] ?? key;
 
-/** Painel demográfico: pirâmide etária, situação, estado civil e geografia. */
+/** Painel demografico: piramide etaria, situacao, estado civil e geografia. */
 export function DemographicsSection() {
   const [d, setD] = useState<Demographics | null>(null);
 
@@ -45,7 +45,7 @@ export function DemographicsSection() {
     <div className="space-y-6">
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Pirâmide etária</h3>
+          <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Piramide etaria</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pyramid} layout="vertical" margin={{ left: 8, right: 8 }}>
@@ -62,7 +62,7 @@ export function DemographicsSection() {
         </Card>
 
         <Card>
-          <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Situação no Rol</h3>
+          <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Situacao no Rol</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={statusData} layout="vertical" margin={{ left: 8, right: 8 }}>
@@ -110,7 +110,7 @@ export function DemographicsSection() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Distribuicao titulo="Distribuição por UF" rows={d.by_state} />
+        <Distribuicao titulo="Distribuicao por UF" rows={d.by_state} />
         <Distribuicao titulo="Cidades (top 20)" rows={d.by_city} />
       </div>
     </div>
@@ -123,14 +123,14 @@ function Distribuicao({ titulo, rows }: { titulo: string; rows: { key: string; c
     <Card>
       <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">{titulo}</h3>
       {rows.length === 0 ? (
-        <p className="text-sm text-zinc-400">Sem dados de endereço.</p>
+        <p className="text-sm text-zinc-400">Sem dados de endereco.</p>
       ) : (
         <ul className="space-y-2">
           {rows.map((r) => (
             <li key={r.key} className="text-sm">
               <div className="flex items-center justify-between">
                 <span className="truncate">
-                  {r.key === "nao_informado" ? "Não informado" : r.key}
+                  {r.key === "nao_informado" ? "Nao informado" : r.key}
                 </span>
                 <span className="text-xs text-zinc-400">{r.count}</span>
               </div>

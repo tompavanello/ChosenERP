@@ -16,17 +16,17 @@ func TestScheduleDue_Once(t *testing.T) {
 	}
 	// antes da hora
 	if due, _ := scheduleDue(s, at.Add(-time.Minute)); due {
-		t.Error("não deveria vencer antes do horário")
+		t.Error("nao deveria vencer antes do horario")
 	}
 	// na hora
 	if due, period := scheduleDue(s, at); !due || period != "once" {
 		t.Errorf("deveria vencer, due=%v period=%q", due, period)
 	}
-	// já rodou
+	// ja rodou
 	ran := at.Add(time.Second)
 	s.LastRunAt = &ran
 	if due, _ := scheduleDue(s, at.Add(time.Hour)); due {
-		t.Error("não deveria repetir agendamento único já executado")
+		t.Error("nao deveria repetir agendamento unico ja executado")
 	}
 }
 
@@ -39,19 +39,19 @@ func TestScheduleDue_Daily(t *testing.T) {
 
 	before := time.Date(2026, 9, 23, 7, 0, 0, 0, loc)
 	if due, _ := scheduleDue(s, before); due {
-		t.Error("não deveria vencer antes do horário diário")
+		t.Error("nao deveria vencer antes do horario diario")
 	}
 
 	after := time.Date(2026, 9, 23, 12, 0, 0, 0, loc)
 	due, period := scheduleDue(s, after)
 	if !due || period != "2026-09-23" {
-		t.Errorf("deveria vencer com período do dia, due=%v period=%q", due, period)
+		t.Errorf("deveria vencer com periodo do dia, due=%v period=%q", due, period)
 	}
 
-	// Já rodou hoje → não repete.
+	// Ja rodou hoje -> nao repete.
 	s.LastRunAt = &after
 	if due, _ := scheduleDue(s, after.Add(time.Hour)); due {
-		t.Error("não deveria repetir no mesmo dia")
+		t.Error("nao deveria repetir no mesmo dia")
 	}
 }
 
@@ -67,15 +67,15 @@ func TestScheduleDue_Event(t *testing.T) {
 	}
 
 	if due, _ := scheduleDue(s, starts.Add(-time.Hour)); due {
-		t.Error("não deveria vencer antes de 30min do evento")
+		t.Error("nao deveria vencer antes de 30min do evento")
 	}
 	// 18:35 = 5 min antes do disparo (18:30)
 	if due, period := scheduleDue(s, starts.Add(-25*time.Minute)); !due || period != "evt:evt-1" {
 		t.Errorf("deveria vencer 30min antes, due=%v period=%q", due, period)
 	}
-	// Depois da janela de tolerância.
+	// Depois da janela de tolerancia.
 	if due, _ := scheduleDue(s, starts.Add(eventGraceWindow+time.Hour)); due {
-		t.Error("não deveria vencer fora da janela de tolerância")
+		t.Error("nao deveria vencer fora da janela de tolerancia")
 	}
 }
 
@@ -84,6 +84,6 @@ func TestParseHHMM(t *testing.T) {
 		t.Errorf("parseHHMM(08:05) = %d:%d %v", hh, mm, err)
 	}
 	if _, _, err := parseHHMM("8h"); err == nil {
-		t.Error("formato inválido deveria falhar")
+		t.Error("formato invalido deveria falhar")
 	}
 }

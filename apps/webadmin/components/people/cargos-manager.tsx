@@ -14,7 +14,7 @@ import {
 import { CARGO_KINDS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
-/** Formulário em branco do catálogo. */
+/** Formulario em branco do catalogo. */
 type CargoDraft = {
   name: string;
   kind: string;
@@ -25,9 +25,9 @@ type CargoDraft = {
 const EMPTY_DRAFT: CargoDraft = { name: "", kind: "eclesiastico", requires_term: false, sort_order: "0" };
 
 /**
- * CargosManagerDialog é o "lugar para criar os cargos" pedido pelo cliente: o
- * catálogo é da igreja, não uma lista fixa no código. Aqui ela cria, renomeia,
- * agrupa, ordena, desativa e — só quando nunca houve mandato — exclui.
+ * CargosManagerDialog e o "lugar para criar os cargos" pedido pelo cliente: o
+ * catalogo e da igreja, nao uma lista fixa no codigo. Aqui ela cria, renomeia,
+ * agrupa, ordena, desativa e - so quando nunca houve mandato - exclui.
  */
 export function CargosManagerDialog({
   open,
@@ -36,7 +36,7 @@ export function CargosManagerDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  /** Avisa o pai para recarregar as opções (o seletor de cargos usa a mesma lista). */
+  /** Avisa o pai para recarregar as opcoes (o seletor de cargos usa a mesma lista). */
   onChanged?: () => void;
 }) {
   const { toast } = useToast();
@@ -86,7 +86,7 @@ export function CargosManagerDialog({
       toast("Cargo criado.");
       reload();
     } catch (err) {
-      // O backend recusa nome/slug repetido no mesmo tenant (índice único).
+      // O backend recusa nome/slug repetido no mesmo tenant (indice unico).
       toast(err instanceof Error ? err.message : "Erro ao criar cargo", "error");
     } finally {
       setSalvando(false);
@@ -118,14 +118,14 @@ export function CargosManagerDialog({
       toast(cargo.is_active ? "Cargo desativado." : "Cargo reativado.");
       reload();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro ao alterar situação", "error");
+      toast(err instanceof Error ? err.message : "Erro ao alterar situacao", "error");
     }
   }
 
   async function excluir(cargo: Cargo) {
     try {
       await deleteCargo(cargo.id);
-      toast("Cargo excluído.");
+      toast("Cargo excluido.");
       reload();
     } catch (err) {
       // 409 do backend: existe mandato (mesmo encerrado) apontando para o cargo.
@@ -136,8 +136,8 @@ export function CargosManagerDialog({
   return (
     <Modal open={open} onClose={onClose} title="Cargos da igreja">
       <p className="-mt-2 mb-4 text-xs text-zinc-500">
-        O catálogo vale para toda a igreja. Desative um cargo que saiu de uso em vez de
-        excluí-lo: o histórico de quem o exerceu é preservado.
+        O catalogo vale para toda a igreja. Desative um cargo que saiu de uso em vez de
+        exclui-lo: o historico de quem o exerceu e preservado.
       </p>
 
       {criando ? (
@@ -148,7 +148,7 @@ export function CargosManagerDialog({
                 autoFocus
                 required
                 className="h-8 text-sm"
-                placeholder="Ex: Líder de Adolescentes"
+                placeholder="Ex: Lider de Adolescentes"
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               />
@@ -197,7 +197,7 @@ export function CargosManagerDialog({
         <EmptyState
           icon={<BadgeCheck className="h-10 w-10" />}
           title="Nenhum cargo cadastrado"
-          description="Crie os cargos e funções que a igreja usa (Pastor, Diácono, Líder de Louvor...)."
+          description="Crie os cargos e funcoes que a igreja usa (Pastor, Diacono, Lider de Louvor...)."
         />
       ) : (
         <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -224,7 +224,7 @@ export function CargosManagerDialog({
                     </Select>
                     <Input
                       type="number"
-                      title="Ordem de exibição"
+                      title="Ordem de exibicao"
                       className="h-8 w-20 text-sm"
                       value={editDraft.sort_order}
                       onChange={(e) => setEditDraft({ ...editDraft, sort_order: e.target.value })}

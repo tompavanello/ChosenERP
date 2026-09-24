@@ -1,5 +1,5 @@
 -- 000027_fix_fin_hash.down.sql
--- Restaura a versão anterior (que não protegia payment_method nulo).
+-- Restaura a versao anterior (que nao protegia payment_method nulo).
 CREATE OR REPLACE FUNCTION fin_tx_hash() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE

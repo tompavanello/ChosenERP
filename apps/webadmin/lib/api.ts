@@ -1,13 +1,13 @@
-// A API é servida na MESMA origem do webadmin, por caminho: o túnel Cloudflare
+// A API e servida na MESMA origem do webadmin, por caminho: o tunel Cloudflare
 // manda /api/* para o Go e todo o resto para o Next; localmente o rewrite do
 // next.config.ts (API_ORIGIN) faz o mesmo papel. Por isso todo fetch neste
-// módulo é RELATIVO — o browser resolve contra a origem que ele abriu.
+// modulo e RELATIVO - o browser resolve contra a origem que ele abriu.
 //
-// Isto já foi uma URL absoluta gravada no bundle em build time (API_URL). O
-// custo era concreto: o mesmo build não servia local e remoto, então abrir o
-// localhost mandava o browser para o domínio público, e publicar exigia
-// rebuildar o frontend sempre que o endereço mudasse. Com caminho relativo um
-// build só serve os dois casos.
+// Isto ja foi uma URL absoluta gravada no bundle em build time (API_URL). O
+// custo era concreto: o mesmo build nao servia local e remoto, entao abrir o
+// localhost mandava o browser para o dominio publico, e publicar exigia
+// rebuildar o frontend sempre que o endereco mudasse. Com caminho relativo um
+// build so serve os dois casos.
 
 export const STORAGE_KEYS = {
   token: "chosen_token",
@@ -19,7 +19,7 @@ export const STORAGE_KEYS = {
 
 // ---- Multi-igreja (identidade global) ----
 
-/** Vínculo da identidade com uma igreja. */
+/** Vinculo da identidade com uma igreja. */
 export interface Membership {
   tenant_id: string;
   tenant_name: string;
@@ -29,7 +29,7 @@ export interface Membership {
   is_active: boolean;
 }
 
-/** Igreja oferecida no seletor após o login. */
+/** Igreja oferecida no seletor apos o login. */
 export interface TenantOption {
   id: string;
   name: string;
@@ -37,7 +37,7 @@ export interface TenantOption {
   role: string;
 }
 
-/** Branding público da igreja (tela de login). */
+/** Branding publico da igreja (tela de login). */
 export interface PublicTenant {
   name: string;
   slug: string;
@@ -46,13 +46,13 @@ export interface PublicTenant {
   favicon_url?: string | null;
 }
 
-/** Subdomínios que NÃO são igreja. */
+/** Subdominios que NAO sao igreja. */
 const RESERVED_SLUGS = new Set(["app", "www", "api", "admin", "localhost"]);
 
 /**
- * Extrai o slug da igreja do host atual (subdomínio). O domínio central
- * (`app.dominio`) e o localhost não têm slug. Depende de pelo menos 3 rótulos
- * (ex.: `igreja.dominio.com`); o domínio base pode ser fixado em
+ * Extrai o slug da igreja do host atual (subdominio). O dominio central
+ * (`app.dominio`) e o localhost nao tem slug. Depende de pelo menos 3 rotulos
+ * (ex.: `igreja.dominio.com`); o dominio base pode ser fixado em
  * NEXT_PUBLIC_BASE_DOMAIN.
  */
 export function tenantSlugFromHost(): string {
@@ -69,7 +69,7 @@ export function tenantSlugFromHost(): string {
   return RESERVED_SLUGS.has(slug) ? "" : slug;
 }
 
-/** Tenant ativo (referência local; a autoridade é o JWT). */
+/** Tenant ativo (referencia local; a autoridade e o JWT). */
 export function getTenantContext(): string {
   if (typeof window === "undefined") return "";
   return localStorage.getItem(STORAGE_KEYS.tenant) ?? "";
@@ -80,7 +80,7 @@ export function setTenantContext(tenantID: string) {
   else localStorage.removeItem(STORAGE_KEYS.tenant);
 }
 
-/** Contexto de filial ativo: "" (padrão do token), "all" (Sede) ou um uuid. */
+/** Contexto de filial ativo: "" (padrao do token), "all" (Sede) ou um uuid. */
 export function getBranchContext(): string {
   if (typeof window === "undefined") return "";
   return localStorage.getItem(STORAGE_KEYS.branch) ?? "";
@@ -90,7 +90,7 @@ export function setBranchContext(branchID: string) {
   if (branchID) localStorage.setItem(STORAGE_KEYS.branch, branchID);
   else localStorage.removeItem(STORAGE_KEYS.branch);
 }
-// Enviado em toda requisição; o backend só honra para super_admin/admin_sede.
+// Enviado em toda requisicao; o backend so honra para super_admin/admin_sede.
 function branchHeader(): Record<string, string> {
   const v = getBranchContext();
   return v ? { "X-Branch-Id": v } : {};
@@ -105,7 +105,7 @@ export interface User {
   branch_id: string;
   role: string;
   // Opcional em runtime: o cache do localStorage pode ter sido gravado por uma
-  // versão anterior do app. O backend sempre devolve o array no login e no /me.
+  // versao anterior do app. O backend sempre devolve o array no login e no /me.
   permissions?: string[];
   mfa_enabled?: boolean;
   /** Igrejas da identidade (para o seletor/troca de igreja). */
@@ -132,7 +132,7 @@ export interface Member {
   gender?: string;
   marital_status?: string;
   membership_status: string;
-  /** Derivado no backend da situação: "professo" quando ativo, senão "nao_professo". */
+  /** Derivado no backend da situacao: "professo" quando ativo, senao "nao_professo". */
   roll_class?: string;
   profession?: string;
   /** Legado: virou member_cargos (a API devolve os dois). */
@@ -142,22 +142,22 @@ export interface Member {
   baptism_date?: string;
   baptism_location?: string;
   joined_at?: string;
-  /** Endereço do membro (requisito 1.1). */
+  /** Endereco do membro (requisito 1.1). */
   address?: MemberAddress;
-  /** Motivo da baixa, quando a situação é baixa/transferência/falecimento. */
+  /** Motivo da baixa, quando a situacao e baixa/transferencia/falecimento. */
   exit_reason?: string;
   exited_at?: string;
-  /** Data de casamento (aniversários de casamento). */
+  /** Data de casamento (aniversarios de casamento). */
   marriage_date?: string;
   photo_url?: string;
   created_at: string;
   /** Cargos ativos do membro, para os badges do grid. */
   cargos?: MemberCargoRef[];
-  /** Número da carteirinha já emitida; ausente quando ainda não houve emissão. */
+  /** Numero da carteirinha ja emitida; ausente quando ainda nao houve emissao. */
   card_ref?: string;
 }
 
-/** Endereço do membro (jsonb no backend). */
+/** Endereco do membro (jsonb no backend). */
 export interface MemberAddress {
   zip_code?: string;
   street?: string;
@@ -168,7 +168,7 @@ export interface MemberAddress {
   state?: string;
 }
 
-/** Evento do histórico eclesiástico do membro (requisito 1.8). */
+/** Evento do historico eclesiastico do membro (requisito 1.8). */
 export interface MemberHistory {
   id: string;
   member_id: string;
@@ -188,7 +188,7 @@ export interface MemberCargoRef {
   ends_at?: string;
 }
 
-/** Item do catálogo de cargos (customizável pela igreja). */
+/** Item do catalogo de cargos (customizavel pela igreja). */
 export interface Cargo {
   id: string;
   branch_id?: string;
@@ -201,7 +201,7 @@ export interface Cargo {
   created_at: string;
 }
 
-/** Mandato de um membro em um cargo (data de início, vencimento e situação). */
+/** Mandato de um membro em um cargo (data de inicio, vencimento e situacao). */
 export interface MemberCargo {
   id: string;
   member_id: string;
@@ -260,7 +260,7 @@ export interface Transaction {
   supplier_name?: string;
   hash: string;
   occurred_at: string;
-  /** Preenchido quando o lançamento foi estornado (continua no histórico). */
+  /** Preenchido quando o lancamento foi estornado (continua no historico). */
   voided_at?: string;
   void_reason?: string;
   attachment_count?: number;
@@ -314,7 +314,7 @@ export interface Relationship {
 export interface Family {
   id: string;
   name: string;
-  /** Código de exibição no padrão da planilha do cliente (#001, #002...). */
+  /** Codigo de exibicao no padrao da planilha do cliente (#001, #002...). */
   code?: string;
   head_id?: string;
   head_name?: string;
@@ -333,7 +333,7 @@ export interface FamilyAddress {
   zip?: string;
 }
 
-/** Membro dentro de uma família; "relation" é o parentesco com o chefe. */
+/** Membro dentro de uma familia; "relation" e o parentesco com o chefe. */
 export interface FamilyMemberRow {
   id: string;
   full_name: string;
@@ -482,15 +482,15 @@ export interface Delivery {
   created_at: string;
 }
 
-// ---- Sessão (module-level) ----
+// ---- Sessao (module-level) ----
 let accessToken: string | null = null;
 let refreshToken: string | null = null;
 let onSessionLost: (() => void) | null = null;
 
-// Restaura a sessão já no carregamento do módulo (browser), antes de qualquer
-// efeito. Sem isto, a primeira chamada disparada por uma página (ex.: /branches
-// no layout) pode sair sem Bearer — efeitos de filhos rodam antes do
-// AuthProvider — e devolver 401.
+// Restaura a sessao ja no carregamento do modulo (browser), antes de qualquer
+// efeito. Sem isto, a primeira chamada disparada por uma pagina (ex.: /branches
+// no layout) pode sair sem Bearer - efeitos de filhos rodam antes do
+// AuthProvider - e devolver 401.
 if (typeof window !== "undefined") {
   accessToken = localStorage.getItem(STORAGE_KEYS.token) ?? null;
   refreshToken = localStorage.getItem(STORAGE_KEYS.refresh) ?? null;
@@ -562,9 +562,9 @@ async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   return text ? (JSON.parse(text) as T) : ({} as T);
 }
 
-// apiRaw é como api() mas devolve o Response RAW (sem fazer JSON.parse).
-// Útil para respostas text/html, multipart upload (FormData) e blobs (CSV/PDF).
-// Não impõe Content-Type: application/json por padrão — o chamador ou o browser
+// apiRaw e como api() mas devolve o Response RAW (sem fazer JSON.parse).
+// Util para respostas text/html, multipart upload (FormData) e blobs (CSV/PDF).
+// Nao impoe Content-Type: application/json por padrao - o chamador ou o browser
 // definem o content-type apropriado (ex.: boundary para FormData).
 async function apiRaw(path: string, opts: RequestInit = {}): Promise<Response> {
   const doFetch = (): Promise<Response> =>
@@ -593,9 +593,9 @@ async function apiRaw(path: string, opts: RequestInit = {}): Promise<Response> {
   return res;
 }
 
-// ---- Auth / sessão ----
+// ---- Auth / sessao ----
 
-/** Login direto (tokens + user) ou pedido de seleção de igreja. */
+/** Login direto (tokens + user) ou pedido de selecao de igreja. */
 export type LoginResponse =
   | { tokens: Tokens; user: User }
   | { requires_tenant_selection: true; selection_token: string; tenants: TenantOption[] };
@@ -643,7 +643,7 @@ export const createMember = (data: Record<string, unknown>) =>
 export const updateMember = (id: string, data: Record<string, unknown>) =>
   api<Member>(`/api/v1/members/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 
-// ---- Histórico eclesiástico do membro (requisito 1.8) ----
+// ---- Historico eclesiastico do membro (requisito 1.8) ----
 export const listMemberHistory = (memberId: string) =>
   api<{ history: MemberHistory[] }>(`/api/v1/members/${memberId}/history`);
 export const addMemberHistory = (memberId: string, data: Record<string, unknown>) =>
@@ -665,15 +665,15 @@ export interface CardResult {
   member: string;
 }
 
-/** Emite a carteirinha. É idempotente: repetir devolve a MESMA carteirinha. */
+/** Emite a carteirinha. E idempotente: repetir devolve a MESMA carteirinha. */
 export const issueCard = (memberId: string) =>
   api<CardResult>(`/api/v1/members/${memberId}/card`, { method: "POST" });
 
-/** Lê a carteirinha já emitida, sem emitir (404 quando não existe). */
+/** Le a carteirinha ja emitida, sem emitir (404 quando nao existe). */
 export const getCard = (memberId: string) => api<CardResult>(`/api/v1/members/${memberId}/card`);
 
 // ---- Foto do membro ----
-// Multipart: apiRaw não força Content-Type, deixando o browser definir o
+// Multipart: apiRaw nao forca Content-Type, deixando o browser definir o
 // boundary, e preserva o auto-refresh do token em caso de 401.
 export async function uploadMemberPhoto(memberId: string, file: File) {
   const form = new FormData();
@@ -686,7 +686,7 @@ export async function uploadMemberPhoto(memberId: string, file: File) {
 export const deleteMemberPhoto = (memberId: string) =>
   api<{ ok: boolean }>(`/api/v1/members/${memberId}/photo`, { method: "DELETE" });
 
-// ---- Cargos (funções/ministérios) ----
+// ---- Cargos (funcoes/ministerios) ----
 export const listCargos = () => api<{ cargos: Cargo[] }>("/api/v1/cargos");
 export const createCargo = (data: Partial<Cargo>) =>
   api<Cargo>("/api/v1/cargos", { method: "POST", body: JSON.stringify(data) });
@@ -712,24 +712,24 @@ export const unassignCargo = (memberId: string, linkId: string) =>
   api<{ ok: boolean }>(`/api/v1/members/${memberId}/cargos/${linkId}`, { method: "DELETE" });
 
 /**
- * Sincroniza os cargos do membro com a seleção do formulário.
+ * Sincroniza os cargos do membro com a selecao do formulario.
  *
- * Duas decisões que valem explicação:
- *  - Desmarcar NÃO apaga o mandato: encerra (status 'encerrado', vencimento hoje).
- *    O histórico de quem exerceu cada cargo é justamente o que o requisito 1.4
+ * Duas decisoes que valem explicacao:
+ *  - Desmarcar NAO apaga o mandato: encerra (status 'encerrado', vencimento hoje).
+ *    O historico de quem exerceu cada cargo e justamente o que o requisito 1.4
  *    protege, e o backend recusa (409) apagar um cargo com mandatos por isso.
- *  - Remarcar REATIVA o mandato existente em vez de inserir outro: o índice
- *    único (member_id, cargo_id, started_at) rejeitaria uma segunda linha com a
- *    mesma data de início. As datas do mandato podem ser ajustadas depois na
- *    aba Cargos, que é onde o histórico completo aparece.
+ *  - Remarcar REATIVA o mandato existente em vez de inserir outro: o indice
+ *    unico (member_id, cargo_id, started_at) rejeitaria uma segunda linha com a
+ *    mesma data de inicio. As datas do mandato podem ser ajustadas depois na
+ *    aba Cargos, que e onde o historico completo aparece.
  */
 export async function syncMemberCargos(memberId: string, cargoIds: string[]): Promise<void> {
   const { cargos: atuais } = await listMemberCargos(memberId);
   const desejados = new Set(cargoIds);
   const hoje = new Date().toISOString().slice(0, 10);
 
-  // A lista já vem com os ativos primeiro e o mandato mais recente antes dos
-  // antigos: a primeira ocorrência de cada cargo é o vínculo que vale hoje.
+  // A lista ja vem com os ativos primeiro e o mandato mais recente antes dos
+  // antigos: a primeira ocorrencia de cada cargo e o vinculo que vale hoje.
   const vigente = new Map<string, MemberCargo>();
   for (const mc of atuais) {
     if (!vigente.has(mc.cargo_id)) vigente.set(mc.cargo_id, mc);
@@ -751,7 +751,7 @@ export async function syncMemberCargos(memberId: string, cargoIds: string[]): Pr
   }
 }
 
-// ---- Famílias ----
+// ---- Familias ----
 export const listFamilies = () => api<{ families: Family[] }>("/api/v1/families");
 export const getFamily = (id: string) => api<Family>(`/api/v1/families/${id}`);
 export const createFamily = (name: string) =>
@@ -889,7 +889,7 @@ export const createTransaction = (data: Record<string, unknown>) =>
     body: JSON.stringify(data),
   });
 
-// ---- Importação em lote de lançamentos (CSV/planilha) ----
+// ---- Importacao em lote de lancamentos (CSV/planilha) ----
 export interface ImportResult {
   imported: number;
   skipped: number;
@@ -901,14 +901,14 @@ export const importTransactions = (csv: string) =>
     body: JSON.stringify({ csv }),
   });
 
-/** Estorna um lançamento (append-only: não apaga, marca como anulado). */
+/** Estorna um lancamento (append-only: nao apaga, marca como anulado). */
 export const voidTransaction = (id: string, reason = "") =>
   api<{ ok: boolean }>(`/api/v1/finance/transactions/${id}/void`, {
     method: "POST",
     body: JSON.stringify({ reason }),
   });
 
-// ---- Rateio do lançamento por evento ----
+// ---- Rateio do lancamento por evento ----
 export interface EventAllocation {
   id: string;
   event_id: string;
@@ -918,7 +918,7 @@ export interface EventAllocation {
 export const listTransactionEvents = (id: string) =>
   api<{ allocations: EventAllocation[] }>(`/api/v1/finance/transactions/${id}/events`);
 
-// Importação com mapeamento de colunas (CSV/XLSX).
+// Importacao com mapeamento de colunas (CSV/XLSX).
 export const previewTransactions = (data: string, filename: string) =>
   api<{ rows: string[][] }>("/api/v1/finance/transactions/import/preview", {
     method: "POST",
@@ -935,9 +935,9 @@ export const importTransactionsFile = (
     body: JSON.stringify({ data, filename, start_row: startRow, mapping }),
   });
 
-// ---- Anexos de lançamentos ----
-// Upload usa multipart/form-data (não JSON) — apiRaw não força Content-Type,
-// deixando o browser definir o boundary automaticamente, e mantém o
+// ---- Anexos de lancamentos ----
+// Upload usa multipart/form-data (nao JSON) - apiRaw nao forca Content-Type,
+// deixando o browser definir o boundary automaticamente, e mantem o
 // auto-refresh de token em caso de 401.
 export async function uploadAttachment(transactionId: string, file: File): Promise<FinancialAttachment> {
   const form = new FormData();
@@ -953,7 +953,7 @@ export const listAttachments = (transactionId: string) =>
   api<{ attachments: FinancialAttachment[] }>(`/api/v1/finance/transactions/${transactionId}/attachments`);
 export const getBalance = () => api<Balance>("/api/v1/finance/balance");
 
-// ---- Relatórios ----
+// ---- Relatorios ----
 export const getMonthlyBalance = (from = "", to = "") => {
   const q = new URLSearchParams();
   if (from) q.set("from", from);
@@ -967,7 +967,7 @@ export const getDRE = (from = "", to = "") => {
   return api<DRE>(`/api/v1/reports/dre?${q}`);
 };
 
-// ---- Relatórios de pessoas ----
+// ---- Relatorios de pessoas ----
 export interface Birthday {
   id: string;
   full_name: string;
@@ -1074,7 +1074,7 @@ export const getConsolidated = (from = "", to = "") => {
 };
 
 // ---- Recibos ----
-// Recebemos text/html (não JSON), então usamos apiRaw que preserva o
+// Recebemos text/html (nao JSON), entao usamos apiRaw que preserva o
 // auto-refresh de token sem tentar fazer JSON.parse.
 export async function getReceiptHTML(documentId: string): Promise<string> {
   const res = await apiRaw(`/api/v1/receipts/${documentId}`, {
@@ -1153,7 +1153,7 @@ export interface Tenant {
   plan: string;
   locale: string;
   timezone: string;
-  /** White-label: branding aplicado no login do subdomínio. */
+  /** White-label: branding aplicado no login do subdominio. */
   logo_url?: string | null;
   brand_color?: string | null;
   favicon_url?: string | null;
@@ -1165,7 +1165,7 @@ export const getTenant = () => api<Tenant>("/api/v1/tenant");
 export const updateTenant = (data: Record<string, unknown>) =>
   api<Tenant>("/api/v1/tenant", { method: "PATCH", body: JSON.stringify(data) });
 
-// ---- Perfil do próprio usuário ----
+// ---- Perfil do proprio usuario ----
 export const updateProfile = (data: { full_name?: string; email?: string }) =>
   api<User>("/api/v1/me", { method: "PATCH", body: JSON.stringify(data) });
 export const changePassword = (currentPassword: string, newPassword: string) =>
@@ -1174,7 +1174,7 @@ export const changePassword = (currentPassword: string, newPassword: string) =>
     body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
   });
 
-// ---- Usuários e acessos ----
+// ---- Usuarios e acessos ----
 export interface AdminUser {
   id: string;
   branch_id?: string;
@@ -1213,7 +1213,7 @@ export const resetUserPassword = (id: string, password: string) =>
 export const listRoles = () => api<{ roles: RoleInfo[] }>("/api/v1/roles");
 export const listPermissions = () => api<{ permissions: PermissionInfo[] }>("/api/v1/permissions");
 
-// ---- MFA (TOTP) do próprio usuário ----
+// ---- MFA (TOTP) do proprio usuario ----
 export const mfaStatus = () => api<{ enabled: boolean }>("/api/v1/auth/mfa");
 export const mfaSetup = () =>
   api<{ secret: string; otpauth_url: string; account: string }>("/api/v1/auth/mfa/setup", { method: "POST" });
@@ -1242,7 +1242,7 @@ export const listTransfers = () => api<{ transfers: Transfer[] }>("/api/v1/finan
 export const createTransfer = (data: Record<string, unknown>) =>
   api<Transfer>("/api/v1/finance/transfers", { method: "POST", body: JSON.stringify(data) });
 
-// ---- Doações recorrentes ----
+// ---- Doacoes recorrentes ----
 export interface RecurringDonation {
   id: string;
   branch_id: string;
@@ -1270,7 +1270,7 @@ export const createRecurring = (data: Record<string, unknown>) =>
 export const updateRecurring = (id: string, data: Record<string, unknown>) =>
   api<RecurringDonation>(`/api/v1/finance/recurring/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 
-// ---- Ministérios / voluntários ----
+// ---- Ministerios / voluntarios ----
 export interface Ministry {
   id: string;
   branch_id: string;
@@ -1313,7 +1313,7 @@ export const addMultipleMinistryMembers = (id: string, members: { member_id: str
     body: JSON.stringify({ members }),
   });
 
-// ---- Grupos / células / check-in ----
+// ---- Grupos / celulas / check-in ----
 export interface SmallGroup {
   id: string;
   branch_id: string;
@@ -1370,7 +1370,7 @@ export interface Announcement {
   created_at: string;
 }
 
-// Corpo de criação/edição. Só as chaves abaixo são aceitas pelo backend.
+// Corpo de criacao/edicao. So as chaves abaixo sao aceitas pelo backend.
 export interface AnnouncementInput {
   title?: string;
   body?: string;
@@ -1401,8 +1401,8 @@ export interface AnnouncementDelivery {
   created_at: string;
 }
 
-// Segmentação do disparo em massa (#32). Sexo, estado civil, faixa etária e
-// situação são atributos só de membros — ao usá-los, visitantes saem do público.
+// Segmentacao do disparo em massa (#32). Sexo, estado civil, faixa etaria e
+// situacao sao atributos so de membros - ao usa-los, visitantes saem do publico.
 export interface AudienceFilter {
   group_ids?: string[];
   ministry_ids?: string[];
@@ -1437,7 +1437,7 @@ export const updateAnnouncement = (id: string, data: AnnouncementInput) =>
 export const deleteAnnouncement = (id: string) =>
   api<{ ok: boolean }>(`/api/v1/announcements/${id}`, { method: "DELETE" });
 
-// Histórico de execuções dos comunicados agendados.
+// Historico de execucoes dos comunicados agendados.
 export interface AnnouncementRun {
   id: string;
   announcement_id: string;
@@ -1473,7 +1473,7 @@ export const listAnnouncementDeliveries = (id: string) =>
     `/api/v1/announcements/${id}/deliveries`
   );
 
-// ---- Automações de WhatsApp (#31) ----
+// ---- Automacoes de WhatsApp (#31) ----
 export interface NotificationSettings {
   tenant_id: string;
   birthdays_enabled: boolean;
@@ -1514,7 +1514,7 @@ export const sendTestMessage = (data: TestMessageInput) =>
     body: JSON.stringify(data),
   });
 
-// ---- Eventos, tipos de evento, chamada e frequência ----
+// ---- Eventos, tipos de evento, chamada e frequencia ----
 export interface EventKind {
   id: string;
   branch_id?: string;
@@ -1610,12 +1610,12 @@ export const setMemberFrequency = (memberId: string, data: Record<string, unknow
     body: JSON.stringify(data),
   });
 
-// ---- App do membro (público por token) ----
+// ---- App do membro (publico por token) ----
 /**
- * Resposta do endpoint público da carteirinha. É uma projeção MÍNIMA de
- * propósito: o token que endereça a rota está impresso no QR da carteirinha
- * física, então qualquer coisa devolvida aqui é alcançável por quem fotografar
- * um cartão. Por isso o `member` traz só o nome — nada de CPF, RG, telefone ou
+ * Resposta do endpoint publico da carteirinha. E uma projecao MINIMA de
+ * proposito: o token que endereca a rota esta impresso no QR da carteirinha
+ * fisica, entao qualquer coisa devolvida aqui e alcancavel por quem fotografar
+ * um cartao. Por isso o `member` traz so o nome - nada de CPF, RG, telefone ou
  * data de nascimento (ver internal/httpapi/memberapp_handlers.go).
  */
 export interface PublicCardData {
@@ -1632,16 +1632,16 @@ export interface PublicCardData {
 }
 export const getPublicCard = (token: string) => api<PublicCardData>(`/api/v1/public/card/${token}`);
 
-/** URL do endpoint HTML de impressão da carteirinha (mesma origem do webadmin). */
+/** URL do endpoint HTML de impressao da carteirinha (mesma origem do webadmin). */
 export const cardPrintURL = (token: string) => `/api/v1/public/card/${token}/print`;
 
 /**
- * URL da foto do membro dono da carteirinha. Não use `assetURL(photo_url)`:
- * aquele formato aponta para /api/v1/attachments/{arquivo}, que não tem auth
- * nenhuma e serve junto os comprovantes do financeiro. Este endpoint é amarrado
- * ao token da carteirinha e é o único que pode ficar público.
+ * URL da foto do membro dono da carteirinha. Nao use `assetURL(photo_url)`:
+ * aquele formato aponta para /api/v1/attachments/{arquivo}, que nao tem auth
+ * nenhuma e serve junto os comprovantes do financeiro. Este endpoint e amarrado
+ * ao token da carteirinha e e o unico que pode ficar publico.
  *
- * Devolve 404 quando o membro não tem foto; o <Avatar> cai para as iniciais.
+ * Devolve 404 quando o membro nao tem foto; o <Avatar> cai para as iniciais.
  */
 export const cardPhotoURL = (token: string) => `/api/v1/public/card/${token}/photo`;
 
@@ -1649,16 +1649,16 @@ export const cardPhotoURL = (token: string) => `/api/v1/public/card/${token}/pho
  * Resolve a URL de um arquivo do backend a partir do caminho relativo que a API
  * devolve (ex.: photo_url, no formato `/api/v1/attachments/<arquivo>`).
  *
- * Hoje é quase uma passagem, porque webadmin e API estão na mesma origem: o
- * caminho que a API devolve já funciona direto no <img>. Continua existindo como
- * o único ponto que traduz caminho do backend em URL para o browser — se as duas
- * origens voltarem a divergir, é só aqui que muda. Preserva também o caso de um
- * valor já absoluto (dado legado) e a normalização de vazio para undefined.
+ * Hoje e quase uma passagem, porque webadmin e API estao na mesma origem: o
+ * caminho que a API devolve ja funciona direto no <img>. Continua existindo como
+ * o unico ponto que traduz caminho do backend em URL para o browser - se as duas
+ * origens voltarem a divergir, e so aqui que muda. Preserva tambem o caso de um
+ * valor ja absoluto (dado legado) e a normalizacao de vazio para undefined.
  */
 export const assetURL = (path?: string | null) =>
   !path ? undefined : path.startsWith("http") ? path : path;
 
-// ---- LGPD: consentimento, portabilidade e anonimização ----
+// ---- LGPD: consentimento, portabilidade e anonimizacao ----
 export interface ConsentTerm {
   id: string;
   version: number;
@@ -1690,7 +1690,7 @@ export const anonymizeMember = (memberId: string) =>
 export const exportMemberData = (memberId: string) =>
   downloadExport(`/api/v1/members/${memberId}/export`, `dados-membro-${memberId}.json`);
 
-// ---- Governança (Módulo 6): atas, votação, mandatos e convênios ----
+// ---- Governanca (Modulo 6): atas, votacao, mandatos e convenios ----
 export type MinuteStatus = "rascunho" | "aprovada" | "assinada" | "cancelada";
 export interface Minute {
   id: string;
@@ -1832,7 +1832,7 @@ export const deleteLegalDocument = (id: string) =>
 
 export const listMandates = () => api<{ mandates: Mandate[] }>("/api/v1/governance/mandates");
 
-// ---- Escalas de voluntários ----
+// ---- Escalas de voluntarios ----
 export type RosterStatus = "rascunho" | "publicada" | "concluida" | "cancelada";
 export type AssignmentStatus = "convidado" | "confirmado" | "recusado";
 export interface RosterAssignment {
@@ -1916,9 +1916,9 @@ export const getRosterSuggestions = (params: { ministry_id: string; starts_at: s
   return api<{ suggestions: RosterSuggestion[] }>(`/api/v1/rosters/suggestions?${q}`);
 };
 
-// ---- Exportação de relatórios (CSV/PDF) ----
+// ---- Exportacao de relatorios (CSV/PDF) ----
 // Usa apiRaw para preservar o auto-refresh em caso de 401 e obter o blob
-// diretamente (não tenta JSON.parse no conteúdo binário).
+// diretamente (nao tenta JSON.parse no conteudo binario).
 export async function downloadExport(path: string, filename: string): Promise<void> {
   const res = await apiRaw(path);
   const blob = await res.blob();
@@ -1931,15 +1931,15 @@ export async function downloadExport(path: string, filename: string): Promise<vo
 }
 
 /**
- * Abre o relatório de impressão (HTML) numa nova aba e dispara a impressão.
+ * Abre o relatorio de impressao (HTML) numa nova aba e dispara a impressao.
  *
- * Não dá para usar `window.open(url)` direto: o endpoint de exportação exige
- * Bearer e uma navegação nova não envia o header. Por isso busca com apiRaw
+ * Nao da para usar `window.open(url)` direto: o endpoint de exportacao exige
+ * Bearer e uma navegacao nova nao envia o header. Por isso busca com apiRaw
  * (que autentica e renova o token) e escreve o HTML na aba nova.
  */
 export async function openPrint(path: string): Promise<void> {
   // Abre a aba ANTES do await: se abrir depois, os bloqueadores de pop-up
-  // recusam a nova janela (não é mais um gesto do usuário).
+  // recusam a nova janela (nao e mais um gesto do usuario).
   const w = window.open("", "_blank");
   const res = await apiRaw(path);
   const html = await res.text();
@@ -1951,7 +1951,7 @@ export async function openPrint(path: string): Promise<void> {
   w.setTimeout(() => w.print(), 400);
 }
 
-// ---- Ministério Infantil (Kids) ----
+// ---- Ministerio Infantil (Kids) ----
 export interface KidTrack {
   id: string;
   branch_id: string;

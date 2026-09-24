@@ -1,6 +1,6 @@
-// Package rosters gerencia escalas de voluntários: criação da escala, convocação
-// de membros (com função), confirmação/recusa de presença, detecção de conflito
-// de agenda e sugestão de voluntários. O isolamento é do RLS.
+// Package rosters gerencia escalas de voluntarios: criacao da escala, convocacao
+// de membros (com funcao), confirmacao/recusa de presenca, deteccao de conflito
+// de agenda e sugestao de voluntarios. O isolamento e do RLS.
 package rosters
 
 import (
@@ -11,10 +11,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ErrInvalidStatus sinaliza status de resposta inválido.
-var ErrInvalidStatus = errors.New("status inválido (use confirmado ou recusado)")
+// ErrInvalidStatus sinaliza status de resposta invalido.
+var ErrInvalidStatus = errors.New("status invalido (use confirmado ou recusado)")
 
-// Roster é uma escala.
+// Roster e uma escala.
 type Roster struct {
 	ID              string       `json:"id"`
 	BranchID        string       `json:"branch_id"`
@@ -37,7 +37,7 @@ type Roster struct {
 	CreatedAt       time.Time    `json:"created_at"`
 }
 
-// Assignment é um voluntário escalado.
+// Assignment e um voluntario escalado.
 type Assignment struct {
 	ID          string     `json:"id"`
 	RosterID    string     `json:"roster_id"`
@@ -49,7 +49,7 @@ type Assignment struct {
 	Notes       *string    `json:"notes,omitempty"`
 }
 
-// CreateInput é o corpo de criação da escala.
+// CreateInput e o corpo de criacao da escala.
 type CreateInput struct {
 	MinistryID  *string           `json:"ministry_id"`
 	EventID     *string           `json:"event_id"`
@@ -64,7 +64,7 @@ type CreateInput struct {
 	Assignments []AssignmentInput `json:"assignments"`
 }
 
-// UpdateInput é o corpo de edição da escala.
+// UpdateInput e o corpo de edicao da escala.
 type UpdateInput struct {
 	MinistryID  *string `json:"ministry_id"`
 	EventID     *string `json:"event_id"`
@@ -83,7 +83,7 @@ type AssignmentInput struct {
 	Role     *string `json:"role"`
 }
 
-// Conflict é um choque de agenda de um membro escalado.
+// Conflict e um choque de agenda de um membro escalado.
 type Conflict struct {
 	MemberID    string    `json:"member_id"`
 	MemberName  string    `json:"member_name"`
@@ -92,7 +92,7 @@ type Conflict struct {
 	OtherStarts time.Time `json:"other_starts_at"`
 }
 
-// Suggestion é um candidato a entrar na escala.
+// Suggestion e um candidato a entrar na escala.
 type Suggestion struct {
 	MemberID   string  `json:"member_id"`
 	MemberName string  `json:"member_name"`
@@ -118,7 +118,7 @@ func scanRoster(row pgx.Row) (*Roster, error) {
 	return &r, err
 }
 
-// List devolve as escalas do escopo, com filtro opcional de período/ministério.
+// List devolve as escalas do escopo, com filtro opcional de periodo/ministerio.
 func (r *Repo) List(ctx context.Context, tx pgx.Tx, from, to, ministryID string) ([]Roster, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT `+rosterCols+`
@@ -165,7 +165,7 @@ func (r *Repo) Get(ctx context.Context, tx pgx.Tx, id string) (*Roster, error) {
 	return ro, nil
 }
 
-// ListAssignments devolve os voluntários de uma escala.
+// ListAssignments devolve os voluntarios de uma escala.
 func (r *Repo) ListAssignments(ctx context.Context, tx pgx.Tx, rosterID string) ([]Assignment, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT a.id::text, a.roster_id::text, a.member_id::text, mb.full_name, a.role, a.status, a.responded_at, a.notes
@@ -188,7 +188,7 @@ func (r *Repo) ListAssignments(ctx context.Context, tx pgx.Tx, rosterID string) 
 	return out, rows.Err()
 }
 
-// Create insere a escala (e, opcionalmente, já os escalados).
+// Create insere a escala (e, opcionalmente, ja os escalados).
 func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID, actorID string, in CreateInput) (*Roster, error) {
 	starts, err := parseTime(in.StartsAt)
 	if err != nil {
@@ -212,7 +212,7 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID, actorI
 	if err != nil {
 		return nil, err
 	}
-	// Gera o evento (grade + convocados) quando pedido e não há evento vinculado.
+	// Gera o evento (grade + convocados) quando pedido e nao ha evento vinculado.
 	if in.CreateEvent && str(in.EventID) == "" && str(in.EventKindID) != "" {
 		if err := r.generateEvent(ctx, tx, newID); err != nil {
 			return nil, err
@@ -284,9 +284,9 @@ func (r *Repo) generateEvent(ctx context.Context, tx pgx.Tx, rosterID string) er
 	return err
 }
 
-// syncInvitees reflete os escalados (pessoas + ministério da escala) como
+// syncInvitees reflete os escalados (pessoas + ministerio da escala) como
 // convocados/responsabilidades do evento GERADO pela escala. Eventos externos
-// (generated_event = false) não são tocados.
+// (generated_event = false) nao sao tocados.
 func (r *Repo) syncInvitees(ctx context.Context, tx pgx.Tx, rosterID string) error {
 	var eventID, ministryID *string
 	var generated bool
@@ -298,7 +298,7 @@ func (r *Repo) syncInvitees(ctx context.Context, tx pgx.Tx, rosterID string) err
 	if eventID == nil || !generated {
 		return nil
 	}
-	// Limpa os convocados que a escala gerencia (pessoas + o ministério dela).
+	// Limpa os convocados que a escala gerencia (pessoas + o ministerio dela).
 	if _, err := tx.Exec(ctx, `
 		DELETE FROM event_invitees
 		WHERE event_id = $1::uuid
@@ -324,9 +324,9 @@ func (r *Repo) syncInvitees(ctx context.Context, tx pgx.Tx, rosterID string) err
 	return err
 }
 
-// Delete remove a escala. Quando deleteEvent é true e o evento foi GERADO pela
-// escala, remove também o evento da grade (com convocados e chamada por
-// cascade). Eventos externos nunca são apagados por aqui.
+// Delete remove a escala. Quando deleteEvent e true e o evento foi GERADO pela
+// escala, remove tambem o evento da grade (com convocados e chamada por
+// cascade). Eventos externos nunca sao apagados por aqui.
 func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string, deleteEvent bool) error {
 	var eventID *string
 	var generated bool
@@ -350,8 +350,8 @@ func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string, deleteEvent boo
 	return nil
 }
 
-// SetAssignments substitui a lista de escalados, PRESERVANDO a confirmação de
-// quem já estava (o status só é recriado para os novos).
+// SetAssignments substitui a lista de escalados, PRESERVANDO a confirmacao de
+// quem ja estava (o status so e recriado para os novos).
 func (r *Repo) SetAssignments(ctx context.Context, tx pgx.Tx, rosterID string, items []AssignmentInput) error {
 	var exists bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM rosters WHERE id = $1::uuid)`, rosterID).Scan(&exists); err != nil {
@@ -360,7 +360,7 @@ func (r *Repo) SetAssignments(ctx context.Context, tx pgx.Tx, rosterID string, i
 	if !exists {
 		return pgx.ErrNoRows
 	}
-	// Remove os que saíram da escala.
+	// Remove os que sairam da escala.
 	if len(items) == 0 {
 		if _, err := tx.Exec(ctx, `DELETE FROM roster_assignments WHERE roster_id = $1::uuid`, rosterID); err != nil {
 			return err
@@ -388,7 +388,7 @@ func (r *Repo) SetAssignments(ctx context.Context, tx pgx.Tx, rosterID string, i
 	return r.syncInvitees(ctx, tx, rosterID)
 }
 
-// Respond registra a confirmação/recusa de um escalado.
+// Respond registra a confirmacao/recusa de um escalado.
 func (r *Repo) Respond(ctx context.Context, tx pgx.Tx, rosterID, assignmentID, status string, notes *string) (*Assignment, error) {
 	if status != "confirmado" && status != "recusado" && status != "convidado" {
 		return nil, ErrInvalidStatus
@@ -407,7 +407,7 @@ func (r *Repo) Respond(ctx context.Context, tx pgx.Tx, rosterID, assignmentID, s
 }
 
 // Conflicts lista os choques de agenda dos escalados desta escala com outras
-// escalas (não canceladas) que se sobrepõem no tempo.
+// escalas (nao canceladas) que se sobrepoem no tempo.
 func (r *Repo) Conflicts(ctx context.Context, tx pgx.Tx, rosterID string) ([]Conflict, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT DISTINCT a.member_id::text, mb.full_name, r2.id::text, r2.title, r2.starts_at
@@ -435,8 +435,8 @@ func (r *Repo) Conflicts(ctx context.Context, tx pgx.Tx, rosterID string) ([]Con
 	return out, rows.Err()
 }
 
-// Suggestions lista candidatos de um ministério para uma janela de tempo,
-// marcando quem já está ocupado (conflito) e ordenando por frequência recente.
+// Suggestions lista candidatos de um ministerio para uma janela de tempo,
+// marcando quem ja esta ocupado (conflito) e ordenando por frequencia recente.
 func (r *Repo) Suggestions(ctx context.Context, tx pgx.Tx, ministryID, startsAt, endsAt, excludeRosterID string) ([]Suggestion, error) {
 	if ministryID == "" {
 		return []Suggestion{}, nil

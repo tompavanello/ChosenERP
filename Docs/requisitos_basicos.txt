@@ -7,139 +7,139 @@ Data:
 Para:
 <everton.luiz@supportweb.com.br>
 
-## Cadastro e Gestão de Membros
+## Cadastro e Gestao de Membros
 
-Objetivo: permitir o cadastro completo dos membros, o controle do Rol de Membros e o histórico da situação eclesiástica de cada pessoa.
+Objetivo: permitir o cadastro completo dos membros, o controle do Rol de Membros e o historico da situacao eclesiastica de cada pessoa.
 
 O QUE IMPLEMENTAR
 
 Criar/adequar o cadastro de membros contemplando:
 
-1.1 – Dados cadastrais
+1.1 - Dados cadastrais
 
     Nome completo;
     CPF/RG;
     Data de nascimento;
     Sexo: Masculino/Feminino;
-    Estado civil: Solteiro/Casado/Viúvo/Divorciado;
-    Endereço;
+    Estado civil: Solteiro/Casado/Viuvo/Divorciado;
+    Endereco;
     Telefone;
     E-mail;
-    Outros dados cadastrais necessários. 
+    Outros dados cadastrais necessarios. 
 
-1.2 – Classificação no Rol
+1.2 - Classificacao no Rol
 Criar campo para identificar:
 
     Membro Professo;
-    Membro Não Professo. 
+    Membro Nao Professo. 
 
-1.3 – Função/Ministério
-Criar possibilidade de indicar se o membro exerce alguma função ou ministério na igreja, permitindo selecionar, por exemplo:
+1.3 - Funcao/Ministerio
+Criar possibilidade de indicar se o membro exerce alguma funcao ou ministerio na igreja, permitindo selecionar, por exemplo:
 
     Pastor;
-    Presbítero;
-    Diácono;
-    Líder de Jovens;
-    Líder de Louvor;
-    Líder de Pequeno Grupo;
+    Presbitero;
+    Diacono;
+    Lider de Jovens;
+    Lider de Louvor;
+    Lider de Pequeno Grupo;
     Professor;
     Outro. 
 
-O sistema deverá permitir que um mesmo membro possua mais de uma função/ministério, quando aplicável.
+O sistema devera permitir que um mesmo membro possua mais de uma funcao/ministerio, quando aplicavel.
 
-1.4 – Controle de mandato
-Quando a função possuir período determinado, permitir informar:
+1.4 - Controle de mandato
+Quando a funcao possuir periodo determinado, permitir informar:
 
-    Data de início do mandato;
+    Data de inicio do mandato;
     Data de vencimento do mandato;
-    Situação: Ativo/Encerrado. 
+    Situacao: Ativo/Encerrado. 
 
-1.5 – Frequência
-Criar campo para classificação da frequência do membro:
+1.5 - Frequencia
+Criar campo para classificacao da frequencia do membro:
 
     Frequente;
     Pouco frequente;
-    Não frequente. 
+    Nao frequente. 
 
-Idealmente, essa informação poderá ser alterada ao longo do tempo sem apagar o histórico anterior.
+Idealmente, essa informacao podera ser alterada ao longo do tempo sem apagar o historico anterior.
 
-1.6 – Situação do membro
-Permitir identificar a situação atual do membro:
+1.6 - Situacao do membro
+Permitir identificar a situacao atual do membro:
 
     Ativo (membro professo);
-    Inativo (membro não professo);
+    Inativo (membro nao professo);
     Baixado do Rol;
     Transferido;
     Falecido;
     Outros. 
 
-1.7 – Motivo da baixa
+1.7 - Motivo da baixa
 Quando houver baixa do Rol, permitir informar o motivo:
 
     Falecimento;
     Desligamento a pedido do membro;
-    Transferência para outra igreja;
-    Abandono das atividades eclesiásticas;
-    Baixa por ausência superior a 1 ano;
+    Transferencia para outra igreja;
+    Abandono das atividades eclesiasticas;
+    Baixa por ausencia superior a 1 ano;
     Outro. 
 
-1.8 – Histórico eclesiástico
-Criar uma área para registrar os eventos relacionados à entrada, alteração ou saída do Rol, contendo:
+1.8 - Historico eclesiastico
+Criar uma area para registrar os eventos relacionados a entrada, alteracao ou saida do Rol, contendo:
 
     Data;
     Hora;
     Tipo de evento;
-    Observação. 
+    Observacao. 
 
 Exemplos de eventos:
 
     Batismo infantil;
-    Profissão de fé;
-    Recebido por jurisdição;
-    Recebido por transferência;
-    Transferência para outra igreja;
+    Profissao de fe;
+    Recebido por jurisdicao;
+    Recebido por transferencia;
+    Transferencia para outra igreja;
     Desligamento;
-    Abandono das atividades eclesiásticas;
+    Abandono das atividades eclesiasticas;
     Baixa do Rol;
     Falecimento;
     Outros. 
 
-IMPORTANTE: essas informações deverão formar um histórico cronológico do membro, permitindo consultar posteriormente tudo o que ocorreu com ele durante sua trajetória na igreja.
+IMPORTANTE: essas informacoes deverao formar um historico cronologico do membro, permitindo consultar posteriormente tudo o que ocorreu com ele durante sua trajetoria na igreja.
 
-##2.  Registro de Eventos e Frequência
+##2.  Registro de Eventos e Frequencia
 
-Objetivo: permitir o registro dos eventos realizados pela igreja e a quantidade de participantes, criando posteriormente um histórico e indicadores de participação.
+Objetivo: permitir o registro dos eventos realizados pela igreja e a quantidade de participantes, criando posteriormente um historico e indicadores de participacao.
 
 O QUE IMPLEMENTAR
 
 Criar cadastro de eventos contendo:
 
     Data do evento;
-    Hora de início;
-    Hora de término, se necessário;
+    Hora de inicio;
+    Hora de termino, se necessario;
     Tipo de evento;
     Quantidade de participantes;
-    Observações. 
+    Observacoes. 
 
 Tipos de eventos, por exemplo:
 
-    Escola Bíblica Dominical;
+    Escola Biblica Dominical;
     Culto;
     Culto Especial;
-    Reunião;
+    Reuniao;
     Pequeno Grupo;
     Evento de Jovens;
-    Escola Bíblica;
+    Escola Biblica;
     Santa Ceia;
-    Vigília;
+    Vigilia;
     Outros. 
 
-Exemplo de lançamento
+Exemplo de lancamento
 
 Data
 	
 
-Horário
+Horario
 	
 
 Evento
@@ -148,7 +148,7 @@ Evento
 Quantidade
 	
 
-Observação
+Observacao
 
 20/09/2026
 	
@@ -156,7 +156,7 @@ Observação
 09:00
 	
 
-Escola Bíblica Dominical
+Escola Biblica Dominical
 	
 
 85
@@ -184,48 +184,48 @@ Culto Especial do Amigo
 09:00
 	
 
-Escola Bíblica Dominical
+Escola Biblica Dominical
 	
 
 92
 	
 
-—
+-
 
-3. Evolução que eu recomendo deixar prevista
+3. Evolucao que eu recomendo deixar prevista
 
-Como vocês estão desenvolvendo o sistema pensando no uso da igreja a longo prazo, eu colocaria uma observação importante na OP:
+Como voces estao desenvolvendo o sistema pensando no uso da igreja a longo prazo, eu colocaria uma observacao importante na OP:
 
-O cadastro deverá ser estruturado de forma que os dados registrados possam futuramente ser utilizados em relatórios e indicadores, permitindo acompanhar a evolução do Rol de Membros, entradas e baixas, frequência, participação nos cultos e demais eventos, composição por faixa etária, sexo, estado civil, situação no Rol, funções exercidas e demais informações cadastradas no sistema.
+O cadastro devera ser estruturado de forma que os dados registrados possam futuramente ser utilizados em relatorios e indicadores, permitindo acompanhar a evolucao do Rol de Membros, entradas e baixas, frequencia, participacao nos cultos e demais eventos, composicao por faixa etaria, sexo, estado civil, situacao no Rol, funcoes exercidas e demais informacoes cadastradas no sistema.
 
-Isso é importante porque evita criar simplesmente dois cadastros isolados. O ideal é que o CAD100 seja a base das pessoas e o CAD107 seja a base dos eventos, permitindo futuramente cruzar as informações.
+Isso e importante porque evita criar simplesmente dois cadastros isolados. O ideal e que o CAD100 seja a base das pessoas e o CAD107 seja a base dos eventos, permitindo futuramente cruzar as informacoes.
 
-Por exemplo, posteriormente vocês poderiam ter um painel mostrando:
+Por exemplo, posteriormente voces poderiam ter um painel mostrando:
 
 ROL DE MEMBROS
 
     Total de Professos;
-    Total de Não Professos;
+    Total de Nao Professos;
     Total Ativos;
     Total Inativos;
-    Entradas no período;
-    Baixas no período;
-    Transferências;
+    Entradas no periodo;
+    Baixas no periodo;
+    Transferencias;
     Falecimentos. 
 
-FREQUÊNCIA
+FREQUENCIA
 
     Frequentes;
     Pouco frequentes;
-    Não frequentes. 
+    Nao frequentes. 
 
 EVENTOS
 
-    Média de participantes nos cultos;
-    Média da EBD;
-    Maior público do período;
-    Menor público do período;
-    Comparativo mês a mês;
+    Media de participantes nos cultos;
+    Media da EBD;
+    Maior publico do periodo;
+    Menor publico do periodo;
+    Comparativo mes a mes;
     Comparativo anual. 
 
  

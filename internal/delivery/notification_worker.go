@@ -12,8 +12,8 @@ import (
 	"chosenerp/internal/store"
 )
 
-// NotificationWorker dispara as automações de WhatsApp (#31): aniversário do
-// dia, lembrete de escala e boas-vindas a visitante. Ele NÃO envia: apenas
+// NotificationWorker dispara as automacoes de WhatsApp (#31): aniversario do
+// dia, lembrete de escala e boas-vindas a visitante. Ele NAO envia: apenas
 // enfileira mensagens na outbox (announcement_deliveries); o AnnouncementWorker
 // faz o envio real, reaproveitando o mesmo Dispatcher e o retry.
 type NotificationWorker struct {
@@ -22,7 +22,7 @@ type NotificationWorker struct {
 	Dispatcher    *Dispatcher
 	Interval      time.Duration
 
-	// Now permite fixar o relógio nos testes; nil = time.Now.
+	// Now permite fixar o relogio nos testes; nil = time.Now.
 	Now func() time.Time
 }
 
@@ -37,7 +37,7 @@ func (w *NotificationWorker) Run(ctx context.Context) {
 	if n, err := w.ProcessOnce(ctx); err != nil {
 		log.Printf("[notification-worker] erro na varredura inicial: %v", err)
 	} else if n > 0 {
-		log.Printf("[notification-worker] %d mensagem(ns) de automação enfileirada(s)", n)
+		log.Printf("[notification-worker] %d mensagem(ns) de automacao enfileirada(s)", n)
 	}
 
 	for {
@@ -47,9 +47,9 @@ func (w *NotificationWorker) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if n, err := w.ProcessOnce(ctx); err != nil {
-				log.Printf("[notification-worker] erro ao processar automações: %v", err)
+				log.Printf("[notification-worker] erro ao processar automacoes: %v", err)
 			} else if n > 0 {
-				log.Printf("[notification-worker] %d mensagem(ns) de automação enfileirada(s)", n)
+				log.Printf("[notification-worker] %d mensagem(ns) de automacao enfileirada(s)", n)
 			}
 		}
 	}
@@ -110,7 +110,7 @@ func (w *NotificationWorker) processTenant(ctx context.Context, s announcements.
 					TenantID: s.TenantID, BranchID: r.BranchID,
 					Channel: ChannelWhatsApp, Provider: provider,
 					Recipient: r.Phone, RecipientName: r.FirstName,
-					Title: "Feliz aniversário", Body: body,
+					Title: "Feliz aniversario", Body: body,
 					Source:    announcements.SourceBirthday,
 					DedupeKey: "birthday:" + r.MemberID + ":" + local.Format("2006-01-02"),
 				})
@@ -191,7 +191,7 @@ func (w *NotificationWorker) processTenant(ctx context.Context, s announcements.
 	return count, err
 }
 
-// renderTemplate troca {chave} pelo valor; chaves desconhecidas ficam como estão.
+// renderTemplate troca {chave} pelo valor; chaves desconhecidas ficam como estao.
 func renderTemplate(tpl string, vars map[string]string) string {
 	out := tpl
 	for k, v := range vars {

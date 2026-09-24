@@ -8,15 +8,15 @@ import (
 	"time"
 )
 
-// Limite das rotas públicas (sem auth), por IP.
+// Limite das rotas publicas (sem auth), por IP.
 //
-// 60/min é folgado para o uso real — a página da carteirinha faz três chamadas
-// (JSON, HTML de impressão e foto) — e apertado o bastante para desencorajar
+// 60/min e folgado para o uso real - a pagina da carteirinha faz tres chamadas
+// (JSON, HTML de impressao e foto) - e apertado o bastante para desencorajar
 // varredura de tokens e raspagem de uma lista de carteirinhas.
 const (
 	publicRateMax    = 60
 	publicRateJanela = time.Minute
-	// Teto de IPs guardados; acima disso as janelas vencidas são podadas.
+	// Teto de IPs guardados; acima disso as janelas vencidas sao podadas.
 	publicRateMaxIPs = 4096
 )
 
@@ -25,9 +25,9 @@ type contadorIP struct {
 	n      int
 }
 
-// limitadorPublico é um limitador de janela fixa por IP. Estado em memória, de
-// propósito: são poucas rotas, o volume é baixo, e um Redis só para isso seria
-// mais peça móvel do que o problema pede.
+// limitadorPublico e um limitador de janela fixa por IP. Estado em memoria, de
+// proposito: sao poucas rotas, o volume e baixo, e um Redis so para isso seria
+// mais peca movel do que o problema pede.
 type limitadorPublico struct {
 	mu       sync.Mutex
 	contador map[string]*contadorIP
@@ -58,14 +58,14 @@ func (l *limitadorPublico) permitir(ip string) bool {
 	return c.n <= publicRateMax
 }
 
-// ipDoCliente extrai o IP do visitante considerando o proxy do túnel.
+// ipDoCliente extrai o IP do visitante considerando o proxy do tunel.
 //
-// CF-Connecting-IP vem primeiro porque é o único que o Cloudflare escreve e
-// sobrescreve — o RemoteAddr atrás do túnel é sempre o do cloudflared, então
-// usá-lo colocaria todos os visitantes no mesmo balde. Ressalva honesta:
-// X-Forwarded-For e o próprio CF-Connecting-IP são falsificáveis por quem
-// alcança a API direto (a 38080 escuta em 0.0.0.0), então isto é um dissuasor
-// contra abuso casual, não uma fronteira de segurança.
+// CF-Connecting-IP vem primeiro porque e o unico que o Cloudflare escreve e
+// sobrescreve - o RemoteAddr atras do tunel e sempre o do cloudflared, entao
+// usa-lo colocaria todos os visitantes no mesmo balde. Ressalva honesta:
+// X-Forwarded-For e o proprio CF-Connecting-IP sao falsificaveis por quem
+// alcanca a API direto (a 38080 escuta em 0.0.0.0), entao isto e um dissuasor
+// contra abuso casual, nao uma fronteira de seguranca.
 func ipDoCliente(r *http.Request) string {
 	if ip := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); ip != "" {
 		return ip
@@ -83,15 +83,15 @@ func ipDoCliente(r *http.Request) string {
 	return host
 }
 
-// publico envolve as rotas sem autenticação: marca a resposta como não
-// indexável e aplica o limite por IP. O noindex é redundante com o robots.txt
-// do webadmin de propósito — o token da carteirinha não pode acabar num índice
+// publico envolve as rotas sem autenticacao: marca a resposta como nao
+// indexavel e aplica o limite por IP. O noindex e redundante com o robots.txt
+// do webadmin de proposito - o token da carteirinha nao pode acabar num indice
 // de busca.
 func (a *App) publico(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 		if !a.Limitador.permitir(ipDoCliente(r)) {
-			writeErr(w, http.StatusTooManyRequests, "muitas requisições")
+			writeErr(w, http.StatusTooManyRequests, "muitas requisicoes")
 			return
 		}
 		next(w, r)

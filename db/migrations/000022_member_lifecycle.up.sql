@@ -1,24 +1,24 @@
 -- 000022_member_lifecycle.up.sql
 -- Ciclo de vida do membro (requisitos 1.1/1.6/1.7/1.8 do cliente):
---   * 1.1 endereço POR MEMBRO (decisão: o endereço é da pessoa, não só da família);
---   * 1.6 situação do membro com domínio fechado por CHECK;
---   * 1.7 motivo da baixa + data de saída;
---   * 1.8 histórico eclesiástico append-only com hash-chain.
+--   * 1.1 endereco POR MEMBRO (decisao: o endereco e da pessoa, nao so da familia);
+--   * 1.6 situacao do membro com dominio fechado por CHECK;
+--   * 1.7 motivo da baixa + data de saida;
+--   * 1.8 historico eclesiastico append-only com hash-chain.
 --
--- Classificação no Rol (1.2): NÃO vira coluna. O cliente define Ativo = membro
--- professo e não existe "professo inativo", então a professorate é DERIVADA da
--- situação (`membership_status = 'active'`), evitando duas fontes de verdade.
+-- Classificacao no Rol (1.2): NAO vira coluna. O cliente define Ativo = membro
+-- professo e nao existe "professo inativo", entao a professorate e DERIVADA da
+-- situacao (`membership_status = 'active'`), evitando duas fontes de verdade.
 
 -- ---------------------------------------------------------------------------
--- 1.1 Endereço do membro
+-- 1.1 Endereco do membro
 -- ---------------------------------------------------------------------------
 ALTER TABLE members ADD COLUMN address jsonb;
 
 -- ---------------------------------------------------------------------------
--- 1.6 Situação do membro — fecha o domínio (antes era texto livre)
+-- 1.6 Situacao do membro - fecha o dominio (antes era texto livre)
 -- ---------------------------------------------------------------------------
--- Valores normalizados. `member` é mantido como "não professo (ainda ativo na
--- igreja)" — a planilha do cliente distingue NÃO PROFESSO de INATIVO; usar
+-- Valores normalizados. `member` e mantido como "nao professo (ainda ativo na
+-- igreja)" - a planilha do cliente distingue NAO PROFESSO de INATIVO; usar
 -- `other` para qualquer valor legado desconhecido.
 UPDATE members SET membership_status = 'other'
 WHERE membership_status IS NULL
@@ -30,12 +30,12 @@ ALTER TABLE members
     CHECK (membership_status IN
         ('active','member','inactive','dismissed','transferred','deceased','other'));
 
--- Índice para os relatórios do Rol (contagem por situação/classificação).
+-- Indice para os relatorios do Rol (contagem por situacao/classificacao).
 CREATE INDEX IF NOT EXISTS idx_members_tenant_status
     ON members(tenant_id, branch_id, membership_status);
 
 -- ---------------------------------------------------------------------------
--- 1.7 Motivo da baixa + data de saída
+-- 1.7 Motivo da baixa + data de saida
 -- ---------------------------------------------------------------------------
 ALTER TABLE members ADD COLUMN exit_reason text;
 ALTER TABLE members ADD COLUMN exited_at date;
@@ -46,7 +46,7 @@ ALTER TABLE members
         ('falecimento','desligamento','transferencia','abandono','ausencia','outro'));
 
 -- ---------------------------------------------------------------------------
--- 1.8 Histórico eclesiástico (append-only + hash-chain)
+-- 1.8 Historico eclesiastico (append-only + hash-chain)
 -- ---------------------------------------------------------------------------
 CREATE TABLE member_history (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -65,10 +65,10 @@ CREATE TABLE member_history (
 CREATE INDEX idx_member_history_member ON member_history(member_id, created_at DESC);
 CREATE INDEX idx_member_history_tenant ON member_history(tenant_id, branch_id);
 
--- Imutabilidade: sem UPDATE/DELETE (mesmo padrão de financial_transactions).
--- A exceção é a exclusão em CASCADE quando o membro é apagado (FK abaixo):
+-- Imutabilidade: sem UPDATE/DELETE (mesmo padrao de financial_transactions).
+-- A excecao e a exclusao em CASCADE quando o membro e apagado (FK abaixo):
 -- nesse caso o PostgreSQL dispara o trigger com pg_trigger_depth() > 1, e a
--- linha some junto com o membro em vez de travar a operação.
+-- linha some junto com o membro em vez de travar a operacao.
 CREATE OR REPLACE FUNCTION member_history_guard() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -83,8 +83,8 @@ CREATE TRIGGER member_history_no_update
 BEFORE UPDATE OR DELETE ON member_history
 FOR EACH ROW EXECUTE FUNCTION member_history_guard();
 
--- Encadeia o hash cronológico dentro do tenant, por created_at + id (o mesmo
--- cuidado do fin_tx_hash: UUID puro produz cadeia não-temporal).
+-- Encadeia o hash cronologico dentro do tenant, por created_at + id (o mesmo
+-- cuidado do fin_tx_hash: UUID puro produz cadeia nao-temporal).
 CREATE OR REPLACE FUNCTION member_history_hash() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -107,8 +107,8 @@ CREATE TRIGGER member_history_hash
 BEFORE INSERT ON member_history
 FOR EACH ROW EXECUTE FUNCTION member_history_hash();
 
--- RLS: leitura/gravação pelo escopo da filial (como members). Sem UPDATE/DELETE
--- de propósito — a tabela é append-only.
+-- RLS: leitura/gravacao pelo escopo da filial (como members). Sem UPDATE/DELETE
+-- de proposito - a tabela e append-only.
 ALTER TABLE member_history ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY member_history_sel ON member_history

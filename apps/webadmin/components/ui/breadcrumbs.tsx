@@ -12,12 +12,12 @@ const BREADCRUMB_LABELS: Record<string, string> = {
   benefactors: "Benfeitores",
   finance: "Financeiro",
   transfers: "Repasses",
-  ministries: "Ministérios",
+  ministries: "Ministerios",
   announcements: "Comunicados",
-  reports: "Relatórios",
+  reports: "Relatorios",
 };
 
-// Segmentos que são identificadores (UUID) e não nomes de rota.
+// Segmentos que sao identificadores (UUID) e nao nomes de rota.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function Breadcrumbs({ className }: { className?: string }) {
@@ -25,7 +25,7 @@ export function Breadcrumbs({ className }: { className?: string }) {
   const segments = pathname.split("/").filter(Boolean);
 
   const crumbs = segments.map((segment, index) => {
-    // Um UUID na URL é rota de detalhe: não vira link com o UUID no texto.
+    // Um UUID na URL e rota de detalhe: nao vira link com o UUID no texto.
     const isId = UUID_RE.test(segment);
     const label = isId
       ? "Detalhes"
@@ -34,7 +34,7 @@ export function Breadcrumbs({ className }: { className?: string }) {
     return { label, href: "/" + segments.slice(0, index + 1).join("/"), isId };
   });
 
-  // Não mostra breadcrumb na home do dashboard.
+  // Nao mostra breadcrumb na home do dashboard.
   if (crumbs.length <= 1) return null;
 
   return (

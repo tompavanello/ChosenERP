@@ -16,12 +16,12 @@ export interface Column<T> {
   render?: (row: T, index: number) => ReactNode;
   className?: string;
   headerClassName?: string;
-  // Valor usado na ordenação quando `key` não existe na linha ou não ordena bem
-  // (ex.: idade derivada de birth_date). Sem ele a ordenação usa row[key].
+  // Valor usado na ordenacao quando `key` nao existe na linha ou nao ordena bem
+  // (ex.: idade derivada de birth_date). Sem ele a ordenacao usa row[key].
   sortValue?: (row: T) => string | number | null | undefined;
 }
 
-// Compara números como números e o resto como texto — `localeCompare` puro
+// Compara numeros como numeros e o resto como texto - `localeCompare` puro
 // ordenava "10" antes de "9".
 function compareValues(a: unknown, b: unknown): number {
   if (a == null && b == null) return 0;
@@ -73,10 +73,10 @@ export interface DataTableProps<T> {
   className?: string;
 }
 
-// Devolve o CONTEÚDO do <th> (texto ou botão de ordenação), nunca um <th>:
-// o elemento é criado pelo DataTable, e um <th> dentro de outro <th> é HTML
-// inválido — o React acusa "In HTML, <th> cannot be a child of <th>" e quebra
-// a hidratação.
+// Devolve o CONTEUDO do <th> (texto ou botao de ordenacao), nunca um <th>:
+// o elemento e criado pelo DataTable, e um <th> dentro de outro <th> e HTML
+// invalido - o React acusa "In HTML, <th> cannot be a child of <th>" e quebra
+// a hidratacao.
 function SortableHeader<T>({
   column,
   sort,
@@ -186,9 +186,9 @@ export function DataTable<T>({  columns,
         className,
       )}
     >
-      {/* Tabela. Só é escondida no mobile quando existe card equivalente; sem
-          renderMobileCard ela continua visível e rola na horizontal, em vez de
-          a página ficar em branco abaixo de 1024px. */}
+      {/* Tabela. So e escondida no mobile quando existe card equivalente; sem
+          renderMobileCard ela continua visivel e rola na horizontal, em vez de
+          a pagina ficar em branco abaixo de 1024px. */}
       <div className={cn("overflow-x-auto", renderMobileCard && "hidden lg:block")}>
         <table className="w-full min-w-max text-[13px]" role="grid">
           <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-zinc-50/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
@@ -282,7 +282,7 @@ export function DataTable<T>({  columns,
                     >
                      {column.render
                        ? column.render(row, index)
-                       : String(row[column.key as keyof T] ?? "—")}
+                       : String(row[column.key as keyof T] ?? "-")}
                     </td>
                   ))}
                 </tr>
@@ -330,13 +330,13 @@ export function createStatusColumn<T>(key: string): Column<T> {
         visitor: { label: "Visitante", tone: "amber" },
         converted: { label: "Convertido", tone: "green" },
         welcome: { label: "Boas-vindas", tone: "zinc" },
-        coffee_pastor: { label: "Café c/ Pastor", tone: "sky" },
+        coffee_pastor: { label: "Cafe c/ Pastor", tone: "sky" },
         course: { label: "Curso", tone: "sky" },
-        cell: { label: "Célula", tone: "indigo" },
+        cell: { label: "Celula", tone: "indigo" },
         transferred: { label: "Transferido", tone: "sky" },
         deceased: { label: "Falecido", tone: "red" },
       };
-      const config = statusMap[status] ?? { label: status || "—", tone: "zinc" as Tone };
+      const config = statusMap[status] ?? { label: status || "-", tone: "zinc" as Tone };
       return <Badge tone={config.tone}>{config.label}</Badge>;
     },
   };
@@ -373,7 +373,7 @@ export function createFinancialTypeColumn<T>(key: string): Column<T> {
     render: (row) => {
       const type = row[key as keyof T] as string;
       const tone: Tone = type === "income" ? "green" : "red";
-      return <Badge tone={tone}>{type === "income" ? "Entrada" : "Saída"}</Badge>;
+      return <Badge tone={tone}>{type === "income" ? "Entrada" : "Saida"}</Badge>;
     },
   };
 }

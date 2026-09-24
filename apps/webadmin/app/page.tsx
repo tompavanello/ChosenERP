@@ -6,17 +6,17 @@ import { Church, Lock, Mail, Eye, EyeOff, Loader2, ShieldCheck, Building2 } from
 import { useAuth } from "@/components/providers/auth-provider";
 import { getPublicTenant, tenantSlugFromHost, type PublicTenant } from "@/lib/api";
 
-// A conveniência de pré-preencher o login da demo vale só no `npm run dev`.
-// No build de produção (o que o túnel publica) os campos saem vazios e a dica
-// de credenciais não é renderizada: a senha demo é rotacionada e vive no .env
-// (DEMO_ADMIN_PASSWORD), não no bundle. `process.env.NODE_ENV` é substituído em
-// build time, então isto é uma constante nos dois lados — não gera divergência
-// de hidratação.
+// A conveniencia de pre-preencher o login da demo vale so no `npm run dev`.
+// No build de producao (o que o tunel publica) os campos saem vazios e a dica
+// de credenciais nao e renderizada: a senha demo e rotacionada e vive no .env
+// (DEMO_ADMIN_PASSWORD), nao no bundle. `process.env.NODE_ENV` e substituido em
+// build time, entao isto e uma constante nos dois lados - nao gera divergencia
+// de hidratacao.
 //
-// Só o E-MAIL é pré-preenchido. A senha saiu daqui: ela era `admin123` fixo no
-// código e, depois da rotação das contas de demo, o formulário passou a abrir
-// com uma senha que já não vale mais — clicar em Entrar dava 401 e parecia
-// senha errada do usuário. A senha de verdade está no .env; o campo começa
+// So o E-MAIL e pre-preenchido. A senha saiu daqui: ela era `admin123` fixo no
+// codigo e, depois da rotacao das contas de demo, o formulario passou a abrir
+// com uma senha que ja nao vale mais - clicar em Entrar dava 401 e parecia
+// senha errada do usuario. A senha de verdade esta no .env; o campo comeca
 // vazio nos dois modos.
 const MODO_DEV = process.env.NODE_ENV !== "production";
 
@@ -30,7 +30,7 @@ export default function LoginPage() {
   const [mfa, setMfa] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  // Branding do subdomínio (igreja.dominio) + slug detectado do host.
+  // Branding do subdominio (igreja.dominio) + slug detectado do host.
   const [slug, setSlug] = useState("");
   const [brand, setBrand] = useState<PublicTenant | null>(null);
 
@@ -45,7 +45,7 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      // Com 1 igreja entra direto; com >1 o provider guarda a seleção pendente.
+      // Com 1 igreja entra direto; com >1 o provider guarda a selecao pendente.
       const entered = await login(email, password, code || undefined, slug || undefined);
       if (entered) router.replace("/dashboard");
       else setLoading(false);
@@ -53,13 +53,13 @@ export default function LoginPage() {
       const msg = err instanceof Error ? err.message : "";
       if (msg.includes("mfa_required")) {
         setMfa(true);
-        setError("Informe o código do autenticador.");
+        setError("Informe o codigo do autenticador.");
       } else if (msg.includes("mfa_invalid")) {
-        setError("Código de verificação inválido.");
+        setError("Codigo de verificacao invalido.");
       } else if (msg.includes("tenant_forbidden")) {
-        setError("Sua conta não tem acesso a esta igreja.");
+        setError("Sua conta nao tem acesso a esta igreja.");
       } else {
-        setError("Credenciais inválidas. Tente novamente.");
+        setError("Credenciais invalidas. Tente novamente.");
       }
       setLoading(false);
     }
@@ -72,7 +72,7 @@ export default function LoginPage() {
       await selectTenant(id);
       router.replace("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Não foi possível selecionar a igreja.");
+      setError(err instanceof Error ? err.message : "Nao foi possivel selecionar a igreja.");
       setLoading(false);
     }
   }
@@ -90,7 +90,7 @@ export default function LoginPage() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">{brand?.name ?? "Chosen ERP"}</h1>
             <p className="text-sm text-zinc-500">
-              {brand ? "Acesso da igreja" : "Gestão eclesiástica completa"}
+              {brand ? "Acesso da igreja" : "Gestao eclesiastica completa"}
             </p>
           </div>
         </div>
@@ -139,7 +139,7 @@ export default function LoginPage() {
             </div>
             {mfa && (
               <div className="space-y-1">
-                <label className="label" htmlFor="code">Código do autenticador</label>
+                <label className="label" htmlFor="code">Codigo do autenticador</label>
                 <div className="relative">
                   <ShieldCheck className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
                   <input
@@ -163,7 +163,7 @@ export default function LoginPage() {
 
         {MODO_DEV && (
           <div className="mt-4 rounded-lg bg-zinc-100 p-3 text-center text-xs text-zinc-500">
-            Dev: <b>admin@demo.local</b> — senha em <code>.env</code> (<code>DEMO_ADMIN_PASSWORD</code>)
+            Dev: <b>admin@demo.local</b> - senha em <code>.env</code> (<code>DEMO_ADMIN_PASSWORD</code>)
           </div>
         )}
       </div>

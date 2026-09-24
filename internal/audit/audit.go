@@ -11,8 +11,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ErrClosed indica que a auditoria já foi fechada (documento imutável).
-var ErrClosed = errors.New("auditoria fechada: documento imutável")
+// ErrClosed indica que a auditoria ja foi fechada (documento imutavel).
+var ErrClosed = errors.New("auditoria fechada: documento imutavel")
 
 type Audit struct {
 	ID            string     `json:"id"`
@@ -55,7 +55,7 @@ type Item struct {
 	Notes           *string      `json:"notes,omitempty"`
 }
 
-// Allocation é o rateio do lançamento em um evento (custo real por evento).
+// Allocation e o rateio do lancamento em um evento (custo real por evento).
 type Allocation struct {
 	EventID   string  `json:"event_id"`
 	EventName string  `json:"event_name"`
@@ -70,7 +70,7 @@ type CreateInput struct {
 }
 
 type MarkInput struct {
-	// TransactionIDs vazio = marca/desmarca TODOS os lançamentos do período.
+	// TransactionIDs vazio = marca/desmarca TODOS os lancamentos do periodo.
 	TransactionIDs []string `json:"transaction_ids"`
 	Audited        bool     `json:"audited"`
 }
@@ -130,8 +130,8 @@ func (r *Repo) Get(ctx context.Context, tx pgx.Tx, id string) (*Audit, error) {
 		GROUP BY a.id`, id))
 }
 
-// ListItems devolve as linhas do período; antes, sincroniza os itens que ainda
-// não estão na auditoria (só enquanto aberta).
+// ListItems devolve as linhas do periodo; antes, sincroniza os itens que ainda
+// nao estao na auditoria (so enquanto aberta).
 func (r *Repo) ListItems(ctx context.Context, tx pgx.Tx, id string) ([]Item, error) {
 	if err := r.syncItems(ctx, tx, id); err != nil {
 		return nil, err
@@ -174,10 +174,10 @@ func (r *Repo) ListItems(ctx context.Context, tx pgx.Tx, id string) ([]Item, err
 		return nil, err
 	}
 
-	// Rateio por evento (uma consulta para todos os lançamentos da auditoria).
+	// Rateio por evento (uma consulta para todos os lancamentos da auditoria).
 	allocRows, err := tx.Query(ctx, `
 		SELECT a.transaction_id::text, a.event_id::text,
-		       COALESCE(to_char(e.starts_at,'DD/MM/YYYY') || ' · ' || k.name, 'Evento'),
+		       COALESCE(to_char(e.starts_at,'DD/MM/YYYY') || ' - ' || k.name, 'Evento'),
 		       a.amount::float8
 		FROM financial_event_allocations a
 		LEFT JOIN church_events e ON e.id = a.event_id
@@ -202,8 +202,8 @@ func (r *Repo) ListItems(ctx context.Context, tx pgx.Tx, id string) ([]Item, err
 	return out, allocRows.Err()
 }
 
-// syncItems materializa os lançamentos do período como itens da auditoria.
-// O guard do banco recusa quando a auditoria está fechada.
+// syncItems materializa os lancamentos do periodo como itens da auditoria.
+// O guard do banco recusa quando a auditoria esta fechada.
 func (r *Repo) syncItems(ctx context.Context, tx pgx.Tx, id string) error {
 	_, err := tx.Exec(ctx, `
 		INSERT INTO financial_audit_items (audit_id, transaction_id)
@@ -224,7 +224,7 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID, actorI
 		title = "Auditoria financeira"
 	}
 	if in.PeriodStart == "" || in.PeriodEnd == "" {
-		return nil, errors.New("period_start e period_end são obrigatórios")
+		return nil, errors.New("period_start e period_end sao obrigatorios")
 	}
 	var id string
 	err := tx.QueryRow(ctx, `
@@ -241,7 +241,7 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID, actorI
 	return r.Get(ctx, tx, id)
 }
 
-// Mark marca/desmarca os lançamentos (todos quando a lista vem vazia).
+// Mark marca/desmarca os lancamentos (todos quando a lista vem vazia).
 func (r *Repo) Mark(ctx context.Context, tx pgx.Tx, id string, in MarkInput, actorID string) error {
 	a, err := r.Get(ctx, tx, id)
 	if err != nil {
@@ -269,7 +269,7 @@ func (r *Repo) Mark(ctx context.Context, tx pgx.Tx, id string, in MarkInput, act
 	return err
 }
 
-// Close sela a auditoria com a assinatura do responsável e o hash do conteúdo.
+// Close sela a auditoria com a assinatura do responsavel e o hash do conteudo.
 func (r *Repo) Close(ctx context.Context, tx pgx.Tx, id string, in CloseInput, actorID string) (*Audit, error) {
 	a, err := r.Get(ctx, tx, id)
 	if err != nil {
@@ -279,7 +279,7 @@ func (r *Repo) Close(ctx context.Context, tx pgx.Tx, id string, in CloseInput, a
 		return nil, ErrClosed
 	}
 	if in.SignerName == "" {
-		return nil, errors.New("signer_name é obrigatório")
+		return nil, errors.New("signer_name e obrigatorio")
 	}
 	items, err := r.ListItems(ctx, tx, id)
 	if err != nil {
@@ -303,7 +303,7 @@ func (r *Repo) Close(ctx context.Context, tx pgx.Tx, id string, in CloseInput, a
 	return r.Get(ctx, tx, id)
 }
 
-// Delete remove a auditoria (e seus itens, em cascata). Ação de manutenção —
+// Delete remove a auditoria (e seus itens, em cascata). Acao de manutencao -
 // usada para descartar uma auditoria criada indevidamente. O guard libera o
 // cascade mesmo com a auditoria fechada.
 func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {

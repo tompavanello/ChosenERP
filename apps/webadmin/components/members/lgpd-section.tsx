@@ -40,7 +40,7 @@ export function LgpdSection({
     load().catch(() => toast("Erro ao carregar dados de LGPD", "error"));
   }, [load, toast]);
 
-  // Último consentimento por termo (o mais recente manda).
+  // Ultimo consentimento por termo (o mais recente manda).
   const latest = new Map<string, ConsentRecord>();
   for (const c of consents ?? []) if (!latest.has(c.term_id)) latest.set(c.term_id, c);
 
@@ -70,14 +70,14 @@ export function LgpdSection({
   async function doExport() {
     try {
       await exportMemberData(memberId);
-      toast("Exportação gerada.");
+      toast("Exportacao gerada.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao exportar", "error");
     }
   }
 
   async function doAnonymize() {
-    if (!confirm("Anonimizar os dados pessoais deste membro? Esta ação não pode ser desfeita (LGPD).")) return;
+    if (!confirm("Anonimizar os dados pessoais deste membro? Esta acao nao pode ser desfeita (LGPD).")) return;
     try {
       await anonymizeMember(memberId);
       toast("Membro anonimizado.");
@@ -114,7 +114,7 @@ export function LgpdSection({
 
         {showTermForm && (
           <form onSubmit={submitTerm} className="mb-4 grid grid-cols-1 gap-2 rounded border border-zinc-200 p-3 sm:grid-cols-2 dark:border-zinc-700">
-            <Field label="Título *" className="sm:col-span-2">
+            <Field label="Titulo *" className="sm:col-span-2">
               <Input required className="h-8 text-sm" value={termForm.title} onChange={(e) => setTermForm({ ...termForm, title: e.target.value })} />
             </Field>
             <Field label="Texto do termo *" className="sm:col-span-2">

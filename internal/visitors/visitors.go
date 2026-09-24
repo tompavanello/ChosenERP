@@ -83,7 +83,7 @@ func (r *Repo) Get(ctx context.Context, tx pgx.Tx, id string) (*Visitor, error) 
 	return &v, err
 }
 
-// UpdateStage avança a trilha de acolhimento.
+// UpdateStage avanca a trilha de acolhimento.
 func (r *Repo) UpdateStage(ctx context.Context, tx pgx.Tx, id, stage string) (*Visitor, error) {
 	var v Visitor
 	err := tx.QueryRow(ctx, `
@@ -98,7 +98,7 @@ func (r *Repo) UpdateStage(ctx context.Context, tx pgx.Tx, id, stage string) (*V
 }
 
 // Convert transforma um visitante em membro. Cria o membro (via members.Repo,
-// para não duplicar a projeção/inserção) e marca o visitante como convertido.
+// para nao duplicar a projecao/insercao) e marca o visitante como convertido.
 func (r *Repo) Convert(ctx context.Context, tx pgx.Tx, visitorID string, tenantID, branchID string, in members.CreateInput, actorID string) (*members.Member, error) {
 	m, err := (&members.Repo{}).Create(ctx, tx, tenantID, branchID, in, actorID)
 	if err != nil {
@@ -114,7 +114,7 @@ func (r *Repo) Convert(ctx context.Context, tx pgx.Tx, visitorID string, tenantI
 	return m, nil
 }
 
-// RevertConversion reverte a conversão de um visitante em membro (remove o membro criado).
+// RevertConversion reverte a conversao de um visitante em membro (remove o membro criado).
 func (r *Repo) RevertConversion(ctx context.Context, tx pgx.Tx, visitorID string) error {
 	var memberID string
 	err := tx.QueryRow(ctx, `

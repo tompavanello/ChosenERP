@@ -105,8 +105,8 @@ export default function MembersPage() {
     try {
       if (showForm?.mode === "edit") {
         await updateMember(showForm.member.id, data);
-        // Os cargos são um recurso à parte (tabela de mandatos): sincroniza
-        // depois do PATCH, quando já existe id e o membro está atualizado.
+        // Os cargos sao um recurso a parte (tabela de mandatos): sincroniza
+        // depois do PATCH, quando ja existe id e o membro esta atualizado.
         await syncMemberCargos(showForm.member.id, ctx.cargoIds);
         toast("Membro atualizado.");
       } else {
@@ -154,7 +154,7 @@ export default function MembersPage() {
                 <p className="truncate font-medium group-hover:text-sky-700 dark:group-hover:text-sky-400">
                   {m.full_name}
                 </p>
-                <p className="truncate text-xs text-zinc-400">{secundaria.join(" · ")}</p>
+                <p className="truncate text-xs text-zinc-400">{secundaria.join(" - ")}</p>
               </div>
             </Link>
           );
@@ -166,7 +166,7 @@ export default function MembersPage() {
         width: "w-52",
         render: (m) => {
           if (!m.cargos || m.cargos.length === 0) {
-            return <span className="text-xs text-zinc-300 dark:text-zinc-600">—</span>;
+            return <span className="text-xs text-zinc-300 dark:text-zinc-600">-</span>;
           }
           return (
             <div className="flex flex-wrap gap-1">
@@ -187,7 +187,7 @@ export default function MembersPage() {
           const zap = digits(m.whatsapp);
           const fone = digits(m.phone);
           const principal = m.whatsapp ?? m.phone ?? m.email;
-          if (!principal) return <span className="text-xs text-zinc-300 dark:text-zinc-600">—</span>;
+          if (!principal) return <span className="text-xs text-zinc-300 dark:text-zinc-600">-</span>;
           return (
             <div className="flex items-center gap-2">
               {zap && (
@@ -246,11 +246,11 @@ export default function MembersPage() {
         label: "Desde",
         sortable: true,
         width: "w-28",
-        // Ordena pela data ISO, não pela data já formatada (dd/mm/yyyy ordenaria
+        // Ordena pela data ISO, nao pela data ja formatada (dd/mm/yyyy ordenaria
         // por dia). Campo vazio vai para o fim em ordem crescente.
         sortValue: (m) => m.joined_at ?? "9999-12-31",
         render: (m) => (
-          <span className="tnum text-xs text-zinc-500">{m.joined_at ? datePt(m.joined_at) : "—"}</span>
+          <span className="tnum text-xs text-zinc-500">{m.joined_at ? datePt(m.joined_at) : "-"}</span>
         ),
       },
       {
@@ -268,7 +268,7 @@ export default function MembersPage() {
                   onClick: () => window.location.assign(`/dashboard/members/${m.id}`),
                 },
                 {
-                  label: "Família e vínculos",
+                  label: "Familia e vinculos",
                   icon: <GitBranch className="h-3.5 w-3.5" />,
                   onClick: () => window.location.assign(`/dashboard/members/${m.id}?tab=familia`),
                 },
@@ -287,7 +287,7 @@ export default function MembersPage() {
     [branchName, canWrite],
   );
 
-  /** Card do mobile: as mesmas informações essenciais, empilhadas. */
+  /** Card do mobile: as mesmas informacoes essenciais, empilhadas. */
   const renderMobileCard = useCallback(
     (m: Member) => {
       const st = MEMBERSHIP_STATUS[m.membership_status] ?? { label: m.membership_status, tone: "zinc" };
@@ -307,7 +307,7 @@ export default function MembersPage() {
               <p className="truncate text-xs text-zinc-400">
                 {[m.nickname ? `"${m.nickname}"` : null, anos !== null ? `${anos} anos` : null, branchName(m.branch_id)]
                   .filter(Boolean)
-                  .join(" · ")}
+                  .join(" - ")}
               </p>
               {m.cargos && m.cargos.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1">
@@ -355,7 +355,7 @@ export default function MembersPage() {
     <div className="page">
       <PageHeader
         title="Membros"
-        description="Cadastro, cargos, família e carteirinha digital em um só lugar"
+        description="Cadastro, cargos, familia e carteirinha digital em um so lugar"
         actions={
           canWrite && (
             <Button onClick={() => setShowForm({ mode: "create" })}>
@@ -366,10 +366,10 @@ export default function MembersPage() {
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total" value={members ? String(stats.total) : "…"} icon={Users} />
-        <StatCard label="Professos" value={members ? String(stats.active) : "…"} tone="green" />
-        <StatCard label="Não professos" value={members ? String(stats.nonprofessed) : "…"} tone="sky" />
-        <StatCard label="Inativos" value={members ? String(stats.inactive) : "…"} tone="zinc" />
+        <StatCard label="Total" value={members ? String(stats.total) : "..."} icon={Users} />
+        <StatCard label="Professos" value={members ? String(stats.active) : "..."} tone="green" />
+        <StatCard label="Nao professos" value={members ? String(stats.nonprofessed) : "..."} tone="sky" />
+        <StatCard label="Inativos" value={members ? String(stats.inactive) : "..."} tone="zinc" />
       </div>
 
       <Card className="mb-3 p-3">
@@ -390,27 +390,27 @@ export default function MembersPage() {
             ))}
           </Select>
           <Select className="h-8 w-28 text-sm" value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))}>
-            <option value="10">10 / pág</option>
-            <option value="15">15 / pág</option>
-            <option value="25">25 / pág</option>
-            <option value="50">50 / pág</option>
+            <option value="10">10 / pag</option>
+            <option value="15">15 / pag</option>
+            <option value="25">25 / pag</option>
+            <option value="50">50 / pag</option>
           </Select>
         </div>
       </Card>
 
-      {/* Um único formulário para incluir e editar. */}
+      {/* Um unico formulario para incluir e editar. */}
       <Modal
         open={showForm !== null}
         onClose={() => setShowForm(null)}
         size="lg"
-        title={showForm?.mode === "edit" ? `Editar — ${showForm.member.full_name}` : "Novo Membro"}
+        title={showForm?.mode === "edit" ? `Editar - ${showForm.member.full_name}` : "Novo Membro"}
       >
         {showForm && (
           <MemberForm
             memberId={showForm.mode === "edit" ? showForm.member.id : undefined}
             initial={showForm.mode === "edit" ? showForm.member : null}
             saving={saving}
-            submitLabel={showForm.mode === "edit" ? "Salvar alterações" : "Cadastrar"}
+            submitLabel={showForm.mode === "edit" ? "Salvar alteracoes" : "Cadastrar"}
             onSubmit={save}
             onCancel={() => setShowForm(null)}
           />

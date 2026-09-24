@@ -33,9 +33,9 @@ const AUDIENCE_OPTIONS = [
   { value: "everyone", label: "Todos (membros + visitantes)" },
   { value: "members", label: "Membros" },
   { value: "visitors", label: "Visitantes" },
-  { value: "leaders", label: "Líderes/Ministros" },
-  { value: "groups", label: "Grupos específicos" },
-  { value: "ministries", label: "Ministérios específicos" },
+  { value: "leaders", label: "Lideres/Ministros" },
+  { value: "groups", label: "Grupos especificos" },
+  { value: "ministries", label: "Ministerios especificos" },
 ] as const;
 
 const EMPTY_FILTER: AudienceFilter = {
@@ -106,14 +106,14 @@ function formFromAnnouncement(a: Announcement): AnnForm {
 function scheduleLabel(a: Announcement): string {
   switch (a.schedule_type) {
     case "once":
-      return a.schedule_at ? `Uma vez · ${new Date(a.schedule_at).toLocaleString("pt-BR")}` : "Uma vez";
+      return a.schedule_at ? `Uma vez - ${new Date(a.schedule_at).toLocaleString("pt-BR")}` : "Uma vez";
     case "daily":
-      return a.schedule_time ? `Diário · ${a.schedule_time}` : "Diário";
+      return a.schedule_time ? `Diario - ${a.schedule_time}` : "Diario";
     case "event": {
       const off = a.schedule_offset_minutes ?? 0;
-      if (off < 0) return `Evento · ${Math.abs(off)}min antes`;
-      if (off > 0) return `Evento · ${off}min depois`;
-      return "Evento · no horário";
+      if (off < 0) return `Evento - ${Math.abs(off)}min antes`;
+      if (off > 0) return `Evento - ${off}min depois`;
+      return "Evento - no horario";
     }
     default:
       return "Manual";
@@ -123,7 +123,7 @@ function scheduleLabel(a: Announcement): string {
 function runTypeLabel(t: string): string {
   switch (t) {
     case "once": return "Uma vez";
-    case "daily": return "Diário";
+    case "daily": return "Diario";
     case "event": return "Evento";
     default: return t;
   }
@@ -151,7 +151,7 @@ export default function AnnouncementsPage() {
   const [ministries, setMinistries] = useState<Ministry[]>([]);
   const [groups, setGroups] = useState<SmallGroup[]>([]);
 
-  // Automações
+  // Automacoes
   const [automationOpen, setAutomationOpen] = useState(false);
   const [automation, setAutomation] = useState<AutomationForm | null>(null);
   const [savingAutomation, setSavingAutomation] = useState(false);
@@ -162,7 +162,7 @@ export default function AnnouncementsPage() {
   const [deliveries, setDeliveries] = useState<AnnouncementDelivery[] | null>(null);
   const [stats, setStats] = useState<DeliveryStats | null>(null);
 
-  // Execuções agendadas
+  // Execucoes agendadas
   const [runsOpen, setRunsOpen] = useState(false);
   const [runs, setRuns] = useState<AnnouncementRun[] | null>(null);
 
@@ -201,7 +201,7 @@ export default function AnnouncementsPage() {
   async function saveAnn(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title.trim()) {
-      toast("Informe o título.", "error");
+      toast("Informe o titulo.", "error");
       return;
     }
     if (form.schedule_type === "once" && !form.schedule_at) {
@@ -209,7 +209,7 @@ export default function AnnouncementsPage() {
       return;
     }
     if (form.schedule_type === "daily" && !form.schedule_time) {
-      toast("Informe o horário do agendamento diário.", "error");
+      toast("Informe o horario do agendamento diario.", "error");
       return;
     }
     if (form.schedule_type === "event" && !form.schedule_event_id) {
@@ -251,7 +251,7 @@ export default function AnnouncementsPage() {
     setSending(true);
     try {
       const res = await sendAnnouncement(activeAnn!.id, sendForm);
-      toast(`Comunicado enviado para ${res.recipient_count} destinatário(s).`);
+      toast(`Comunicado enviado para ${res.recipient_count} destinatario(s).`);
       setSendOpen(false);
       loadAll();
     } catch (err) {
@@ -267,7 +267,7 @@ export default function AnnouncementsPage() {
       const res = await previewAudience(sendForm);
       setPreviewCount(res.count);
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro ao pré-visualizar", "error");
+      toast(err instanceof Error ? err.message : "Erro ao pre-visualizar", "error");
     } finally {
       setPreviewing(false);
     }
@@ -280,7 +280,7 @@ export default function AnnouncementsPage() {
       const s = await getNotificationSettings();
       setAutomation(toAutomationForm(s));
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro ao carregar automações", "error");
+      toast(err instanceof Error ? err.message : "Erro ao carregar automacoes", "error");
     }
   }
 
@@ -290,7 +290,7 @@ export default function AnnouncementsPage() {
     try {
       const s = await updateNotificationSettings(automation);
       setAutomation(toAutomationForm(s));
-      toast("Automações salvas.");
+      toast("Automacoes salvas.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao salvar", "error");
     } finally {
@@ -319,10 +319,10 @@ export default function AnnouncementsPage() {
   }
 
   async function removeAnn(a: Announcement) {
-    if (!confirm(`Excluir o comunicado "${a.title}"? As entregas e o histórico de execuções serão removidos.`)) return;
+    if (!confirm(`Excluir o comunicado "${a.title}"? As entregas e o historico de execucoes serao removidos.`)) return;
     try {
       await deleteAnnouncement(a.id);
-      toast("Comunicado excluído.");
+      toast("Comunicado excluido.");
       loadAll();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao excluir", "error");
@@ -336,7 +336,7 @@ export default function AnnouncementsPage() {
       const res = await listNotificationRuns(100);
       setRuns(res.runs);
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro ao carregar execuções", "error");
+      toast(err instanceof Error ? err.message : "Erro ao carregar execucoes", "error");
       setRuns([]);
     }
   }
@@ -354,11 +354,11 @@ export default function AnnouncementsPage() {
         actions={
           <>
             <Button variant="outline" size="sm" onClick={openRuns}>
-              <History className="h-4 w-4" /> Execuções
+              <History className="h-4 w-4" /> Execucoes
             </Button>
             {canAutomate && (
               <Button variant="outline" size="sm" onClick={openAutomation}>
-                <Zap className="h-4 w-4" /> Automações
+                <Zap className="h-4 w-4" /> Automacoes
               </Button>
             )}
             <Button onClick={openCreate}><Plus className="h-4 w-4" /> Novo Comunicado</Button>
@@ -368,7 +368,7 @@ export default function AnnouncementsPage() {
 
       <div className="relative max-w-sm">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-        <Input className="pl-9" placeholder="Buscar por título..." value={query} onChange={(e) => setQuery(e.target.value)} />
+        <Input className="pl-9" placeholder="Buscar por titulo..." value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
 
       {items === null ? (
@@ -380,11 +380,11 @@ export default function AnnouncementsPage() {
           <Table>
             <THead>
               <TRow>
-                <TH>Título</TH>
-                <TH>Público</TH>
+                <TH>Titulo</TH>
+                <TH>Publico</TH>
                 <TH>Agendamento</TH>
                 <TH>Status</TH>
-                <TH className="text-right">Ações</TH>
+                <TH className="text-right">Acoes</TH>
               </TRow>
             </THead>
             <TBody>
@@ -436,7 +436,7 @@ export default function AnnouncementsPage() {
       {/* Form Drawer (criar/editar) */}
       <Drawer open={formOpen} onClose={() => setFormOpen(false)} title={form.id ? "Editar Comunicado" : "Novo Comunicado"} size="xl">
         <form onSubmit={saveAnn} className="space-y-4">
-          <Field label="Título *">
+          <Field label="Titulo *">
             <Input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           </Field>
           <Field label="Corpo da mensagem">
@@ -444,7 +444,7 @@ export default function AnnouncementsPage() {
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Público-alvo">
+            <Field label="Publico-alvo">
               <select
                 value={form.audience}
                 onChange={(e) => setForm({ ...form, audience: e.target.value })}
@@ -510,7 +510,7 @@ export default function AnnouncementsPage() {
                 </select>
               </Field>
 
-              <Field label="Público-alvo">
+              <Field label="Publico-alvo">
                 <select
                   value={sendForm.audience}
                   onChange={(e) => setSendForm({ ...sendForm, audience: e.target.value as SendInput["audience"], audience_filter: { ...EMPTY_FILTER } })}
@@ -537,10 +537,10 @@ export default function AnnouncementsPage() {
               <div className="flex items-center gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={doPreview} disabled={previewing}>
                   {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
-                  Pré-visualizar
+                  Pre-visualizar
                 </Button>
                 {previewCount !== null && (
-                  <Badge tone={previewCount > 0 ? "sky" : "amber"}>{previewCount} destinatário(s)</Badge>
+                  <Badge tone={previewCount > 0 ? "sky" : "amber"}>{previewCount} destinatario(s)</Badge>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -555,19 +555,19 @@ export default function AnnouncementsPage() {
       </Modal>
 
       {/* Automation Drawer */}
-      <Drawer open={automationOpen} onClose={() => setAutomationOpen(false)} title="Automações de WhatsApp">
+      <Drawer open={automationOpen} onClose={() => setAutomationOpen(false)} title="Automacoes de WhatsApp">
         {!automation ? (
           <SkeletonRows />
         ) : (
           <div className="space-y-5">
             <p className="text-sm text-zinc-500">
-              Mensagens automáticas enviadas uma única vez por destinatário (com deduplicação).
+              Mensagens automaticas enviadas uma unica vez por destinatario (com deduplicacao).
               Use <code>{"{primeiro_nome}"}</code>, <code>{"{nome}"}</code>, <code>{"{igreja}"}</code>
-              {" "}— e nas escalas também <code>{"{titulo}"}</code> e <code>{"{data}"}</code>.
+              {" "}- e nas escalas tambem <code>{"{titulo}"}</code> e <code>{"{data}"}</code>.
             </p>
 
             <AutomationBlock
-              title="Aniversários"
+              title="Aniversarios"
               enabled={automation.birthdays_enabled}
               onToggle={(v) => setAutomation({ ...automation, birthdays_enabled: v })}
             >
@@ -579,7 +579,7 @@ export default function AnnouncementsPage() {
               enabled={automation.roster_reminders_enabled}
               onToggle={(v) => setAutomation({ ...automation, roster_reminders_enabled: v })}
             >
-              <Field label="Antecedência (horas)">
+              <Field label="Antecedencia (horas)">
                 <Input type="number" min={1} value={automation.roster_reminder_hours} onChange={(e) => setAutomation({ ...automation, roster_reminder_hours: Number(e.target.value) })} />
               </Field>
               <Textarea rows={2} value={automation.roster_template} onChange={(e) => setAutomation({ ...automation, roster_template: e.target.value })} />
@@ -590,7 +590,7 @@ export default function AnnouncementsPage() {
               enabled={automation.visitor_welcome_enabled}
               onToggle={(v) => setAutomation({ ...automation, visitor_welcome_enabled: v })}
             >
-              <Field label="Atraso após o cadastro (horas)">
+              <Field label="Atraso apos o cadastro (horas)">
                 <Input type="number" min={1} value={automation.visitor_welcome_delay_hours} onChange={(e) => setAutomation({ ...automation, visitor_welcome_delay_hours: Number(e.target.value) })} />
               </Field>
               <Textarea rows={2} value={automation.visitor_welcome_template} onChange={(e) => setAutomation({ ...automation, visitor_welcome_template: e.target.value })} />
@@ -610,20 +610,20 @@ export default function AnnouncementsPage() {
         )}
       </Drawer>
 
-      {/* Execuções Drawer */}
-      <Drawer open={runsOpen} onClose={() => setRunsOpen(false)} title="Execuções de agendamento" size="xl">
+      {/* Execucoes Drawer */}
+      <Drawer open={runsOpen} onClose={() => setRunsOpen(false)} title="Execucoes de agendamento" size="xl">
         {runs === null ? (
           <SkeletonRows />
         ) : runs.length === 0 ? (
-          <EmptyState icon={<History className="h-10 w-10" />} title="Nenhuma execução" description="Os disparos agendados aparecem aqui." />
+          <EmptyState icon={<History className="h-10 w-10" />} title="Nenhuma execucao" description="Os disparos agendados aparecem aqui." />
         ) : (
           <Table>
             <THead>
               <TRow>
                 <TH>Comunicado</TH>
                 <TH>Tipo</TH>
-                <TH>Período</TH>
-                <TH>Destinatários</TH>
+                <TH>Periodo</TH>
+                <TH>Destinatarios</TH>
                 <TH>Disparado em</TH>
               </TRow>
             </THead>
@@ -632,7 +632,7 @@ export default function AnnouncementsPage() {
                 <TRow key={r.id}>
                   <TD className="font-medium">{r.announcement_title}</TD>
                   <TD className="text-zinc-500">{runTypeLabel(r.schedule_type)}</TD>
-                  <TD className="text-xs text-zinc-500">{r.period_key ?? "—"}</TD>
+                  <TD className="text-xs text-zinc-500">{r.period_key ?? "-"}</TD>
                   <TD>{r.recipient_count}</TD>
                   <TD className="text-zinc-500">{new Date(r.fired_at).toLocaleString("pt-BR")}</TD>
                 </TRow>
@@ -667,9 +667,9 @@ export default function AnnouncementsPage() {
             <TBody>
               {deliveries?.map((d) => (
                 <TRow key={d.id}>
-                  <TD className="font-mono text-xs">{d.recipient_name ? `${d.recipient_name} · ` : ""}{d.recipient}</TD>
+                  <TD className="font-mono text-xs">{d.recipient_name ? `${d.recipient_name} - ` : ""}{d.recipient}</TD>
                   <TD className="text-zinc-500">
-                    {d.source === "birthday" ? "Aniversário"
+                    {d.source === "birthday" ? "Aniversario"
                       : d.source === "roster" ? "Escala"
                       : d.source === "visitor_welcome" ? "Visitante"
                       : d.source === "schedule" ? "Agendado"
@@ -686,7 +686,7 @@ export default function AnnouncementsPage() {
                   </TD>
                   <TD className="text-zinc-500">{d.provider}</TD>
                   <TD>{d.attempts}</TD>
-                  <TD className="text-xs text-red-500">{d.error ?? "—"}</TD>
+                  <TD className="text-xs text-red-500">{d.error ?? "-"}</TD>
                 </TRow>
               ))}
             </TBody>
@@ -734,11 +734,11 @@ function SegmentationFields({ filter, branches, groups, ministries, showMembers,
   return (
     <div className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
       <div className="flex items-center gap-2 text-sm font-medium">
-        <Users className="h-4 w-4" /> Segmentação
+        <Users className="h-4 w-4" /> Segmentacao
       </div>
 
       {showMembers && (
-        <Field label="Grupos (células)">
+        <Field label="Grupos (celulas)">
           <div className="max-h-32 space-y-1 overflow-y-auto rounded-lg border p-2">
             {groups.length === 0 ? <p className="text-xs text-zinc-500">Nenhum grupo cadastrado.</p> : groups.map((g) => (
               <label key={g.id} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -751,9 +751,9 @@ function SegmentationFields({ filter, branches, groups, ministries, showMembers,
       )}
 
       {showMinistries && (
-        <Field label="Ministérios">
+        <Field label="Ministerios">
           <div className="max-h-32 space-y-1 overflow-y-auto rounded-lg border p-2">
-            {ministries.length === 0 ? <p className="text-xs text-zinc-500">Nenhum ministério cadastrado.</p> : ministries.map((m) => (
+            {ministries.length === 0 ? <p className="text-xs text-zinc-500">Nenhum ministerio cadastrado.</p> : ministries.map((m) => (
               <label key={m.id} className="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="checkbox" checked={(filter.ministry_ids ?? []).includes(m.id)} onChange={() => toggle("ministry_ids", m.id)} className="h-4 w-4" />
                 {m.name}
@@ -797,7 +797,7 @@ function SegmentationFields({ filter, branches, groups, ministries, showMembers,
           </div>
         </Field>
 
-        <Field label="Situação">
+        <Field label="Situacao">
           <div className="flex flex-wrap gap-3 pt-1.5">
             {Object.entries(MEMBERSHIP_STATUS).map(([value, meta]) => (
               <label key={value} className="flex items-center gap-1.5 text-sm cursor-pointer">
@@ -808,17 +808,17 @@ function SegmentationFields({ filter, branches, groups, ministries, showMembers,
           </div>
         </Field>
 
-        <Field label="Faixa etária">
+        <Field label="Faixa etaria">
           <div className="flex items-center gap-2">
             <Input type="number" min={0} placeholder="De" value={filter.age_min ?? ""} onChange={(e) => setAge("age_min", e.target.value)} />
-            <span className="text-zinc-400">até</span>
-            <Input type="number" min={0} placeholder="Até" value={filter.age_max ?? ""} onChange={(e) => setAge("age_max", e.target.value)} />
+            <span className="text-zinc-400">ate</span>
+            <Input type="number" min={0} placeholder="Ate" value={filter.age_max ?? ""} onChange={(e) => setAge("age_max", e.target.value)} />
           </div>
         </Field>
       </div>
 
       <p className="text-xs text-zinc-500">
-        Sexo, estado civil, faixa etária e situação consideram apenas membros — visitantes não têm esses campos.
+        Sexo, estado civil, faixa etaria e situacao consideram apenas membros - visitantes nao tem esses campos.
       </p>
     </div>
   );
@@ -847,10 +847,10 @@ function ScheduleFields({ form, setForm }: { form: AnnForm; setForm: (f: AnnForm
           onChange={(e) => setForm({ ...form, schedule_type: e.target.value as ScheduleType })}
           className="input w-full"
         >
-          <option value="manual">Manual (só pelo botão Enviar)</option>
+          <option value="manual">Manual (so pelo botao Enviar)</option>
           <option value="once">Uma vez, em data/hora</option>
-          <option value="daily">Diariamente em um horário</option>
-          <option value="event">Em relação a um evento</option>
+          <option value="daily">Diariamente em um horario</option>
+          <option value="event">Em relacao a um evento</option>
         </select>
       </Field>
 
@@ -861,7 +861,7 @@ function ScheduleFields({ form, setForm }: { form: AnnForm; setForm: (f: AnnForm
       )}
 
       {form.schedule_type === "daily" && (
-        <Field label="Horário (fuso da igreja)">
+        <Field label="Horario (fuso da igreja)">
           <Input type="time" value={form.schedule_time} onChange={(e) => setForm({ ...form, schedule_time: e.target.value })} />
         </Field>
       )}
@@ -877,12 +877,12 @@ function ScheduleFields({ form, setForm }: { form: AnnForm; setForm: (f: AnnForm
               <option value="">Selecione...</option>
               {events.map((ev) => (
                 <option key={ev.id} value={ev.id}>
-                  {ev.kind_name ?? "Evento"} · {new Date(ev.starts_at).toLocaleString("pt-BR")}
+                  {ev.kind_name ?? "Evento"} - {new Date(ev.starts_at).toLocaleString("pt-BR")}
                 </option>
               ))}
             </select>
           </Field>
-          <Field label="Antecedência">
+          <Field label="Antecedencia">
             <select
               value={form.schedule_offset_minutes}
               onChange={(e) => setForm({ ...form, schedule_offset_minutes: Number(e.target.value) })}
@@ -892,7 +892,7 @@ function ScheduleFields({ form, setForm }: { form: AnnForm; setForm: (f: AnnForm
               <option value={-60}>1 hora antes</option>
               <option value={-30}>30 minutos antes</option>
               <option value={-15}>15 minutos antes</option>
-              <option value={0}>No horário do evento</option>
+              <option value={0}>No horario do evento</option>
               <option value={15}>15 minutos depois</option>
               <option value={30}>30 minutos depois</option>
               <option value={60}>1 hora depois</option>
@@ -903,7 +903,7 @@ function ScheduleFields({ form, setForm }: { form: AnnForm; setForm: (f: AnnForm
 
       {form.schedule_type !== "manual" && (
         <p className="text-xs text-zinc-500">
-          O disparo usa a segmentação e o canal configurados acima. Cada destinatário recebe uma única vez por disparo.
+          O disparo usa a segmentacao e o canal configurados acima. Cada destinatario recebe uma unica vez por disparo.
         </p>
       )}
     </div>

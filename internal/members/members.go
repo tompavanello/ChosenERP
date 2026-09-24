@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Address é o endereço do MEMBRO (requisito 1.1). Guardado como jsonb para
-// acomodar variações sem migração a cada campo novo.
+// Address e o endereco do MEMBRO (requisito 1.1). Guardado como jsonb para
+// acomodar variacoes sem migracao a cada campo novo.
 type Address struct {
 	ZipCode    string `json:"zip_code,omitempty"`
 	Street     string `json:"street,omitempty"`
@@ -35,8 +35,8 @@ type Member struct {
 	Gender           *string `json:"gender,omitempty"`
 	MaritalStatus    *string `json:"marital_status,omitempty"`
 	MembershipStatus string  `json:"membership_status"`
-	// RollClass é DERIVADO da situação (requisito 1.2): Ativo = professo; como
-	// não existe "professo inativo", a professorate acompanha membership_status.
+	// RollClass e DERIVADO da situacao (requisito 1.2): Ativo = professo; como
+	// nao existe "professo inativo", a professorate acompanha membership_status.
 	RollClass       string   `json:"roll_class"`
 	Profession      *string  `json:"profession,omitempty"`
 	Office          *string  `json:"office,omitempty"` // legado: ver member_cargos
@@ -53,18 +53,18 @@ type Member struct {
 	ExitedAt        *string  `json:"exited_at,omitempty"`
 	MarriageDate    *string  `json:"marriage_date,omitempty"`
 	PhotoURL        *string  `json:"photo_url,omitempty"`
-	// Cargos ativos do membro (funções/ministérios, requisito 1.3). Vem de
+	// Cargos ativos do membro (funcoes/ministerios, requisito 1.3). Vem de
 	// member_cargos; pode ter mais de um.
 	Cargos    []CargoRef `json:"cargos,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 
-	// Número da carteirinha já emitida (documents.document_ref). Ausente quando
-	// o membro ainda não tem carteirinha. O qr_token NÃO é exposto na listagem:
+	// Numero da carteirinha ja emitida (documents.document_ref). Ausente quando
+	// o membro ainda nao tem carteirinha. O qr_token NAO e exposto na listagem:
 	// quem precisa dele usa GET /members/{id}/card.
 	CardRef *string `json:"card_ref,omitempty"`
 }
 
-// CargoRef é o cargo ativo resumido para exibição em listas.
+// CargoRef e o cargo ativo resumido para exibicao em listas.
 type CargoRef struct {
 	ID     string  `json:"id"`
 	Name   string  `json:"name"`
@@ -72,7 +72,7 @@ type CargoRef struct {
 	EndsAt *string `json:"ends_at,omitempty"`
 }
 
-// rollClassOf deriva a classificação no Rol a partir da situação.
+// rollClassOf deriva a classificacao no Rol a partir da situacao.
 func rollClassOf(status string) string {
 	if status == "active" {
 		return "professo"
@@ -80,9 +80,9 @@ func rollClassOf(status string) string {
 	return "nao_professo"
 }
 
-// decodeCargos converte o json_agg da projeção em CargoRef.
-// A lista vem sempre presente (COALESCE com '[]'), então um JSON inválido aqui
-// é bug de SQL, não dado ausente.
+// decodeCargos converte o json_agg da projecao em CargoRef.
+// A lista vem sempre presente (COALESCE com '[]'), entao um JSON invalido aqui
+// e bug de SQL, nao dado ausente.
 func decodeCargos(raw string, m *Member) error {
 	if raw == "" {
 		return nil
@@ -91,7 +91,7 @@ func decodeCargos(raw string, m *Member) error {
 }
 
 // HasCargoVencendo informa se algum cargo ativo tem mandato vencido ou vencendo
-// nos próximos `dias`. Usado para sinalizar a situação na UI.
+// nos proximos `dias`. Usado para sinalizar a situacao na UI.
 func (m Member) HasCargoVencendo(hoje time.Time, dias int) bool {
 	limite := hoje.AddDate(0, 0, dias)
 	for _, c := range m.Cargos {
@@ -111,7 +111,7 @@ func (m Member) HasCargoVencendo(hoje time.Time, dias int) bool {
 
 type Repo struct{}
 
-// Projeção única compartilhada por List/Get/Update/Create — evita que uma
+// Projecao unica compartilhada por List/Get/Update/Create - evita que uma
 // coluna nova entre em uma query e falte em outra.
 const memberCols = `m.id::text, m.branch_id::text, m.first_name, m.last_name,
 	m.full_name, m.nickname, m.email, m.phone, m.whatsapp, m.birth_date::text,
@@ -160,7 +160,7 @@ func scanMember(row pgx.Row) (*Member, error) {
 	return &m, nil
 }
 
-// List retorna membros do escopo definido pela transação (RLS).
+// List retorna membros do escopo definido pela transacao (RLS).
 // Se q for informado, filtra por full_name ILIKE (case-insensitive).
 func (r *Repo) List(ctx context.Context, tx pgx.Tx, q string) ([]Member, error) {
 	rows, err := tx.Query(ctx, `
@@ -200,7 +200,7 @@ type UpdateInput struct {
 	Gender           *string  `json:"gender"`
 	MaritalStatus    *string  `json:"marital_status"`
 	Profession       *string  `json:"profession"`
-	Office           *string  `json:"office"` // legado: mantido para não quebrar clientes antigos (readJSON rejeita campo desconhecido)
+	Office           *string  `json:"office"` // legado: mantido para nao quebrar clientes antigos (readJSON rejeita campo desconhecido)
 	Nationality      *string  `json:"nationality"`
 	Education        *string  `json:"education"`
 	Notes            *string  `json:"notes"`
@@ -214,16 +214,16 @@ type UpdateInput struct {
 	ExitReason       *string  `json:"exit_reason"`
 	ExitedAt         *string  `json:"exited_at"`
 	MarriageDate     *string  `json:"marriage_date"`
-	// photo_url NÃO é aceito aqui de propósito: só o endpoint de upload pode
-	// gravar a foto, senão o cliente poderia apontar para javascript:, para um
+	// photo_url NAO e aceito aqui de proposito: so o endpoint de upload pode
+	// gravar a foto, senao o cliente poderia apontar para javascript:, para um
 	// host de terceiros ou para arquivo de outro tenant.
 }
 
 // Update edita campos do perfil do membro.
-// Semântica de PATCH: campo nil (ausente no JSON) mantém o valor atual.
+// Semantica de PATCH: campo nil (ausente no JSON) mantem o valor atual.
 //
-// Quando a situação muda, grava automaticamente uma entrada no histórico
-// eclesiástico (requisito 1.8) — o histórico é consequência, não digitação.
+// Quando a situacao muda, grava automaticamente uma entrada no historico
+// eclesiastico (requisito 1.8) - o historico e consequencia, nao digitacao.
 func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput, actorID string) (*Member, error) {
 	var oldStatus string
 	if err := tx.QueryRow(ctx,
@@ -231,15 +231,15 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput,
 		return nil, err
 	}
 
-	// O UPDATE devolve só o id e a leitura completa vem do Get: `RETURNING` com
-	// subquery (cargos/card_ref) enxerga o snapshot ANTERIOR à escrita, então
+	// O UPDATE devolve so o id e a leitura completa vem do Get: `RETURNING` com
+	// subquery (cargos/card_ref) enxerga o snapshot ANTERIOR a escrita, entao
 	// devolveria cargos desatualizados.
 	var updatedID string
 	err := tx.QueryRow(ctx, `
 		UPDATE members m SET
 			first_name = COALESCE($2, m.first_name),
 			last_name = COALESCE($3, m.last_name),
-			-- full_name é coluna persistida: precisa acompanhar nome/sobrenome.
+			-- full_name e coluna persistida: precisa acompanhar nome/sobrenome.
 			full_name = btrim(COALESCE($2, m.first_name) || ' ' || COALESCE($3, m.last_name)),
 			nickname = COALESCE($4, m.nickname),
 			email = COALESCE($5, m.email),
@@ -280,7 +280,7 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput,
 		newStatus = *in.MembershipStatus
 	}
 	if newStatus != oldStatus {
-		notes := "Situação alterada de '" + oldStatus + "' para '" + newStatus + "'"
+		notes := "Situacao alterada de '" + oldStatus + "' para '" + newStatus + "'"
 		if in.ExitReason != nil && *in.ExitReason != "" {
 			notes += " (motivo: " + *in.ExitReason + ")"
 		}
@@ -327,10 +327,10 @@ type CreateInput struct {
 	JoinedAt         *string  `json:"joined_at"`
 	Address          *Address `json:"address"`
 	MarriageDate     *string  `json:"marriage_date"`
-	// photo_url fica de fora: só o upload grava a foto (ver UpdateInput).
+	// photo_url fica de fora: so o upload grava a foto (ver UpdateInput).
 }
 
-// Create insere um membro. O branch_id vem da sessão RLS (não do client).
+// Create insere um membro. O branch_id vem da sessao RLS (nao do client).
 func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string, in CreateInput, actorID string) (*Member, error) {
 	status := in.MembershipStatus
 	if status == "" {
@@ -358,7 +358,7 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 	if err != nil {
 		return nil, err
 	}
-	// Primeira entrada do histórico (linha do tempo começa no cadastro).
+	// Primeira entrada do historico (linha do tempo comeca no cadastro).
 	if err := insertHistory(ctx, tx, newID, "cadastro", "Membro cadastrado", actorID); err != nil {
 		return nil, err
 	}

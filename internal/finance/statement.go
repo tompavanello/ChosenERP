@@ -14,17 +14,17 @@ type WeekRange struct {
 	To    string `json:"to"`
 }
 
-// StatementLine é uma conta do plano com os totais por semana.
+// StatementLine e uma conta do plano com os totais por semana.
 type StatementLine struct {
 	CategoryID string    `json:"category_id"`
 	Code       string    `json:"code"`
 	Name       string    `json:"name"`
-	Weeks      []float64 `json:"weeks"` // 5 posições (semanas)
+	Weeks      []float64 `json:"weeks"` // 5 posicoes (semanas)
 	Total      float64   `json:"total"`
 }
 
-// MonthlyStatement é o "Demonstrativo Mensal (Regime de Caixa)" do cliente:
-// entradas e saídas por conta e por semana, com saldo inicial/final.
+// MonthlyStatement e o "Demonstrativo Mensal (Regime de Caixa)" do cliente:
+// entradas e saidas por conta e por semana, com saldo inicial/final.
 type MonthlyStatement struct {
 	Month          string          `json:"month"`
 	From           string          `json:"from"`
@@ -38,8 +38,8 @@ type MonthlyStatement struct {
 	ClosingBalance float64         `json:"closing_balance"`
 }
 
-// parseMonth aceita "YYYY-MM" (vazio = mês corrente) e devolve o primeiro dia,
-// o primeiro dia do mês seguinte e o rótulo.
+// parseMonth aceita "YYYY-MM" (vazio = mes corrente) e devolve o primeiro dia,
+// o primeiro dia do mes seguinte e o rotulo.
 func parseMonth(month string) (first, next time.Time, label string, err error) {
 	now := time.Now().UTC()
 	y, m := now.Year(), int(now.Month())
@@ -55,7 +55,7 @@ func parseMonth(month string) (first, next time.Time, label string, err error) {
 	return first, next, first.Format("2006-01"), nil
 }
 
-// weekBounds devolve as 5 faixas de dias do mês (1–7, 8–14, 15–21, 22–28, 29–fim).
+// weekBounds devolve as 5 faixas de dias do mes (1-7, 8-14, 15-21, 22-28, 29-fim).
 func weekBounds(first, next time.Time) []WeekRange {
 	last := next.AddDate(0, 0, -1)
 	d := func(n int) string {
@@ -73,7 +73,7 @@ func weekBounds(first, next time.Time) []WeekRange {
 	return out
 }
 
-// BuildMonthlyStatement monta o Demonstrativo Mensal do período.
+// BuildMonthlyStatement monta o Demonstrativo Mensal do periodo.
 func (r *Repo) BuildMonthlyStatement(ctx context.Context, tx pgx.Tx, month string) (MonthlyStatement, error) {
 	first, next, label, err := parseMonth(month)
 	if err != nil {
@@ -86,7 +86,7 @@ func (r *Repo) BuildMonthlyStatement(ctx context.Context, tx pgx.Tx, month strin
 		Weeks: weekBounds(first, next),
 	}
 
-	// Saldo inicial: líquido acumulado ANTES do mês (regime de caixa).
+	// Saldo inicial: liquido acumulado ANTES do mes (regime de caixa).
 	if err := tx.QueryRow(ctx, `
 		SELECT COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END), 0)::float8
 		FROM financial_transactions

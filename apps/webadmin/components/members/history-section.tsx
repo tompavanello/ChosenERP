@@ -12,8 +12,8 @@ import { listMemberHistory, addMemberHistory, type MemberHistory } from "@/lib/a
 import { MEMBER_HISTORY_KINDS } from "@/lib/constants";
 import { dateTimePt } from "@/lib/format";
 
-// Tipos que a secretaria lança à mão (os automáticos vêm das mudanças de
-// situação — ver internal/members/members.go).
+// Tipos que a secretaria lanca a mao (os automaticos vem das mudancas de
+// situacao - ver internal/members/members.go).
 const MANUAL_KINDS = [
   "profissao_fe",
   "batismo_infantil",
@@ -36,7 +36,7 @@ export function HistorySection({ memberId, canWrite }: { memberId: string; canWr
   }, [memberId]);
 
   useEffect(() => {
-    load().catch(() => toast("Erro ao carregar o histórico", "error"));
+    load().catch(() => toast("Erro ao carregar o historico", "error"));
   }, [load, toast]);
 
   async function submit(e: React.FormEvent) {
@@ -50,7 +50,7 @@ export function HistorySection({ memberId, canWrite }: { memberId: string; canWr
       });
       setForm({ kind: "profissao_fe", notes: "", occurred_at: "" });
       await load();
-      toast("Evento registrado no histórico.");
+      toast("Evento registrado no historico.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao registrar evento", "error");
     } finally {
@@ -86,12 +86,12 @@ export function HistorySection({ memberId, canWrite }: { memberId: string; canWr
                 onChange={(e) => setForm({ ...form, occurred_at: e.target.value })}
               />
             </Field>
-            <Field label="Observação" className="sm:col-span-3">
+            <Field label="Observacao" className="sm:col-span-3">
               <Textarea
                 rows={2}
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="Ex: batizado pelo Pastor João na Sede"
+                placeholder="Ex: batizado pelo Pastor Joao na Sede"
               />
             </Field>
             <div className="sm:col-span-3">
@@ -106,7 +106,7 @@ export function HistorySection({ memberId, canWrite }: { memberId: string; canWr
       <Card className="p-3">
         <div className="mb-3 flex items-center gap-2">
           <History className="h-4 w-4 text-sky-600" />
-          <h3 className="text-sm font-semibold">Histórico eclesiástico</h3>
+          <h3 className="text-sm font-semibold">Historico eclesiastico</h3>
         </div>
         {items === null ? (
           <SkeletonRows rows={3} />
@@ -114,7 +114,7 @@ export function HistorySection({ memberId, canWrite }: { memberId: string; canWr
           <EmptyState
             icon={<History className="h-8 w-8" />}
             title="Sem eventos"
-            description="Entradas, batismos, transferências e baixas aparecem aqui."
+            description="Entradas, batismos, transferencias e baixas aparecem aqui."
           />
         ) : (
           <ol className="relative space-y-3 border-l border-zinc-200 pl-4 dark:border-zinc-800">

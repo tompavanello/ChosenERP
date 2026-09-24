@@ -12,8 +12,8 @@ import (
 	"chosenerp/internal/store"
 )
 
-// kidsDo executa a operação no escopo RLS da sessão e serializa o resultado,
-// mapeando erros de validação/not-found para os status corretos.
+// kidsDo executa a operacao no escopo RLS da sessao e serializa o resultado,
+// mapeando erros de validacao/not-found para os status corretos.
 func (a *App) kidsDo(w http.ResponseWriter, r *http.Request, status int,
 	fn func(ctx context.Context, tx pgx.Tx, claims *auth.Claims) (any, error)) {
 	claims, ok := claimsFrom(r.Context())
@@ -41,7 +41,7 @@ func (a *App) kidsDo(w http.ResponseWriter, r *http.Request, status int,
 	writeJSON(w, status, out)
 }
 
-// ---- Trilhas / conteúdo ----
+// ---- Trilhas / conteudo ----
 
 func (a *App) handleListKidsTracks(w http.ResponseWriter, r *http.Request) {
 	a.kidsDo(w, r, http.StatusOK, func(ctx context.Context, tx pgx.Tx, _ *auth.Claims) (any, error) {
@@ -158,7 +158,7 @@ func (a *App) handleDeleteKidsClass(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ---- Matrículas / responsáveis ----
+// ---- Matriculas / responsaveis ----
 
 func (a *App) handleListKidsEnrollments(w http.ResponseWriter, r *http.Request) {
 	classID := r.PathValue("id")
@@ -321,7 +321,7 @@ func (a *App) handleKidsAbsence(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ---- Relatório de evolução ----
+// ---- Relatorio de evolucao ----
 
 func (a *App) handleKidsEvolution(w http.ResponseWriter, r *http.Request) {
 	classID := r.PathValue("id")

@@ -24,12 +24,12 @@ func TestFindMembershipIgnoresInactive(t *testing.T) {
 		{TenantID: "t2", IsActive: false},
 	}
 	if _, ok := findMembership(all, "t2"); ok {
-		t.Errorf("findMembership não deveria aceitar vínculo inativo")
+		t.Errorf("findMembership nao deveria aceitar vinculo inativo")
 	}
 	if m, ok := findMembership(all, "t1"); !ok || m.TenantID != "t1" {
 		t.Errorf("findMembership deveria achar t1")
 	}
 	if _, ok := findMembership(all, "t9"); ok {
-		t.Errorf("findMembership não deveria achar tenant inexistente")
+		t.Errorf("findMembership nao deveria achar tenant inexistente")
 	}
 }

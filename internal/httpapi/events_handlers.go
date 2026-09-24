@@ -40,7 +40,7 @@ func (a *App) handleCreateEventKind(w http.ResponseWriter, r *http.Request) {
 	}
 	var in events.KindInput
 	if err := readJSON(r, &in); err != nil || in.Name == "" || in.Slug == "" {
-		writeErr(w, http.StatusBadRequest, "name e slug são obrigatórios")
+		writeErr(w, http.StatusBadRequest, "name e slug sao obrigatorios")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -98,7 +98,7 @@ func (a *App) handleDeleteEventKind(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "tipo não encontrado")
+			writeErr(w, http.StatusNotFound, "tipo nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -138,11 +138,11 @@ func (a *App) handleCreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	var in events.CreateInput
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	if in.StartsAt == "" {
-		writeErr(w, http.StatusBadRequest, "starts_at é obrigatório")
+		writeErr(w, http.StatusBadRequest, "starts_at e obrigatorio")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -177,7 +177,7 @@ func (a *App) handleGetEvent(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "evento não encontrado")
+			writeErr(w, http.StatusNotFound, "evento nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -194,7 +194,7 @@ func (a *App) handleUpdateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	var in events.UpdateInput
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -206,7 +206,7 @@ func (a *App) handleUpdateEvent(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "evento não encontrado")
+			writeErr(w, http.StatusNotFound, "evento nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -227,7 +227,7 @@ func (a *App) handleDeleteEvent(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "evento não encontrado")
+			writeErr(w, http.StatusNotFound, "evento nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -278,7 +278,7 @@ func (a *App) handleSetInvitees(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "evento não encontrado")
+			writeErr(w, http.StatusNotFound, "evento nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -329,7 +329,7 @@ func (a *App) handleSaveEventAttendance(w http.ResponseWriter, r *http.Request) 
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "evento não encontrado")
+			writeErr(w, http.StatusNotFound, "evento nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -338,7 +338,7 @@ func (a *App) handleSaveEventAttendance(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// ---- Frequência do membro ----
+// ---- Frequencia do membro ----
 
 func (a *App) handleListFrequency(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -372,11 +372,11 @@ func (a *App) handleSetFrequency(w http.ResponseWriter, r *http.Request) {
 		Notes     string `json:"notes"`
 	}
 	if err := readJSON(r, &in); err != nil || in.Frequency == "" {
-		writeErr(w, http.StatusBadRequest, "frequency é obrigatório")
+		writeErr(w, http.StatusBadRequest, "frequency e obrigatorio")
 		return
 	}
 	if in.Frequency != "frequente" && in.Frequency != "pouco_frequente" && in.Frequency != "nao_frequente" {
-		writeErr(w, http.StatusBadRequest, "frequência inválida")
+		writeErr(w, http.StatusBadRequest, "frequencia invalida")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -391,7 +391,7 @@ func (a *App) handleSetFrequency(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "membro não encontrado")
+			writeErr(w, http.StatusNotFound, "membro nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())

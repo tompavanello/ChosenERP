@@ -83,7 +83,7 @@ export function JourneyTimeline({
           >
             <span className={cn("h-1.5 w-1.5 rounded-full", reached ? DOT_COLORS[tone] : "bg-zinc-300")} />
             {!compact && <span>{st.label}</span>}
-            {compact && i < JOURNEY_ORDER.length - 1 && <span className="text-zinc-400">›</span>}
+            {compact && i < JOURNEY_ORDER.length - 1 && <span className="text-zinc-400"></span>}
           </button>
         );
       })}

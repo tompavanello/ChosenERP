@@ -43,7 +43,7 @@ export default function UsersPage() {
       setUsers(u.users);
       setRoles(r.roles);
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Erro ao carregar usuÃ¡rios", "error");
+      toast(e instanceof Error ? e.message : "Erro ao carregar usuarios", "error");
       setUsers([]);
     }
   }, [toast]);
@@ -54,7 +54,7 @@ export default function UsersPage() {
 
   const roleName = (key: string) => roles.find((r) => r.key === key)?.name ?? key;
   const branchName = (id?: string) =>
-    !id ? "Sede" : branchData?.branches.find((b) => b.id === id)?.name ?? "â€”";
+    !id ? "Sede" : branchData?.branches.find((b) => b.id === id)?.name ?? "-";
 
   function openCreate() {
     setForm({ ...EMPTY_FORM, role: roles[0]?.key ?? "" });
@@ -79,7 +79,7 @@ export default function UsersPage() {
           branch_id: form.branch_id,
           is_active: form.is_active === "true",
         });
-        toast("UsuÃ¡rio atualizado.");
+        toast("Usuario atualizado.");
       } else {
         await createUser({
           email: form.email,
@@ -89,7 +89,7 @@ export default function UsersPage() {
           branch_id: form.branch_id,
           is_active: form.is_active === "true",
         });
-        toast("UsuÃ¡rio criado.");
+        toast("Usuario criado.");
       }
       setDrawer({ open: false });
       await load();
@@ -104,7 +104,7 @@ export default function UsersPage() {
     try {
       await updateUser(u.id, { is_active: !u.is_active });
       await load();
-      toast(u.is_active ? "UsuÃ¡rio desativado." : "UsuÃ¡rio ativado.");
+      toast(u.is_active ? "Usuario desativado." : "Usuario ativado.");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Erro", "error");
     }
@@ -126,7 +126,7 @@ export default function UsersPage() {
   if (!hasPerm("users.read")) {
     return (
       <div className="page">
-        <EmptyState icon={<UserCog className="h-10 w-10" />} title="Acesso restrito" description="Somente administradores podem gerir usuÃ¡rios." />
+        <EmptyState icon={<UserCog className="h-10 w-10" />} title="Acesso restrito" description="Somente administradores podem gerir usuarios." />
       </div>
     );
   }
@@ -134,9 +134,9 @@ export default function UsersPage() {
   return (
     <div className="page">
       <PageHeader
-        title="UsuÃ¡rios e Acessos"
-        description="Crie usuÃ¡rios, defina perfis e gerencie a seguranÃ§a"
-        actions={canManage ? <Button onClick={openCreate}><Plus className="h-4 w-4" /> Novo usuÃ¡rio</Button> : undefined}
+        title="Usuarios e Acessos"
+        description="Crie usuarios, defina perfis e gerencie a seguranca"
+        actions={canManage ? <Button onClick={openCreate}><Plus className="h-4 w-4" /> Novo usuario</Button> : undefined}
       />
 
       <MfaCard />
@@ -145,25 +145,25 @@ export default function UsersPage() {
         {users === null ? (
           <div className="p-4"><SkeletonRows rows={5} /></div>
         ) : users.length === 0 ? (
-          <EmptyState icon={<UserCog className="h-10 w-10" />} title="Nenhum usuÃ¡rio" description="Cadastre o primeiro usuÃ¡rio da equipe." />
+          <EmptyState icon={<UserCog className="h-10 w-10" />} title="Nenhum usuario" description="Cadastre o primeiro usuario da equipe." />
         ) : (
           <Table>
             <THead>
               <TRow>
-                <TH>UsuÃ¡rio</TH><TH>Perfil</TH><TH>Filial</TH><TH>Status</TH><TH>MFA</TH><TH>Ãšltimo acesso</TH><TH className="text-right">AÃ§Ãµes</TH>
+                <TH>Usuario</TH><TH>Perfil</TH><TH>Filial</TH><TH>Status</TH><TH>MFA</TH><TH>Asltimo acesso</TH><TH className="text-right">Acoes</TH>
               </TRow>
             </THead>
             <TBody>
               {users.map((u) => (
                 <TRow key={u.id}>
                   <TD>
-                    <p className="font-medium">{u.full_name}{u.id === user?.id ? " (vocÃª)" : ""}</p>
+                    <p className="font-medium">{u.full_name}{u.id === user?.id ? " (voce)" : ""}</p>
                     <p className="text-xs text-zinc-400">{u.email}</p>
                   </TD>
                   <TD><Badge tone="sky">{roleName(u.role)}</Badge></TD>
                   <TD className="text-sm">{branchName(u.branch_id)}</TD>
                   <TD><Badge tone={u.is_active ? "green" : "zinc"}>{u.is_active ? "Ativo" : "Inativo"}</Badge></TD>
-                  <TD>{u.mfa_enabled ? <Badge tone="green">Ativo</Badge> : <span className="text-xs text-zinc-400">â€”</span>}</TD>
+                  <TD>{u.mfa_enabled ? <Badge tone="green">Ativo</Badge> : <span className="text-xs text-zinc-400">-</span>}</TD>
                   <TD className="text-xs text-zinc-400">{u.last_login_at ? dateTimePt(u.last_login_at) : "nunca"}</TD>
                   <TD>
                     {canManage && (
@@ -190,7 +190,7 @@ export default function UsersPage() {
       <Drawer
         open={drawer.open}
         onClose={() => setDrawer({ open: false })}
-        title={drawer.editing ? `Editar â€” ${drawer.editing.full_name}` : "Novo usuÃ¡rio"}
+        title={drawer.editing ? `Editar - ${drawer.editing.full_name}` : "Novo usuario"}
         size="lg"
       >
         <form onSubmit={submit} className="space-y-3">
@@ -202,7 +202,7 @@ export default function UsersPage() {
               <Field label="E-mail *">
                 <Input required type="email" className="h-8 text-sm" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </Field>
-              <Field label="Senha *" hint="MÃ­nimo de 8 caracteres.">
+              <Field label="Senha *" hint="Minimo de 8 caracteres.">
                 <Input required type="password" className="h-8 text-sm" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
               </Field>
             </>
@@ -220,7 +220,7 @@ export default function UsersPage() {
               </Select>
             </Field>
           </div>
-          <Field label="SituaÃ§Ã£o">
+          <Field label="Situacao">
             <Select className="h-8 text-sm" value={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.value })}>
               <option value="true">Ativo</option>
               <option value="false">Inativo</option>
@@ -233,9 +233,9 @@ export default function UsersPage() {
         </form>
       </Drawer>
 
-      <Modal open={!!resetTarget} onClose={() => setResetTarget(null)} title={`Redefinir senha â€” ${resetTarget?.full_name ?? ""}`}>
+      <Modal open={!!resetTarget} onClose={() => setResetTarget(null)} title={`Redefinir senha - ${resetTarget?.full_name ?? ""}`}>
         <form onSubmit={doResetPassword} className="space-y-3">
-          <Field label="Nova senha" hint="MÃ­nimo de 8 caracteres.">
+          <Field label="Nova senha" hint="Minimo de 8 caracteres.">
             <Input required type="password" className="h-8 text-sm" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
           </Field>
           <div className="flex justify-end gap-2">

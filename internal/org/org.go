@@ -1,6 +1,6 @@
-// Package org cuida da configuração do tenant (dados da igreja) e das suas
-// filiais/congregações. O isolamento multi-tenant é do RLS; a autorização
-// (apenas Sede/admin) é feita no handler.
+// Package org cuida da configuracao do tenant (dados da igreja) e das suas
+// filiais/congregacoes. O isolamento multi-tenant e do RLS; a autorizacao
+// (apenas Sede/admin) e feita no handler.
 package org
 
 import (
@@ -12,35 +12,35 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Repo agrupa as consultas de configuração. É stateless.
+// Repo agrupa as consultas de configuracao. E stateless.
 type Repo struct{}
 
-// ErrBranchInUse sinaliza que a filial não pode ser excluída por ter membros.
-var ErrBranchInUse = errors.New("não é possível excluir: há membros vinculados a esta filial. Desative-a.")
+// ErrBranchInUse sinaliza que a filial nao pode ser excluida por ter membros.
+var ErrBranchInUse = errors.New("nao e possivel excluir: ha membros vinculados a esta filial. Desative-a.")
 
-// ErrBranchParentInvalido sinaliza hierarquia inválida (pai inexistente, o
-// próprio nó ou um descendente — evitando ciclos).
-var ErrBranchParentInvalido = errors.New("filial superior inválida")
+// ErrBranchParentInvalido sinaliza hierarquia invalida (pai inexistente, o
+// proprio no ou um descendente - evitando ciclos).
+var ErrBranchParentInvalido = errors.New("filial superior invalida")
 
-// Estrutura de governo das unidades: Matriz (Sede), Filial (congregação) e
-// PAE (Ponto de Atendimento de Evangelização).
+// Estrutura de governo das unidades: Matriz (Sede), Filial (congregacao) e
+// PAE (Ponto de Atendimento de Evangelizacao).
 const (
 	BranchKindMatriz = "matriz"
 	BranchKindFilial = "filial"
 	BranchKindPAE    = "pae"
 )
 
-// Erros de validação do tipo de unidade.
+// Erros de validacao do tipo de unidade.
 var (
-	ErrBranchKindInvalido = errors.New("tipo de unidade inválido (use matriz, filial ou pae)")
+	ErrBranchKindInvalido = errors.New("tipo de unidade invalido (use matriz, filial ou pae)")
 	ErrPaeSemSuperior     = errors.New("PAE precisa estar vinculado a uma Matriz ou Filial")
-	ErrMatrizComSuperior  = errors.New("Matriz não pode ter unidade superior")
+	ErrMatrizComSuperior  = errors.New("Matriz nao pode ter unidade superior")
 )
 
 // validateBranchKind aplica as regras estruturais do tipo:
-//   - matriz: não pode ter superior (é a raiz);
-//   - filial: sem restrição de vínculo;
-//   - pae: exige superior (Matriz ou Filial), validado também pelo banco.
+//   - matriz: nao pode ter superior (e a raiz);
+//   - filial: sem restricao de vinculo;
+//   - pae: exige superior (Matriz ou Filial), validado tambem pelo banco.
 func validateBranchKind(kind, parentID string) error {
 	switch kind {
 	case BranchKindMatriz:
@@ -59,8 +59,8 @@ func validateBranchKind(kind, parentID string) error {
 	return nil
 }
 
-// isDescendantOrSelf informa se candidate está na subárvore de root (inclusive
-// root). É a guarda contra ciclo ao trocar o pai de uma filial.
+// isDescendantOrSelf informa se candidate esta na subarvore de root (inclusive
+// root). E a guarda contra ciclo ao trocar o pai de uma filial.
 func isDescendantOrSelf(ctx context.Context, tx pgx.Tx, root, candidate string) (bool, error) {
 	var exists bool
 	err := tx.QueryRow(ctx, `
@@ -73,7 +73,7 @@ func isDescendantOrSelf(ctx context.Context, tx pgx.Tx, root, candidate string) 
 	return exists, err
 }
 
-// branchVisible confirma que a filial existe no escopo do usuário.
+// branchVisible confirma que a filial existe no escopo do usuario.
 func branchVisible(ctx context.Context, tx pgx.Tx, id string) (bool, error) {
 	var exists bool
 	err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM branches WHERE id = $1::uuid)`, id).Scan(&exists)
@@ -82,7 +82,7 @@ func branchVisible(ctx context.Context, tx pgx.Tx, id string) (bool, error) {
 
 // ---- Filiais ----
 
-// Branch é uma filial/congregação do tenant.
+// Branch e uma filial/congregacao do tenant.
 type Branch struct {
 	ID          string          `json:"id"`
 	ParentID    *string         `json:"parent_id,omitempty"`
@@ -97,7 +97,7 @@ type Branch struct {
 	CreatedAt   time.Time       `json:"created_at"`
 }
 
-// BranchInput é o corpo de criação/edição de uma filial.
+// BranchInput e o corpo de criacao/edicao de uma filial.
 type BranchInput struct {
 	Name     string          `json:"name"`
 	Slug     *string         `json:"slug"`
@@ -191,10 +191,10 @@ func (r *Repo) CreateBranch(ctx context.Context, tx pgx.Tx, tenantID string, in 
 	return r.GetBranch(ctx, tx, newID)
 }
 
-// UpdateBranch edita uma filial. Os campos nulos são preservados.
+// UpdateBranch edita uma filial. Os campos nulos sao preservados.
 func (r *Repo) UpdateBranch(ctx context.Context, tx pgx.Tx, id string, in BranchInput) (*Branch, error) {
 	// Tipo efetivo (novo ou atual) + superior efetivo, para validar as regras
-	// da estrutura Matriz / Filial / PAE mesmo em edição parcial.
+	// da estrutura Matriz / Filial / PAE mesmo em edicao parcial.
 	existing, err := r.GetBranch(ctx, tx, id)
 	if err != nil {
 		return nil, err
@@ -214,8 +214,8 @@ func (r *Repo) UpdateBranch(ctx context.Context, tx pgx.Tx, id string, in Branch
 		return nil, err
 	}
 
-	// Valida o novo pai (não pode ser a própria filial nem um descendente,
-	// senão a árvore vira um ciclo e a recursão de escopo estoura).
+	// Valida o novo pai (nao pode ser a propria filial nem um descendente,
+	// senao a arvore vira um ciclo e a recursao de escopo estoura).
 	if in.ParentID != nil && *in.ParentID != "" {
 		ok, err := branchVisible(ctx, tx, *in.ParentID)
 		if err != nil {
@@ -255,8 +255,8 @@ func (r *Repo) UpdateBranch(ctx context.Context, tx pgx.Tx, id string, in Branch
 	return r.GetBranch(ctx, tx, updatedID)
 }
 
-// DeleteBranch exclui uma filial. Recusa quando há membros vinculados (a FK é
-// ON DELETE CASCADE e apagaria os membros em silêncio); nesse caso, desative.
+// DeleteBranch exclui uma filial. Recusa quando ha membros vinculados (a FK e
+// ON DELETE CASCADE e apagaria os membros em silencio); nesse caso, desative.
 func (r *Repo) DeleteBranch(ctx context.Context, tx pgx.Tx, id string) error {
 	var members int
 	if err := tx.QueryRow(ctx, `SELECT count(*) FROM members WHERE branch_id = $1::uuid`, id).Scan(&members); err != nil {
@@ -277,7 +277,7 @@ func (r *Repo) DeleteBranch(ctx context.Context, tx pgx.Tx, id string) error {
 
 // ---- Tenant (dados da igreja) ----
 
-// Tenant são os dados cadastrais do tenant (igreja), incluindo o branding.
+// Tenant sao os dados cadastrais do tenant (igreja), incluindo o branding.
 type Tenant struct {
 	ID           string    `json:"id"`
 	Name         string    `json:"name"`
@@ -295,7 +295,7 @@ type Tenant struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-// TenantInput é o corpo de edição do tenant.
+// TenantInput e o corpo de edicao do tenant.
 type TenantInput struct {
 	Name         string  `json:"name"`
 	LegalName    *string `json:"legal_name"`
@@ -354,7 +354,7 @@ func str(s *string) string {
 
 // ---- Painel consolidado (Fase 2 / #28) ----
 
-// BranchSummary é uma linha do painel consolidado Sede > Filiais.
+// BranchSummary e uma linha do painel consolidado Sede > Filiais.
 type BranchSummary struct {
 	ID           string  `json:"id"`
 	Name         string  `json:"name"`
@@ -367,9 +367,9 @@ type BranchSummary struct {
 	Net          float64 `json:"net"`
 }
 
-// Consolidated devolve, por filial dentro do escopo de leitura do usuário, os
-// totais de membros, visitantes e movimentação financeira no período. Para a
-// Sede, cobre todo o tenant; para uma congregação, ela e suas sub-congregações.
+// Consolidated devolve, por filial dentro do escopo de leitura do usuario, os
+// totais de membros, visitantes e movimentacao financeira no periodo. Para a
+// Sede, cobre todo o tenant; para uma congregacao, ela e suas sub-congregacoes.
 func (r *Repo) Consolidated(ctx context.Context, tx pgx.Tx, from, to string) ([]BranchSummary, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT b.id::text, b.name, b.kind, b.parent_id::text,

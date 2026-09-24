@@ -9,10 +9,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ErrCategoryRequired indica que o lançamento veio sem conta do plano de contas.
-var ErrCategoryRequired = errors.New("a conta contábil é obrigatória")
+// ErrCategoryRequired indica que o lancamento veio sem conta do plano de contas.
+var ErrCategoryRequired = errors.New("a conta contabil e obrigatoria")
 
-// Category é um item do plano de contas (income | expense).
+// Category e um item do plano de contas (income | expense).
 type Category struct {
 	ID       string  `json:"id"`
 	BranchID *string `json:"branch_id,omitempty"`
@@ -22,7 +22,7 @@ type Category struct {
 	IsActive bool    `json:"is_active"`
 }
 
-// Transaction é um lançamento financeiro (append-only).
+// Transaction e um lancamento financeiro (append-only).
 type Transaction struct {
 	ID            string    `json:"id"`
 	BranchID      string    `json:"branch_id"`
@@ -42,10 +42,10 @@ type Transaction struct {
 	ReceiptToken  *string   `json:"receipt_token,omitempty"`
 	Hash          string    `json:"hash"`
 	OccurredAt    time.Time `json:"occurred_at"`
-	// Estorno (o lançamento permanece no histórico, mas sai dos relatórios).
+	// Estorno (o lancamento permanece no historico, mas sai dos relatorios).
 	VoidedAt   *time.Time `json:"voided_at,omitempty"`
 	VoidReason *string    `json:"void_reason,omitempty"`
-	// Anexos (comprovantes) — contagem e URL do primeiro para acesso rápido.
+	// Anexos (comprovantes) - contagem e URL do primeiro para acesso rapido.
 	AttachmentCount int     `json:"attachment_count"`
 	AttachmentURL   *string `json:"attachment_url,omitempty"`
 	// Fornecedor associado (normalmente em despesas).
@@ -110,7 +110,7 @@ func (r *Repo) CreateCategory(ctx context.Context, tx pgx.Tx, tenantID, branchID
 	return &c, err
 }
 
-// UpdateCategoryInput é o payload de edição do plano de contas (PATCH: nil mantém).
+// UpdateCategoryInput e o payload de edicao do plano de contas (PATCH: nil mantem).
 type UpdateCategoryInput struct {
 	Type     *string `json:"type"`
 	Code     *string `json:"code"`
@@ -118,10 +118,10 @@ type UpdateCategoryInput struct {
 	IsActive *bool   `json:"is_active"`
 }
 
-// ErrCategoryInUse indica que a conta contábil tem lançamentos/subitens.
-var ErrCategoryInUse = errors.New("conta contábil em uso: desative em vez de excluir")
+// ErrCategoryInUse indica que a conta contabil tem lancamentos/subitens.
+var ErrCategoryInUse = errors.New("conta contabil em uso: desative em vez de excluir")
 
-// UpdateCategory edita código/nome/tipo e ativa/desativa uma conta contábil.
+// UpdateCategory edita codigo/nome/tipo e ativa/desativa uma conta contabil.
 func (r *Repo) UpdateCategory(ctx context.Context, tx pgx.Tx, id string, in UpdateCategoryInput) (*Category, error) {
 	var c Category
 	err := tx.QueryRow(ctx, `
@@ -137,7 +137,7 @@ func (r *Repo) UpdateCategory(ctx context.Context, tx pgx.Tx, id string, in Upda
 	return &c, err
 }
 
-// DeleteCategory exclui uma conta contábil sem uso (senão devolve ErrCategoryInUse).
+// DeleteCategory exclui uma conta contabil sem uso (senao devolve ErrCategoryInUse).
 func (r *Repo) DeleteCategory(ctx context.Context, tx pgx.Tx, id string) error {
 	var used int
 	if err := tx.QueryRow(ctx, `
@@ -170,7 +170,7 @@ type CreateTxnInput struct {
 	BenefactorID  *string `json:"benefactor_id"`
 	SupplierID    *string `json:"supplier_id"`
 	OccurredAt    *string `json:"occurred_at"`
-	// Rateio opcional do lançamento entre eventos (custo real por evento).
+	// Rateio opcional do lancamento entre eventos (custo real por evento).
 	EventAllocations []EventAllocationInput `json:"event_allocations"`
 }
 
@@ -179,7 +179,7 @@ type EventAllocationInput struct {
 	Amount  *float64 `json:"amount"` // nulo => divide o restante igualmente
 }
 
-// EventAllocation é o rateio de um lançamento em um evento.
+// EventAllocation e o rateio de um lancamento em um evento.
 type EventAllocation struct {
 	ID        string  `json:"id"`
 	EventID   string  `json:"event_id"`
@@ -187,21 +187,21 @@ type EventAllocation struct {
 	Amount    float64 `json:"amount"`
 }
 
-// Create insere um lançamento e retorna a transação + id, ref e token do recibo gerado.
-// A conta do plano de contas (category_id) é OBRIGATÓRIA e precisa bater com o
-// tipo do lançamento (não dá para lançar uma despesa numa conta de entrada).
+// Create insere um lancamento e retorna a transacao + id, ref e token do recibo gerado.
+// A conta do plano de contas (category_id) e OBRIGATORIA e precisa bater com o
+// tipo do lancamento (nao da para lancar uma despesa numa conta de entrada).
 func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string, in CreateTxnInput) (*Transaction, string, string, string, error) {
 	if in.CategoryID == nil || *in.CategoryID == "" {
 		return nil, "", "", "", ErrCategoryRequired
 	}
-	// O RLS esconde contas fora do escopo, então um id de outro tenant/filial
-	// resulta em ErrNoRows — tratado como conta inválida.
+	// O RLS esconde contas fora do escopo, entao um id de outro tenant/filial
+	// resulta em ErrNoRows - tratado como conta invalida.
 	var catType string
 	if err := tx.QueryRow(ctx, `SELECT type FROM financial_categories WHERE id = $1::uuid`, *in.CategoryID).Scan(&catType); err != nil {
 		return nil, "", "", "", err
 	}
 	if catType != in.Type {
-		return nil, "", "", "", fmt.Errorf("a conta selecionada é de %s, mas o lançamento é de %s", catType, in.Type)
+		return nil, "", "", "", fmt.Errorf("a conta selecionada e de %s, mas o lancamento e de %s", catType, in.Type)
 	}
 
 	when := time.Now()
@@ -231,7 +231,7 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 	}
 	t.ReceiptIssued = status
 
-	// Gera recibo digital automático (documento).
+	// Gera recibo digital automatico (documento).
 	docID, ref, token, err := r.issueReceipt(ctx, tx, tenantID, branchID, t)
 	if err != nil {
 		return nil, "", "", "", err
@@ -243,8 +243,8 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 	return &t, docID, ref, token, nil
 }
 
-// insertEventAllocations grava o rateio do lançamento entre eventos. Valores não
-// informados dividem o restante igualmente; eventos fora do escopo são recusados.
+// insertEventAllocations grava o rateio do lancamento entre eventos. Valores nao
+// informados dividem o restante igualmente; eventos fora do escopo sao recusados.
 func (r *Repo) insertEventAllocations(ctx context.Context, tx pgx.Tx, tenantID, branchID, txID string, total float64, allocs []EventAllocationInput) error {
 	if len(allocs) == 0 {
 		return nil
@@ -280,17 +280,17 @@ func (r *Repo) insertEventAllocations(ctx context.Context, tx pgx.Tx, tenantID, 
 			return err
 		}
 		if tag.RowsAffected() == 0 {
-			return fmt.Errorf("evento %s não encontrado no escopo", a.EventID)
+			return fmt.Errorf("evento %s nao encontrado no escopo", a.EventID)
 		}
 	}
 	return nil
 }
 
-// ListTransactionEvents retorna o rateio de um lançamento por evento.
+// ListTransactionEvents retorna o rateio de um lancamento por evento.
 func (r *Repo) ListTransactionEvents(ctx context.Context, tx pgx.Tx, txID string) ([]EventAllocation, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT a.id::text, a.event_id::text,
-		       COALESCE(to_char(e.starts_at, 'DD/MM/YYYY') || ' · ' || k.name, 'Evento'),
+		       COALESCE(to_char(e.starts_at, 'DD/MM/YYYY') || ' - ' || k.name, 'Evento'),
 		       a.amount::float8
 		FROM financial_event_allocations a
 		LEFT JOIN church_events e ON e.id = a.event_id
@@ -312,8 +312,8 @@ func (r *Repo) ListTransactionEvents(ctx context.Context, tx pgx.Tx, txID string
 	return out, rows.Err()
 }
 
-// Void anula um lançamento (estorno). O registro permanece no histórico; os
-// relatórios param de contá-lo. Não é DELETE nem altera os valores.
+// Void anula um lancamento (estorno). O registro permanece no historico; os
+// relatorios param de conta-lo. Nao e DELETE nem altera os valores.
 func (r *Repo) Void(ctx context.Context, tx pgx.Tx, id, reason, actorID string) error {
 	tag, err := tx.Exec(ctx, `
 		UPDATE financial_transactions
@@ -333,7 +333,7 @@ func (r *Repo) Void(ctx context.Context, tx pgx.Tx, id, reason, actorID string) 
 	return nil
 }
 
-// List retorna lançamentos do escopo, com filtro opcional de tipo.
+// List retorna lancamentos do escopo, com filtro opcional de tipo.
 func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind string) ([]Transaction, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT t.id::text, t.branch_id::text, t.category_id::text, c.name,
@@ -373,10 +373,10 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind string) ([]Transaction,
 	return out, rows.Err()
 }
 
-// SumBalance retorna entradas/saídas agregadas e por categoria (balancete/DRE).
-// O saldo líquido inclui o initial_balance das contas bancárias visíveis no
-// escopo, garantindo que o saldo reflit a realidade bancária mesmo quando não
-// há lançamentos registrados para uma conta (ex.: saldo inicial pré-cadastro).
+// SumBalance retorna entradas/saidas agregadas e por categoria (balancete/DRE).
+// O saldo liquido inclui o initial_balance das contas bancarias visiveis no
+// escopo, garantindo que o saldo reflit a realidade bancaria mesmo quando nao
+// ha lancamentos registrados para uma conta (ex.: saldo inicial pre-cadastro).
 func (r *Repo) SumBalance(ctx context.Context, tx pgx.Tx, kind string) (Balance, error) {
 	var b Balance
 	var initialBalance float64

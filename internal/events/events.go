@@ -1,5 +1,5 @@
 // Package events gerencia o registro de eventos da igreja, a chamada nominal de
-// presença e o histórico de frequência dos membros. O isolamento é do RLS.
+// presenca e o historico de frequencia dos membros. O isolamento e do RLS.
 package events
 
 import (
@@ -40,7 +40,7 @@ type Event struct {
 	EndsAt            *time.Time `json:"ends_at,omitempty"`
 	ParticipantsCount int        `json:"participants_count"`
 	AttendanceCount   int        `json:"attendance_count"`
-	// AttendanceMode: 'nominal' (chamada) ou 'count' (só o número).
+	// AttendanceMode: 'nominal' (chamada) ou 'count' (so o numero).
 	AttendanceMode string    `json:"attendance_mode"`
 	EstimatedCost  *float64  `json:"estimated_cost,omitempty"`
 	CostActual     float64   `json:"cost_actual"`
@@ -69,7 +69,7 @@ type UpdateInput struct {
 	Notes             *string  `json:"notes"`
 }
 
-// Invitee é uma pessoa ou ministério convocado para o evento.
+// Invitee e uma pessoa ou ministerio convocado para o evento.
 type Invitee struct {
 	ID           string  `json:"id"`
 	EventID      string  `json:"event_id"`
@@ -87,7 +87,7 @@ type Attendance struct {
 	Present    bool   `json:"present"`
 }
 
-// Frequency é uma entrada do histórico de frequência do membro.
+// Frequency e uma entrada do historico de frequencia do membro.
 type Frequency struct {
 	ID        string  `json:"id"`
 	MemberID  string  `json:"member_id"`
@@ -295,7 +295,7 @@ func (r *Repo) DeleteEvent(ctx context.Context, tx pgx.Tx, id string) error {
 	return nil
 }
 
-// ---- Convocados (pessoas / ministérios) ----
+// ---- Convocados (pessoas / ministerios) ----
 
 func (r *Repo) ListInvitees(ctx context.Context, tx pgx.Tx, eventID string) ([]Invitee, error) {
 	rows, err := tx.Query(ctx, `
@@ -321,8 +321,8 @@ func (r *Repo) ListInvitees(ctx context.Context, tx pgx.Tx, eventID string) ([]I
 	return out, rows.Err()
 }
 
-// SetInvitees substitui a lista de convocados do evento. Só aceita pessoas e
-// ministérios do mesmo tenant/filial do evento.
+// SetInvitees substitui a lista de convocados do evento. So aceita pessoas e
+// ministerios do mesmo tenant/filial do evento.
 func (r *Repo) SetInvitees(ctx context.Context, tx pgx.Tx, eventID string, memberIDs, ministryIDs []string) error {
 	var exists bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM church_events WHERE id = $1::uuid)`, eventID).Scan(&exists); err != nil {
@@ -382,8 +382,8 @@ func (r *Repo) ListAttendance(ctx context.Context, tx pgx.Tx, eventID string) ([
 }
 
 // SaveAttendance substitui a chamada do evento pela lista informada e ajusta o
-// total de participantes. As duas informações coexistem: `total` (digitado) e a
-// presença nominal.
+// total de participantes. As duas informacoes coexistem: `total` (digitado) e a
+// presenca nominal.
 func (r *Repo) SaveAttendance(ctx context.Context, tx pgx.Tx, eventID string, total int, presentIDs []string) error {
 	var exists bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM church_events WHERE id = $1::uuid)`, eventID).Scan(&exists); err != nil {
@@ -411,7 +411,7 @@ func (r *Repo) SaveAttendance(ctx context.Context, tx pgx.Tx, eventID string, to
 	return err
 }
 
-// ---- Frequência do membro ----
+// ---- Frequencia do membro ----
 
 func (r *Repo) ListFrequency(ctx context.Context, tx pgx.Tx, memberID string) ([]Frequency, error) {
 	rows, err := tx.Query(ctx, `
@@ -434,8 +434,8 @@ func (r *Repo) ListFrequency(ctx context.Context, tx pgx.Tx, memberID string) ([
 	return out, rows.Err()
 }
 
-// SetFrequency registra uma nova frequência: fecha a vigente (ended_at) e insere
-// a nova como atual. Nunca sobrescreve o histórico.
+// SetFrequency registra uma nova frequencia: fecha a vigente (ended_at) e insere
+// a nova como atual. Nunca sobrescreve o historico.
 func (r *Repo) SetFrequency(ctx context.Context, tx pgx.Tx, memberID, frequency, startedAt, notes, actorID string) (*Frequency, error) {
 	if _, err := tx.Exec(ctx, `
 		UPDATE member_frequency_history SET ended_at = COALESCE($2::date, current_date)
@@ -462,13 +462,13 @@ func (r *Repo) SetFrequency(ctx context.Context, tx pgx.Tx, memberID, frequency,
 
 // ---- helpers ----
 
-// ErrKindInUse sinaliza que o tipo de evento não pode ser excluído.
+// ErrKindInUse sinaliza que o tipo de evento nao pode ser excluido.
 var ErrKindInUse = errKindInUse{}
 
 type errKindInUse struct{}
 
 func (errKindInUse) Error() string {
-	return "não é possível excluir: há eventos usando este tipo. Desative-o."
+	return "nao e possivel excluir: ha eventos usando este tipo. Desative-o."
 }
 
 func parseTime(s string) (time.Time, error) {

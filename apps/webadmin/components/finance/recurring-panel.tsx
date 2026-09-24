@@ -19,7 +19,7 @@ import { PAYMENT_METHODS } from "@/lib/constants";
 import { currency, datePt } from "@/lib/format";
 
 const FREQUENCY: Record<string, string> = { weekly: "Semanal", monthly: "Mensal", yearly: "Anual" };
-const SUBTYPE: Record<string, string> = { dizimo: "Dízimo", oferta: "Oferta", doacao: "Doação" };
+const SUBTYPE: Record<string, string> = { dizimo: "Dizimo", oferta: "Oferta", doacao: "Doacao" };
 
 export function RecurringPanel() {
   const { hasPerm } = useAuth();
@@ -59,7 +59,7 @@ export function RecurringPanel() {
         description: form.description || undefined,
         period_start: form.period_start || undefined,
       });
-      toast("Doação recorrente agendada.");
+      toast("Doacao recorrente agendada.");
       setOpen(false);
       setForm({ subtype: "dizimo", amount: "", frequency: "monthly", category_id: "", account_id: "", member_id: "", payment_method: "pix", description: "", period_start: "" });
       await load();
@@ -82,7 +82,7 @@ export function RecurringPanel() {
     <div>
       <div className="mb-4 flex justify-end">
         {hasPerm("finance.write") && (
-          <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Agendar Doação</Button>
+          <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Agendar Doacao</Button>
         )}
       </div>
 
@@ -90,15 +90,15 @@ export function RecurringPanel() {
         {items === null ? (
           <SkeletonRows />
         ) : items.length === 0 ? (
-          <EmptyState icon={<Repeat className="h-10 w-10" />} title="Nenhuma doação recorrente" description="Agende dízimos e ofertas para gerar lançamentos + recibos automáticos." />
+          <EmptyState icon={<Repeat className="h-10 w-10" />} title="Nenhuma doacao recorrente" description="Agende dizimos e ofertas para gerar lancamentos + recibos automaticos." />
         ) : (
           <Table>
-            <THead><TRow><TH>Doador</TH><TH>Tipo</TH><TH>Valor</TH><TH>Frequência</TH><TH>Próxima</TH><TH>Status</TH><TH className="text-right">Ações</TH></TRow></THead>
+            <THead><TRow><TH>Doador</TH><TH>Tipo</TH><TH>Valor</TH><TH>Frequencia</TH><TH>Proxima</TH><TH>Status</TH><TH className="text-right">Acoes</TH></TRow></THead>
             <TBody>
               {items.map((it) => (
                 <TRow key={it.id}>
                   <TD>
-                    <p className="font-medium">{it.member_name ?? "Anônimo"}</p>
+                    <p className="font-medium">{it.member_name ?? "Anonimo"}</p>
                     {it.payment_method && <p className="text-xs text-zinc-400">{PAYMENT_METHODS[it.payment_method] ?? it.payment_method}</p>}
                   </TD>
                   <TD><Badge tone="sky">{SUBTYPE[it.subtype] ?? it.subtype}</Badge></TD>
@@ -118,19 +118,19 @@ export function RecurringPanel() {
         )}
       </Card>
 
-      <Drawer open={open} onClose={() => setOpen(false)} title="Agendar doação recorrente">
+      <Drawer open={open} onClose={() => setOpen(false)} title="Agendar doacao recorrente">
         <form onSubmit={submit} className="space-y-3">
           <Field label="Tipo">
             <Select value={form.subtype} onChange={(e) => setForm({ ...form, subtype: e.target.value })}>
-              <option value="dizimo">Dízimo</option>
+              <option value="dizimo">Dizimo</option>
               <option value="oferta">Oferta</option>
-              <option value="doacao">Doação</option>
+              <option value="doacao">Doacao</option>
             </Select>
           </Field>
           <Field label="Valor (R$)*">
             <Input type="number" min="0.01" step="0.01" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
           </Field>
-          <Field label="Frequência">
+          <Field label="Frequencia">
             <Select value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value })}>
               <option value="weekly">Semanal</option>
               <option value="monthly">Mensal</option>
@@ -139,12 +139,12 @@ export function RecurringPanel() {
           </Field>
           <Field label="Categoria de receita">
             <Select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
-              <option value="">Automática</option>
+              <option value="">Automatica</option>
               {incomeCats.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
             </Select>
           </Field>
           {accts.length > 0 && (
-            <Field label="Conta bancária">
+            <Field label="Conta bancaria">
               <Select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
                 <option value="">Nenhuma</option>
                 {accts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
@@ -153,27 +153,27 @@ export function RecurringPanel() {
           )}
           <Field label="Doador (membro)">
             <Select value={form.member_id} onChange={(e) => setForm({ ...form, member_id: e.target.value })}>
-              <option value="">Anônimo</option>
+              <option value="">Anonimo</option>
               {members.map((m) => (<option key={m.id} value={m.id}>{m.full_name}</option>))}
             </Select>
           </Field>
           <Field label="Forma de pagamento">
             <Select value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })}>
               <option value="pix">PIX</option>
-              <option value="card">Cartão</option>
+              <option value="card">Cartao</option>
               <option value="boleto">Boleto</option>
-              <option value="transfer">Transferência</option>
+              <option value="transfer">Transferencia</option>
             </Select>
           </Field>
-          <Field label="Início (data)">
+          <Field label="Inicio (data)">
             <Input type="date" value={form.period_start} onChange={(e) => setForm({ ...form, period_start: e.target.value })} />
           </Field>
-          <Field label="Descrição">
-            <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Ex.: Dízimo mensal" />
+          <Field label="Descricao">
+            <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Ex.: Dizimo mensal" />
           </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" type="button" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button type="submit">{form.subtype === "dizimo" ? "Agendar Dízimo" : "Agendar"}</Button>
+            <Button type="submit">{form.subtype === "dizimo" ? "Agendar Dizimo" : "Agendar"}</Button>
           </div>
         </form>
       </Drawer>

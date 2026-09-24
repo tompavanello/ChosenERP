@@ -24,7 +24,7 @@ type Worker struct {
 	MaxAttempts int
 }
 
-// Run bloqueia processando a fila até o contexto ser cancelado.
+// Run bloqueia processando a fila ate o contexto ser cancelado.
 func (w *Worker) Run(ctx context.Context) {
 	if w.Interval <= 0 {
 		w.Interval = 30 * time.Second
@@ -51,8 +51,8 @@ func (w *Worker) Run(ctx context.Context) {
 	}
 }
 
-// ProcessPending varre a outbox (visão "Sede") e tenta entregar cada item
-// dentro do contexto RLS da sua própria filial.
+// ProcessPending varre a outbox (visao "Sede") e tenta entregar cada item
+// dentro do contexto RLS da sua propria filial.
 func (w *Worker) ProcessPending(ctx context.Context) error {
 	var pending []documents.PendingDelivery
 	err := w.Store.WithSystem(ctx, func(tx pgx.Tx) error {
@@ -100,7 +100,7 @@ func (w *Worker) buildMessage(ctx context.Context, bounds store.Bounds, p docume
 		msg = Message{
 			Channel: p.Channel, Recipient: p.Recipient,
 			Subject: doc.Title, HTML: html,
-			Text: "Código de validação: " + doc.QRToken,
+			Text: "Codigo de validacao: " + doc.QRToken,
 			Link: link, TenantName: tenant,
 			TenantID: p.TenantID, BranchID: p.BranchID,
 		}

@@ -20,8 +20,8 @@ type Family struct {
 
 type Repo struct{}
 
-// familyCols é a projeção única de família: nome do chefe e contagem de
-// membros vêm por subquery para o select não multiplicar linhas.
+// familyCols e a projecao unica de familia: nome do chefe e contagem de
+// membros vem por subquery para o select nao multiplicar linhas.
 const familyCols = `f.id::text, f.name, f.code, f.head_id::text, f.branch_id::text, f.address,
 	(SELECT m.full_name FROM members m WHERE m.id = f.head_id) AS head_name,
 	(SELECT COUNT(DISTINCT x) FROM (
@@ -38,7 +38,7 @@ func scanFamily(row pgx.Row) (*Family, error) {
 	return &f, nil
 }
 
-// List retorna famílias do escopo com contagem de membros vinculados.
+// List retorna familias do escopo com contagem de membros vinculados.
 func (r *Repo) List(ctx context.Context, tx pgx.Tx) ([]Family, error) {
 	rows, err := tx.Query(ctx, `SELECT `+familyCols+` FROM families f ORDER BY f.name`)
 	if err != nil {
@@ -60,9 +60,9 @@ func (r *Repo) Get(ctx context.Context, tx pgx.Tx, id string) (*Family, error) {
 	return scanFamily(tx.QueryRow(ctx, `SELECT `+familyCols+` FROM families f WHERE f.id = $1::uuid`, id))
 }
 
-// ListByMember devolve as famílias das quais o membro participa — seja como
-// membro_id (origem do vínculo), related_id (destino) ou chefe da família.
-// O chefe entra porque uma família pode existir antes do primeiro vínculo.
+// ListByMember devolve as familias das quais o membro participa - seja como
+// membro_id (origem do vinculo), related_id (destino) ou chefe da familia.
+// O chefe entra porque uma familia pode existir antes do primeiro vinculo.
 func (r *Repo) ListByMember(ctx context.Context, tx pgx.Tx, memberID string) ([]Family, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT `+familyCols+`
@@ -88,11 +88,11 @@ func (r *Repo) ListByMember(ctx context.Context, tx pgx.Tx, memberID string) ([]
 	return out, rows.Err()
 }
 
-// Create cria uma família com o próximo código livre do tenant.
+// Create cria uma familia com o proximo codigo livre do tenant.
 //
-// O código é calculado dentro da própria transação (MAX+1). Duas criações
-// simultâneas colidiriam no índice uq_families_tenant_code e a segunda falha
-// com erro claro — preferível a dois "#007" na mesma igreja.
+// O codigo e calculado dentro da propria transacao (MAX+1). Duas criacoes
+// simultaneas colidiriam no indice uq_families_tenant_code e a segunda falha
+// com erro claro - preferivel a dois "#007" na mesma igreja.
 func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID, name string) (*Family, error) {
 	var id string
 	err := tx.QueryRow(ctx, `
@@ -112,8 +112,8 @@ type UpdateInput struct {
 	Address json.RawMessage `json:"address"`
 }
 
-// Update renomeia, troca o chefe ou grava o endereço (jsonb).
-// PATCH: campo ausente (nil) mantém o valor atual.
+// Update renomeia, troca o chefe ou grava o endereco (jsonb).
+// PATCH: campo ausente (nil) mantem o valor atual.
 func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput) (*Family, error) {
 	var updatedID string
 	err := tx.QueryRow(ctx, `
@@ -130,9 +130,9 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput)
 	return r.Get(ctx, tx, updatedID)
 }
 
-// Delete remove a família. member_relationships.family_id é ON DELETE SET NULL,
-// então os vínculos de parentesco sobrevivem — o que se perde é só o
-// agrupamento, nunca a relação familiar em si.
+// Delete remove a familia. member_relationships.family_id e ON DELETE SET NULL,
+// entao os vinculos de parentesco sobrevivem - o que se perde e so o
+// agrupamento, nunca a relacao familiar em si.
 func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
 	tag, err := tx.Exec(ctx, `DELETE FROM families WHERE id = $1::uuid`, id)
 	if err != nil {
@@ -144,8 +144,8 @@ func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
 	return nil
 }
 
-// LinkMember associa um membro à família criando um vínculo real com o anchor
-// (relateID ou o head da família). Se não houver anchor, o membro vira o head.
+// LinkMember associa um membro a familia criando um vinculo real com o anchor
+// (relateID ou o head da familia). Se nao houver anchor, o membro vira o head.
 func (r *Repo) LinkMember(ctx context.Context, tx pgx.Tx, familyID, memberID, relateID, relation string) error {
 	if relation == "" {
 		relation = "relative"
@@ -157,7 +157,7 @@ func (r *Repo) LinkMember(ctx context.Context, tx pgx.Tx, familyID, memberID, re
 		}
 	}
 	if anchor == "" || anchor == memberID {
-		// Sem anchor: define este membro como head da família (autovínculo descartado).
+		// Sem anchor: define este membro como head da familia (autovinculo descartado).
 		_, err := tx.Exec(ctx, `UPDATE families SET head_id=$1::uuid WHERE id=$2::uuid AND head_id IS NULL`, memberID, familyID)
 		return err
 	}
@@ -169,10 +169,10 @@ func (r *Repo) LinkMember(ctx context.Context, tx pgx.Tx, familyID, memberID, re
 	return err
 }
 
-// UnlinkMember desfaz APENAS o agrupamento desta família: as colunas de
-// parentesco do vínculo continuam existindo, mas deixam de pertencer a esta
-// família. Apagar a linha seria destrutivo — o mesmo registro pode ser o
-// vínculo "Cônjuge" fora do contexto familiar.
+// UnlinkMember desfaz APENAS o agrupamento desta familia: as colunas de
+// parentesco do vinculo continuam existindo, mas deixam de pertencer a esta
+// familia. Apagar a linha seria destrutivo - o mesmo registro pode ser o
+// vinculo "Conjuge" fora do contexto familiar.
 func (r *Repo) UnlinkMember(ctx context.Context, tx pgx.Tx, familyID, memberID string) error {
 	_, err := tx.Exec(ctx, `
 		UPDATE member_relationships SET family_id = NULL
@@ -181,7 +181,7 @@ func (r *Repo) UnlinkMember(ctx context.Context, tx pgx.Tx, familyID, memberID s
 	if err != nil {
 		return err
 	}
-	// Quem saiu da família não pode continuar sendo o chefe dela.
+	// Quem saiu da familia nao pode continuar sendo o chefe dela.
 	_, err = tx.Exec(ctx,
 		`UPDATE families SET head_id = NULL WHERE id = $1::uuid AND head_id = $2::uuid`,
 		familyID, memberID)
@@ -189,7 +189,7 @@ func (r *Repo) UnlinkMember(ctx context.Context, tx pgx.Tx, familyID, memberID s
 }
 
 // jsonOrNil devolve nil para JSON vazio, para o COALESCE do UPDATE manter o
-// endereço anterior em vez de zerá-lo.
+// endereco anterior em vez de zera-lo.
 func jsonOrNil(raw json.RawMessage) any {
 	if len(raw) == 0 {
 		return nil

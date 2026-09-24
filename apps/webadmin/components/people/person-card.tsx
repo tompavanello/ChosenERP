@@ -23,7 +23,7 @@ export function personStatusLabel(person: Person): string {
   }
   if (person.type === "benefactor") return "Benfeitor";
   const st = MEMBERSHIP_STATUS[person.membership_status ?? ""] ?? { label: person.membership_status ?? "" };
-  return st.label ?? person.membership_status ?? "—";
+  return st.label ?? person.membership_status ?? "-";
 }
 
 export function PersonCard({
@@ -37,8 +37,8 @@ export function PersonCard({
 }) {
   const tone = personStatusTone(person);
   const label = personStatusLabel(person);
-  // `office` é a coluna legada (o catálogo de cargos vive em /api/v1/cargos e o
-  // vínculo com mandato é por membro) — exibida como veio, sem dicionário fixo.
+  // `office` e a coluna legada (o catalogo de cargos vive em /api/v1/cargos e o
+  // vinculo com mandato e por membro) - exibida como veio, sem dicionario fixo.
   const subtitle = person.type === "member"
     ? person.profession
       ? person.profession
@@ -61,10 +61,10 @@ export function PersonCard({
           <div className="min-w-0">
             {detailHref ? (
               <Link href={detailHref} className="font-semibold truncate block group-hover:text-sky-700 transition-colors">
-                {person.full_name || "—"}
+                {person.full_name || "-"}
               </Link>
             ) : (
-              <span className="font-semibold truncate block">{person.full_name || "—"}</span>
+              <span className="font-semibold truncate block">{person.full_name || "-"}</span>
             )}
             <p className="text-xs text-zinc-400 truncate max-w-[160px]">{subtitle}</p>
           </div>

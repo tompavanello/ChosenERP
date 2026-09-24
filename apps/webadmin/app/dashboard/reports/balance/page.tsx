@@ -38,7 +38,7 @@ export default function BalanceReportPage() {
     load("", "");
   }, [load]);
 
-  const monthly = series.map((p) => ({ name: monthLabel(p.month), Saldo: p.net, Entradas: p.income, Saídas: p.expense }));
+  const monthly = series.map((p) => ({ name: monthLabel(p.month), Saldo: p.net, Entradas: p.income, Saidas: p.expense }));
   const params: Record<string, string> = {};
   if (from) params.from = from;
   if (to) params.to = to;
@@ -49,7 +49,7 @@ export default function BalanceReportPage() {
     <div className="page">
       <PageHeader
         title="Balancete mensal"
-        description="Entradas, saídas e saldo por mês"
+        description="Entradas, saidas e saldo por mes"
         actions={
           <ExportButtons
             path="/api/v1/reports/balance/export"
@@ -61,9 +61,9 @@ export default function BalanceReportPage() {
 
       <Card className="mb-6 flex flex-wrap items-end gap-3">
         <div><label className="label">De</label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-        <div><label className="label">Até</label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+        <div><label className="label">Ate</label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
         <Button onClick={() => load(from, to)}>Filtrar</Button>
-        <Button variant="ghost" onClick={() => { setFrom(""); setTo(""); load("", ""); }}>Mês atual</Button>
+        <Button variant="ghost" onClick={() => { setFrom(""); setTo(""); load("", ""); }}>Mes atual</Button>
       </Card>
 
       {loading ? (
@@ -72,13 +72,13 @@ export default function BalanceReportPage() {
         <>
           <div className="mb-6 grid gap-4 md:grid-cols-3">
             <Card><p className="text-sm text-zinc-500">Entradas</p><p className="mt-1 text-2xl font-semibold text-emerald-600">{currency(totalIncome)}</p></Card>
-            <Card><p className="text-sm text-zinc-500">Saídas</p><p className="mt-1 text-2xl font-semibold text-red-600">{currency(totalExpense)}</p></Card>
+            <Card><p className="text-sm text-zinc-500">Saidas</p><p className="mt-1 text-2xl font-semibold text-red-600">{currency(totalExpense)}</p></Card>
             <Card><p className="text-sm text-zinc-500">Saldo</p><p className={`mt-1 text-2xl font-semibold ${totalIncome - totalExpense >= 0 ? "text-sky-700" : "text-red-600"}`}>{currency(totalIncome - totalExpense)}</p></Card>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
-              <h3 className="mb-4 text-sm font-semibold text-zinc-700">Saldo por mês</h3>
+              <h3 className="mb-4 text-sm font-semibold text-zinc-700">Saldo por mes</h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={monthly}><defs><linearGradient id="bnet" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4} /><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} /><XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#9ca3af" /><YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" width={60} /><Tooltip formatter={(v: unknown) => currency(Number(v))} /><Area type="monotone" dataKey="Saldo" stroke="#8b5cf6" strokeWidth={2.5} fill="url(#bnet)" /></AreaChart>
@@ -86,19 +86,19 @@ export default function BalanceReportPage() {
               </div>
             </Card>
             <Card>
-              <h3 className="mb-4 text-sm font-semibold text-zinc-700">Entradas × Saídas</h3>
+              <h3 className="mb-4 text-sm font-semibold text-zinc-700">Entradas x Saidas</h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={monthly}><CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} /><XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#9ca3af" /><YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" width={60} /><Tooltip formatter={(v: unknown) => currency(Number(v))} /><Legend /><Bar dataKey="Entradas" fill="#10b981" /><Bar dataKey="Saídas" fill="#ef4444" /></BarChart>
+                  <BarChart data={monthly}><CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} /><XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#9ca3af" /><YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" width={60} /><Tooltip formatter={(v: unknown) => currency(Number(v))} /><Legend /><Bar dataKey="Entradas" fill="#10b981" /><Bar dataKey="Saidas" fill="#ef4444" /></BarChart>
                 </ResponsiveContainer>
               </div>
             </Card>
           </div>
 
           <Card className="mt-6 overflow-hidden p-0">
-            <h3 className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-700">Série mensal</h3>
+            <h3 className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-700">Serie mensal</h3>
             <Table>
-              <THead><TRow><TH>Mês</TH><TH className="text-right">Entradas</TH><TH className="text-right">Saídas</TH><TH className="text-right">Saldo</TH></TRow></THead>
+              <THead><TRow><TH>Mes</TH><TH className="text-right">Entradas</TH><TH className="text-right">Saidas</TH><TH className="text-right">Saldo</TH></TRow></THead>
               <TBody>
                 {series.map((p) => (
                   <TRow key={p.month}>
@@ -108,7 +108,7 @@ export default function BalanceReportPage() {
                     <TD className={`text-right font-semibold ${p.net >= 0 ? "text-sky-700" : "text-red-600"}`}>{currency(p.net)}</TD>
                   </TRow>
                 ))}
-                {series.length === 0 && <TRow><TD colSpan={4} className="py-8 text-center text-zinc-400">Sem lançamentos no período.</TD></TRow>}
+                {series.length === 0 && <TRow><TD colSpan={4} className="py-8 text-center text-zinc-400">Sem lancamentos no periodo.</TD></TRow>}
               </TBody>
             </Table>
           </Card>

@@ -11,18 +11,18 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Erros de domínio da governança, traduzidos em HTTP pelos handlers.
+// Erros de dominio da governanca, traduzidos em HTTP pelos handlers.
 var (
-	ErrMinuteSigned  = errors.New("ata assinada não pode ser alterada")
-	ErrVoteNotOpen   = errors.New("votação não está aberta")
-	ErrAlreadyVoted  = errors.New("você já votou nesta votação")
-	ErrOptionInvalid = errors.New("opção inválida para esta votação")
-	ErrVoteClosed    = errors.New("votação já encerrada")
+	ErrMinuteSigned  = errors.New("ata assinada nao pode ser alterada")
+	ErrVoteNotOpen   = errors.New("votacao nao esta aberta")
+	ErrAlreadyVoted  = errors.New("voce ja votou nesta votacao")
+	ErrOptionInvalid = errors.New("opcao invalida para esta votacao")
+	ErrVoteClosed    = errors.New("votacao ja encerrada")
 )
 
 // ---- Tipos ----
 
-// Option é uma opção de voto.
+// Option e uma opcao de voto.
 type Option struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
@@ -30,7 +30,7 @@ type Option struct {
 	Votes int    `json:"votes"`
 }
 
-// Vote é uma votação.
+// Vote e uma votacao.
 type Vote struct {
 	ID               string     `json:"id"`
 	BranchID         string     `json:"branch_id"`
@@ -54,7 +54,7 @@ type Vote struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
-// Result é a apuração de uma votação.
+// Result e a apuracao de uma votacao.
 type Result struct {
 	Total          int      `json:"total"`
 	Participants   int      `json:"participants"`
@@ -65,7 +65,7 @@ type Result struct {
 	GeneratedAt    string   `json:"generated_at"`
 }
 
-// VoteInput é o corpo de criação/edição de uma votação.
+// VoteInput e o corpo de criacao/edicao de uma votacao.
 type VoteInput struct {
 	MinuteID       *string  `json:"minute_id"`
 	Title          string   `json:"title"`
@@ -235,7 +235,7 @@ func (r *Repo) UpdateVote(ctx context.Context, tx pgx.Tx, id string, in VoteInpu
 	return r.GetVote(ctx, tx, updatedID)
 }
 
-// replaceOptions troca as opções de uma votação (só permitido antes de haver
+// replaceOptions troca as opcoes de uma votacao (so permitido antes de haver
 // votos).
 func (r *Repo) replaceOptions(ctx context.Context, tx pgx.Tx, voteID string, labels []string) error {
 	var ballots int
@@ -243,7 +243,7 @@ func (r *Repo) replaceOptions(ctx context.Context, tx pgx.Tx, voteID string, lab
 		return err
 	}
 	if ballots > 0 {
-		return errors.New("não é possível alterar as opções de uma votação que já recebeu votos")
+		return errors.New("nao e possivel alterar as opcoes de uma votacao que ja recebeu votos")
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM vote_options WHERE vote_id = $1::uuid`, voteID); err != nil {
 		return err
@@ -263,7 +263,7 @@ func (r *Repo) replaceOptions(ctx context.Context, tx pgx.Tx, voteID string, lab
 	return nil
 }
 
-// OpenVote coloca a votação em andamento.
+// OpenVote coloca a votacao em andamento.
 func (r *Repo) OpenVote(ctx context.Context, tx pgx.Tx, id string) (*Vote, error) {
 	tag, err := tx.Exec(ctx, `
 		UPDATE votes SET status = 'aberta', opens_at = COALESCE(opens_at, now()), updated_at = now()
@@ -277,8 +277,8 @@ func (r *Repo) OpenVote(ctx context.Context, tx pgx.Tx, id string) (*Vote, error
 	return r.GetVote(ctx, tx, id)
 }
 
-// CastBallot registra a participação (para o quórum) e o voto secreto. Recusa
-// voto repetido e votação fora da janela.
+// CastBallot registra a participacao (para o quorum) e o voto secreto. Recusa
+// voto repetido e votacao fora da janela.
 func (r *Repo) CastBallot(ctx context.Context, tx pgx.Tx, id, voterID, voterName, optionID string) (*Result, error) {
 	v, err := r.GetVote(ctx, tx, id)
 	if err != nil {
@@ -294,7 +294,7 @@ func (r *Repo) CastBallot(ctx context.Context, tx pgx.Tx, id, voterID, voterName
 	if v.ClosesAt != nil && now.After(*v.ClosesAt) {
 		return nil, ErrVoteNotOpen
 	}
-	// A opção precisa pertencer a esta votação.
+	// A opcao precisa pertencer a esta votacao.
 	var ok bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM vote_options WHERE id = $1::uuid AND vote_id = $2::uuid)`, optionID, id).Scan(&ok); err != nil {
 		return nil, err
@@ -302,7 +302,7 @@ func (r *Repo) CastBallot(ctx context.Context, tx pgx.Tx, id, voterID, voterName
 	if !ok {
 		return nil, ErrOptionInvalid
 	}
-	// Participação: uma por usuário por votação.
+	// Participacao: uma por usuario por votacao.
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO vote_registrations (tenant_id, branch_id, vote_id, voter_id, voter_name)
 		SELECT v.tenant_id, v.branch_id, v.id, $2::uuid, $3 FROM votes v WHERE v.id = $1::uuid
@@ -313,7 +313,7 @@ func (r *Repo) CastBallot(ctx context.Context, tx pgx.Tx, id, voterID, voterName
 	if tag.RowsAffected() == 0 {
 		return nil, ErrAlreadyVoted
 	}
-	// Escolha: sem vínculo com o eleitor (voto secreto).
+	// Escolha: sem vinculo com o eleitor (voto secreto).
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO vote_ballots (tenant_id, branch_id, vote_id, option_id)
 		SELECT v.tenant_id, v.branch_id, v.id, $2::uuid FROM votes v WHERE v.id = $1::uuid`,
@@ -323,8 +323,8 @@ func (r *Repo) CastBallot(ctx context.Context, tx pgx.Tx, id, voterID, voterName
 	return r.Tally(ctx, tx, id)
 }
 
-// CloseVote encerra a votação, grava a apuração em result_summary e, se houver
-// ata vinculada, anexa o resultado a ela (ata automática — G3).
+// CloseVote encerra a votacao, grava a apuracao em result_summary e, se houver
+// ata vinculada, anexa o resultado a ela (ata automatica - G3).
 func (r *Repo) CloseVote(ctx context.Context, tx pgx.Tx, id string) (*Vote, error) {
 	var status, minuteID string
 	var minutePtr *string
@@ -350,11 +350,11 @@ func (r *Repo) CloseVote(ctx context.Context, tx pgx.Tx, id string) (*Vote, erro
 	}
 	if minutePtr != nil {
 		minuteID = *minutePtr
-		block := "\n\n---\n\n### Apuração — " + result.Winner + "\n"
+		block := "\n\n---\n\n### Apuracao - " + result.Winner + "\n"
 		for _, o := range result.Options {
 			block += fmt.Sprintf("- %s: %d voto(s)\n", o.Label, o.Votes)
 		}
-		block += fmt.Sprintf("\nTotal: %d voto(s) · Participantes: %d · Quórum exigido: %d · Quórum atingido: %s\n",
+		block += fmt.Sprintf("\nTotal: %d voto(s) - Participantes: %d - Quorum exigido: %d - Quorum atingido: %s\n",
 			result.Total, result.Participants, result.QuorumRequired, yesNo(result.QuorumMet))
 		if err := r.appendMinuteResult(ctx, tx, minuteID, block); err != nil {
 			return nil, err
@@ -363,7 +363,7 @@ func (r *Repo) CloseVote(ctx context.Context, tx pgx.Tx, id string) (*Vote, erro
 	return r.GetVote(ctx, tx, id)
 }
 
-// Tally apura a votação sem alterar o estado (usado também na prévia).
+// Tally apura a votacao sem alterar o estado (usado tambem na previa).
 func (r *Repo) Tally(ctx context.Context, tx pgx.Tx, id string) (*Result, error) {
 	v, err := r.GetVote(ctx, tx, id)
 	if err != nil {
@@ -386,7 +386,7 @@ func (r *Repo) Tally(ctx context.Context, tx pgx.Tx, id string) (*Result, error)
 	return res, nil
 }
 
-// DeleteVote remove uma votação em rascunho (com opções por cascade).
+// DeleteVote remove uma votacao em rascunho (com opcoes por cascade).
 func (r *Repo) DeleteVote(ctx context.Context, tx pgx.Tx, id string) error {
 	tag, err := tx.Exec(ctx, `DELETE FROM votes WHERE id = $1::uuid AND status = 'rascunho'`, id)
 	if err != nil {
@@ -418,7 +418,7 @@ func yesNo(b bool) string {
 	if b {
 		return "sim"
 	}
-	return "não"
+	return "nao"
 }
 
 func parseOptionalTime(s *string) (*time.Time, error) {

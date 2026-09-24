@@ -1,7 +1,7 @@
 -- 000053_identity_memberships.down.sql
 -- Reverte para o modelo antigo (contexto de acesso dentro de users).
 -- Best-effort: se uma identidade tiver mais de um membership, apenas um deles
--- (o primeiro) é restaurado em users.
+-- (o primeiro) e restaurado em users.
 
 DROP POLICY IF EXISTS users_sel ON users;
 DROP POLICY IF EXISTS users_ins ON users;
@@ -19,7 +19,7 @@ UPDATE users u SET
 FROM memberships m
 WHERE m.user_id = u.id;
 
--- Só restaura o NOT NULL quando todas as identidades tiverem vínculo.
+-- So restaura o NOT NULL quando todas as identidades tiverem vinculo.
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM users WHERE tenant_id IS NULL OR role_id IS NULL) THEN

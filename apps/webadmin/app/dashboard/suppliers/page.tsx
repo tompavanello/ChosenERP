@@ -75,7 +75,7 @@ export default function SuppliersPage() {
     if (!confirm(`Excluir "${s.name}"?`)) return;
     try {
       await deleteSupplier(s.id);
-      toast("Fornecedor excluído.");
+      toast("Fornecedor excluido.");
       await load();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro", "error");
@@ -97,14 +97,14 @@ export default function SuppliersPage() {
     <div className="page">
       <PageHeader
         title="Fornecedores"
-        description="Pessoas físicas ou jurídicas — CPF/CNPJ opcionais"
+        description="Pessoas fisicas ou juridicas - CPF/CNPJ opcionais"
         actions={<Button onClick={openNew}><Plus className="h-4 w-4" /> Novo Fornecedor</Button>}
       />
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <StatCard label="Fornecedores" value={items ? String(items.length) : "…"} icon={Building2} />
-        <StatCard label="Com CNPJ" value={items ? String(items.filter((s) => s.cnpj).length) : "…"} tone="sky" />
-        <StatCard label="Com CPF" value={items ? String(items.filter((s) => s.cpf).length) : "…"} tone="green" />
+        <StatCard label="Fornecedores" value={items ? String(items.length) : "..."} icon={Building2} />
+        <StatCard label="Com CNPJ" value={items ? String(items.filter((s) => s.cnpj).length) : "..."} tone="sky" />
+        <StatCard label="Com CPF" value={items ? String(items.filter((s) => s.cpf).length) : "..."} tone="green" />
       </div>
 
       <div className="mb-4 relative max-w-sm">
@@ -129,7 +129,7 @@ export default function SuppliersPage() {
         ) : (
           <Table>
             <THead>
-              <TRow><TH>Nome</TH><TH>CPF/CNPJ</TH><TH>Contato</TH><TH>Situação</TH><TH></TH></TRow>
+              <TRow><TH>Nome</TH><TH>CPF/CNPJ</TH><TH>Contato</TH><TH>Situacao</TH><TH></TH></TRow>
             </THead>
             <TBody>
               {filtered.map((s) => (
@@ -138,9 +138,9 @@ export default function SuppliersPage() {
                     <p className="font-medium">{s.name}</p>
                     {s.trade_name && <p className="text-xs text-zinc-400">{s.trade_name}</p>}
                   </TD>
-                  <TD className="tabular-nums">{s.cnpj || s.cpf || "—"}</TD>
+                  <TD className="tabular-nums">{s.cnpj || s.cpf || "-"}</TD>
                   <TD>
-                    <p>{s.email ?? "—"}</p>
+                    <p>{s.email ?? "-"}</p>
                     <p className="text-xs text-zinc-400">{s.phone ?? ""}</p>
                   </TD>
                   <TD>
@@ -165,7 +165,7 @@ export default function SuppliersPage() {
 
       <Drawer open={open} onClose={() => setOpen(false)} title={editId ? "Editar Fornecedor" : "Novo Fornecedor"}>
         <form onSubmit={save} className="grid grid-cols-2 gap-3">
-          <Field label="Nome / Razão social *" className="col-span-2">
+          <Field label="Nome / Razao social *" className="col-span-2">
             <Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>
           <Field label="Nome fantasia" className="col-span-2">
@@ -183,7 +183,7 @@ export default function SuppliersPage() {
           <Field label="E-mail">
             <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </Field>
-          <Field label="Observações" className="col-span-2">
+          <Field label="Observacoes" className="col-span-2">
             <Textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </Field>
           <div className="col-span-2 flex justify-end gap-2 pt-2">

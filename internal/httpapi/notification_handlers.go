@@ -9,8 +9,8 @@ import (
 	"chosenerp/internal/delivery"
 )
 
-// handlePreviewAudience devolve quantos destinatários um filtro de segmentação
-// alcança (#32) — o "pré-visualizar público" antes de disparar.
+// handlePreviewAudience devolve quantos destinatarios um filtro de segmentacao
+// alcanca (#32) - o "pre-visualizar publico" antes de disparar.
 func (a *App) handlePreviewAudience(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -36,7 +36,7 @@ func (a *App) handlePreviewAudience(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"count": count})
 }
 
-// handleGetNotificationSettings lê as automações de WhatsApp do tenant (#31).
+// handleGetNotificationSettings le as automacoes de WhatsApp do tenant (#31).
 func (a *App) handleGetNotificationSettings(w http.ResponseWriter, r *http.Request) {
 	claims, ok := a.adminClaims(w, r)
 	if !ok {
@@ -56,7 +56,7 @@ func (a *App) handleGetNotificationSettings(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, s)
 }
 
-// handleUpdateNotificationSettings atualiza as automações (PATCH parcial).
+// handleUpdateNotificationSettings atualiza as automacoes (PATCH parcial).
 func (a *App) handleUpdateNotificationSettings(w http.ResponseWriter, r *http.Request) {
 	claims, ok := a.adminClaims(w, r)
 	if !ok {
@@ -81,8 +81,8 @@ func (a *App) handleUpdateNotificationSettings(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, s)
 }
 
-// handleRunNotifications força uma varredura das automações agora (em vez de
-// esperar o tick do worker) — útil para testar a configuração.
+// handleRunNotifications forca uma varredura das automacoes agora (em vez de
+// esperar o tick do worker) - util para testar a configuracao.
 func (a *App) handleRunNotifications(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.adminClaims(w, r); !ok {
 		return

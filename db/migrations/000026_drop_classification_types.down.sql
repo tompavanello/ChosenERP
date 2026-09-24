@@ -1,5 +1,5 @@
 -- 000026_drop_classification_types.down.sql
--- Recria a tabela redundante a partir do plano de contas atual (mesmos códigos).
+-- Recria a tabela redundante a partir do plano de contas atual (mesmos codigos).
 CREATE TABLE financial_classification_types (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id   uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,

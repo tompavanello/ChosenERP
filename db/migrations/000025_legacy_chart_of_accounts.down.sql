@@ -1,5 +1,5 @@
 -- 000025_legacy_chart_of_accounts.down.sql
--- Remove o plano de contas legado e reativa as contas genéricas do seed.
+-- Remove o plano de contas legado e reativa as contas genericas do seed.
 UPDATE financial_categories SET is_active = true
 WHERE code IN ('1.1','1.2','1.3','1.4','2.1','2.2','2.3','2.4','2.5');
 

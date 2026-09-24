@@ -73,7 +73,7 @@ func (a *App) handleUpdateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	var in finance.UpdateCategoryInput
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -85,7 +85,7 @@ func (a *App) handleUpdateCategory(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "conta contábil não encontrada")
+			writeErr(w, http.StatusNotFound, "conta contabil nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -110,7 +110,7 @@ func (a *App) handleDeleteCategory(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "conta contábil não encontrada")
+			writeErr(w, http.StatusNotFound, "conta contabil nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -161,8 +161,8 @@ func (a *App) handleCreateTxn(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleImportTransactions importa lançamentos em lote via CSV ou planilha
-// (XLSX). Aceita o CSV com cabeçalho padrão (`csv`) ou um arquivo em base64 com
+// handleImportTransactions importa lancamentos em lote via CSV ou planilha
+// (XLSX). Aceita o CSV com cabecalho padrao (`csv`) ou um arquivo em base64 com
 // mapeamento de colunas e linha inicial (`data`/`filename`/`start_row`/`mapping`).
 func (a *App) handleImportTransactions(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -178,7 +178,7 @@ func (a *App) handleImportTransactions(w http.ResponseWriter, r *http.Request) {
 		Mapping  map[string]int `json:"mapping"`
 	}
 	if err := readJSONMax(r, &in, 8<<20); err != nil {
-		writeErr(w, http.StatusBadRequest, "arquivo inválido ou muito grande (máx 8MB)")
+		writeErr(w, http.StatusBadRequest, "arquivo invalido ou muito grande (max 8MB)")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -198,7 +198,7 @@ func (a *App) handleImportTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 		raw, e := base64.StdEncoding.DecodeString(in.Data)
 		if e != nil {
-			return errors.New("arquivo em base64 inválido")
+			return errors.New("arquivo em base64 invalido")
 		}
 		rows, e := finance.ParseSheet(raw, in.Filename)
 		if e != nil {
@@ -214,8 +214,8 @@ func (a *App) handleImportTransactions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
-// handlePreviewTransactions lê a planilha e devolve as primeiras linhas para o
-// usuário mapear as colunas antes de importar.
+// handlePreviewTransactions le a planilha e devolve as primeiras linhas para o
+// usuario mapear as colunas antes de importar.
 func (a *App) handlePreviewTransactions(w http.ResponseWriter, r *http.Request) {
 	if _, ok := claimsFrom(r.Context()); !ok {
 		writeErr(w, http.StatusUnauthorized, "unauthenticated")
@@ -231,7 +231,7 @@ func (a *App) handlePreviewTransactions(w http.ResponseWriter, r *http.Request) 
 	}
 	raw, err := base64.StdEncoding.DecodeString(in.Data)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "arquivo em base64 inválido")
+		writeErr(w, http.StatusBadRequest, "arquivo em base64 invalido")
 		return
 	}
 	rows, err := finance.ParseSheet(raw, in.Filename)
@@ -245,8 +245,8 @@ func (a *App) handlePreviewTransactions(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{"rows": rows})
 }
 
-// handleVoidTxn anula (estorna) um lançamento. O registro permanece no
-// histórico; os relatórios deixam de contá-lo.
+// handleVoidTxn anula (estorna) um lancamento. O registro permanece no
+// historico; os relatorios deixam de conta-lo.
 func (a *App) handleVoidTxn(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -257,7 +257,7 @@ func (a *App) handleVoidTxn(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Reason string `json:"reason"`
 	}
-	_ = readJSON(r, &in) // motivo é opcional
+	_ = readJSON(r, &in) // motivo e opcional
 	b := boundsFromClaims(claims)
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
 		if err := a.Finance.Void(r.Context(), tx, id, in.Reason, claims.UserID); err != nil {
@@ -271,7 +271,7 @@ func (a *App) handleVoidTxn(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "lançamento não encontrado ou já estornado")
+			writeErr(w, http.StatusNotFound, "lancamento nao encontrado ou ja estornado")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -280,7 +280,7 @@ func (a *App) handleVoidTxn(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// handleListTxnEvents devolve o rateio do lançamento por evento.
+// handleListTxnEvents devolve o rateio do lancamento por evento.
 func (a *App) handleListTxnEvents(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -370,16 +370,16 @@ func (a *App) handleGetDocumentByToken(w http.ResponseWriter, r *http.Request) {
 
 // handleIssueCard emite (ou recupera) a carteirinha do membro.
 // Idempotente: chamadas repetidas devolvem a MESMA carteirinha. Responde 200 (e
-// não 201) porque passou a ser get-or-create — 201 num no-op seria mentira.
-// As chaves "card_ref" e "member" continuam existindo (backlog #42); "token" é
-// nova. O token não entra em members.List de propósito: /public/card/{token} é
-// não autenticado, então expor N tokens numa listagem seria expor N URLs
+// nao 201) porque passou a ser get-or-create - 201 num no-op seria mentira.
+// As chaves "card_ref" e "member" continuam existindo (backlog #42); "token" e
+// nova. O token nao entra em members.List de proposito: /public/card/{token} e
+// nao autenticado, entao expor N tokens numa listagem seria expor N URLs
 // permanentes de uma vez. Quem quer o token pede por membro.
 func (a *App) handleIssueCard(w http.ResponseWriter, r *http.Request) {
 	a.respondCard(w, r, true)
 }
 
-// handleGetCard devolve a carteirinha já emitida, sem efeito colateral.
+// handleGetCard devolve a carteirinha ja emitida, sem efeito colateral.
 func (a *App) handleGetCard(w http.ResponseWriter, r *http.Request) {
 	a.respondCard(w, r, false)
 }
@@ -417,7 +417,7 @@ func (a *App) respondCard(w http.ResponseWriter, r *http.Request, issue bool) {
 	writeJSON(w, http.StatusOK, map[string]any{"card_ref": ref, "token": token, "member": name})
 }
 
-// ---- Branches (para repasses e seleção de filial) ----
+// ---- Branches (para repasses e selecao de filial) ----
 
 type branchDTO struct {
 	ID   string `json:"id"`
@@ -501,7 +501,7 @@ func (a *App) handleListTransfers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"transfers": out})
 }
 
-// ---- Doações recorrentes ----
+// ---- Doacoes recorrentes ----
 
 func (a *App) handleListRecurring(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -576,7 +576,7 @@ func (a *App) handleUpdateRecurring(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rec)
 }
 
-// ---- Contas bancárias ----
+// ---- Contas bancarias ----
 
 func (a *App) handleListAccounts(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -675,7 +675,7 @@ func (a *App) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "conta não encontrada")
+			writeErr(w, http.StatusNotFound, "conta nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -684,7 +684,7 @@ func (a *App) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// ---- Anexos de lançamentos ----
+// ---- Anexos de lancamentos ----
 
 func (a *App) handleUploadAttachment(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -697,20 +697,20 @@ func (a *App) handleUploadAttachment(w http.ResponseWriter, r *http.Request) {
 
 	// Limite 50 MB em uploads multipart.
 	if err := r.ParseMultipartForm(50 << 20); err != nil {
-		writeErr(w, http.StatusBadRequest, "upload muito grande (máx 50MB)")
+		writeErr(w, http.StatusBadRequest, "upload muito grande (max 50MB)")
 		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "arquivo não enviado")
+		writeErr(w, http.StatusBadRequest, "arquivo nao enviado")
 		return
 	}
 	defer file.Close()
 
-	// Cria diretório de uploads se não existir.
+	// Cria diretorio de uploads se nao existir.
 	if err := os.MkdirAll(a.Config.UploadDir, 0o755); err != nil {
-		writeErr(w, http.StatusInternalServerError, "não foi possível criar diretório de uploads")
+		writeErr(w, http.StatusInternalServerError, "nao foi possivel criar diretorio de uploads")
 		return
 	}
 
@@ -722,7 +722,7 @@ func (a *App) handleUploadAttachment(w http.ResponseWriter, r *http.Request) {
 
 	dst, err := os.Create(diskPath)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "não foi possível salvar arquivo")
+		writeErr(w, http.StatusInternalServerError, "nao foi possivel salvar arquivo")
 		return
 	}
 	n, err := io.Copy(dst, file)
@@ -748,7 +748,7 @@ func (a *App) handleUploadAttachment(w http.ResponseWriter, r *http.Request) {
 	var att *finance.Attachment
 	err = a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
 		var err error
-		// Verifica que a transação pertence ao escopo antes de anexar.
+		// Verifica que a transacao pertence ao escopo antes de anexar.
 		var txExists bool
 		err = tx.QueryRow(r.Context(), `
 			SELECT EXISTS(SELECT 1 FROM financial_transactions
@@ -758,7 +758,7 @@ func (a *App) handleUploadAttachment(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if !txExists && claims.BranchID != "" {
-			// Também permite anexar de escopo Sede (consulta sem branch_id).
+			// Tambem permite anexar de escopo Sede (consulta sem branch_id).
 			err = tx.QueryRow(r.Context(), `
 				SELECT EXISTS(SELECT 1 FROM financial_transactions
 			              WHERE id = $1::uuid AND tenant_id = $2)`,
@@ -803,15 +803,15 @@ func (a *App) handleListAttachments(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleDownloadAttachment serve o arquivo do disco. O nome do arquivo (uuid)
-// é opaco — não expõe caminho real nem credenciais. A autenticação não é
-// exigida porque o URL é um token implícito; o verdadeiro controle de acesso
-// é feito pela RLS no momento da criação do attachment.
+// e opaco - nao expoe caminho real nem credenciais. A autenticacao nao e
+// exigida porque o URL e um token implicito; o verdadeiro controle de acesso
+// e feito pela RLS no momento da criacao do attachment.
 func (a *App) handleDownloadAttachment(w http.ResponseWriter, r *http.Request) {
 	filename := r.PathValue("filename")
 	diskPath := filepath.Join(a.Config.UploadDir, filename)
 	if _, err := os.Stat(diskPath); err != nil {
 		if os.IsNotExist(err) {
-			writeErr(w, http.StatusNotFound, "arquivo não encontrado")
+			writeErr(w, http.StatusNotFound, "arquivo nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, "erro ao acessar arquivo")
@@ -822,8 +822,8 @@ func (a *App) handleDownloadAttachment(w http.ResponseWriter, r *http.Request) {
 		ct = "application/octet-stream"
 	}
 	w.Header().Set("Content-Type", ct)
-	// nosniff impede o browser de "adivinhar" um tipo executável para um arquivo
-	// enviado por usuário; o cache é seguro porque o nome é único por upload
+	// nosniff impede o browser de "adivinhar" um tipo executavel para um arquivo
+	// enviado por usuario; o cache e seguro porque o nome e unico por upload
 	// (trocar a foto gera outra URL).
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "private, max-age=86400")

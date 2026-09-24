@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// O grupo "Relatórios" aponta para as páginas específicas; esta rota é só um
+// O grupo "Relatorios" aponta para as paginas especificas; esta rota e so um
 // atalho de compatibilidade (links antigos para /dashboard/reports).
 export default function ReportsIndex() {
   redirect("/dashboard/reports/balance");

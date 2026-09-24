@@ -8,16 +8,16 @@ import { Dropdown } from "@/components/ui/dropdown";
 import { issueCard, getCard, cardPrintURL } from "@/lib/api";
 
 /**
- * CardCell mostra a carteirinha digital já no grid: número em monospace quando
- * existe, botão "Emitir" quando não existe.
+ * CardCell mostra a carteirinha digital ja no grid: numero em monospace quando
+ * existe, botao "Emitir" quando nao existe.
  *
- * A listagem de membros devolve só o card_ref (o qr_token NÃO vem na lista de
- * propósito: /public/card/{token} é um endpoint sem autenticação, então expor N
- * tokens numa listagem seria abrir N URLs permanentes de uma vez). O token é
- * buscado sob demanda, ao abrir a carteirinha de um membro específico.
+ * A listagem de membros devolve so o card_ref (o qr_token NAO vem na lista de
+ * proposito: /public/card/{token} e um endpoint sem autenticacao, entao expor N
+ * tokens numa listagem seria abrir N URLs permanentes de uma vez). O token e
+ * buscado sob demanda, ao abrir a carteirinha de um membro especifico.
  *
- * A emissão é idempotente no backend, então clicar duas vezes não gera uma
- * segunda carteirinha com outro número.
+ * A emissao e idempotente no backend, entao clicar duas vezes nao gera uma
+ * segunda carteirinha com outro numero.
  */
 export function CardCell({
   memberId,
@@ -57,7 +57,7 @@ export function CardCell({
       setToken(res.token);
       return res.token;
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Carteirinha não encontrada", "error");
+      toast(e instanceof Error ? e.message : "Carteirinha nao encontrada", "error");
       return null;
     }
   }

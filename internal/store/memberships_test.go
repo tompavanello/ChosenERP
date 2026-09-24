@@ -9,16 +9,16 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Identidade global + memberships (migração 000053)
+// Identidade global + memberships (migracao 000053)
 // ---------------------------------------------------------------------------
 
-// A própria pessoa enxerga todos os seus vínculos, mesmo de tenants diferentes
-// — é o que alimenta o seletor de igreja.
+// A propria pessoa enxerga todos os seus vinculos, mesmo de tenants diferentes
+// - e o que alimenta o seletor de igreja.
 func TestRLS_MembershipsSelfAcrossTenants(t *testing.T) {
 	err := inBounds(t, boundsUser(fixTenantX, "", "super_admin", fixUserBoth), func(tx pgx.Tx) error {
 		got := count(t, tx, `SELECT count(*) FROM memberships WHERE user_id = $1::uuid`, fixUserBoth)
 		if got != 2 {
-			t.Errorf("self deveria ver 2 vínculos, viu %d", got)
+			t.Errorf("self deveria ver 2 vinculos, viu %d", got)
 		}
 		return nil
 	})
@@ -27,14 +27,14 @@ func TestRLS_MembershipsSelfAcrossTenants(t *testing.T) {
 	}
 }
 
-// O vínculo de um tenant não vaza para outro.
+// O vinculo de um tenant nao vaza para outro.
 func TestRLS_MembershipsIsolatedBetweenTenants(t *testing.T) {
 	err := inBounds(t, boundsUser(fixTenantX, fixBranchA, "secretario", fixUserX), func(tx pgx.Tx) error {
 		if got := count(t, tx, `SELECT count(*) FROM memberships WHERE tenant_id = $1::uuid`, fixTenantY); got != 0 {
-			t.Errorf("vazamento cross-tenant: user X viu %d vínculo(s) do tenant Y", got)
+			t.Errorf("vazamento cross-tenant: user X viu %d vinculo(s) do tenant Y", got)
 		}
 		if got := count(t, tx, `SELECT count(*) FROM memberships WHERE tenant_id = $1::uuid`, fixTenantX); got == 0 {
-			t.Errorf("user X deveria ver o próprio vínculo no tenant X")
+			t.Errorf("user X deveria ver o proprio vinculo no tenant X")
 		}
 		return nil
 	})
@@ -43,33 +43,33 @@ func TestRLS_MembershipsIsolatedBetweenTenants(t *testing.T) {
 	}
 }
 
-// users é global: self enxerga a si; quem está no tenant enxerga as identidades
-// do próprio tenant; outro tenant não enxerga.
+// users e global: self enxerga a si; quem esta no tenant enxerga as identidades
+// do proprio tenant; outro tenant nao enxerga.
 func TestRLS_UsersGlobalScope(t *testing.T) {
 	// Self.
 	if err := inBounds(t, boundsUser(fixTenantX, fixBranchA, "secretario", fixUserX), func(tx pgx.Tx) error {
 		if got := count(t, tx, `SELECT count(*) FROM users WHERE id = $1::uuid`, fixUserX); got != 1 {
-			t.Errorf("self não enxergou a própria identidade (%d)", got)
+			t.Errorf("self nao enxergou a propria identidade (%d)", got)
 		}
 		return nil
 	}); err != nil {
 		t.Fatalf("self: %v", err)
 	}
 
-	// Sede do tenant X enxerga identidades com vínculo no tenant, mas não do Y.
+	// Sede do tenant X enxerga identidades com vinculo no tenant, mas nao do Y.
 	if err := inBounds(t, boundsUser(fixTenantX, "", "super_admin", fixUserX), func(tx pgx.Tx) error {
 		if got := count(t, tx, `SELECT count(*) FROM users WHERE id = $1::uuid`, fixUserBoth); got != 1 {
-			t.Errorf("sede X deveria enxergar a identidade com vínculo no tenant X")
+			t.Errorf("sede X deveria enxergar a identidade com vinculo no tenant X")
 		}
 		if got := count(t, tx, `SELECT count(*) FROM users WHERE id = $1::uuid`, fixUserY); got != 0 {
-			t.Errorf("vazamento: sede X enxergou identidade só do tenant Y")
+			t.Errorf("vazamento: sede X enxergou identidade so do tenant Y")
 		}
 		return nil
 	}); err != nil {
 		t.Fatalf("sede X: %v", err)
 	}
 
-	// Sede do tenant Y não enxerga identidade do X.
+	// Sede do tenant Y nao enxerga identidade do X.
 	if err := inBounds(t, boundsUser(fixTenantY, "", "super_admin", fixUserY), func(tx pgx.Tx) error {
 		if got := count(t, tx, `SELECT count(*) FROM users WHERE id = $1::uuid`, fixUserX); got != 0 {
 			t.Errorf("vazamento: sede Y enxergou identidade do tenant X")
@@ -80,7 +80,7 @@ func TestRLS_UsersGlobalScope(t *testing.T) {
 	}
 }
 
-// user_attach_to_tenant cria identidade + vínculo e recusa vínculo duplicado.
+// user_attach_to_tenant cria identidade + vinculo e recusa vinculo duplicado.
 func TestRLS_UserAttachToTenant(t *testing.T) {
 	err := inBounds(t, boundsUser(fixTenantX, "", "super_admin", fixUserX), func(tx pgx.Tx) error {
 		var newID string
@@ -90,19 +90,19 @@ func TestRLS_UserAttachToTenant(t *testing.T) {
 			t.Fatalf("attach: %v", err)
 		}
 		if got := count(t, tx, `SELECT count(*) FROM users WHERE id = $1::uuid`, newID); got != 1 {
-			t.Errorf("identidade criada não visível (count=%d)", got)
+			t.Errorf("identidade criada nao visivel (count=%d)", got)
 		}
 		if got := count(t, tx, `SELECT count(*) FROM memberships WHERE user_id = $1::uuid AND tenant_id = $2::uuid`, newID, fixTenantX); got != 1 {
-			t.Errorf("membership não criado (count=%d)", got)
+			t.Errorf("membership nao criado (count=%d)", got)
 		}
 
-		// Segundo vínculo da mesma identidade na mesma igreja => 23505.
+		// Segundo vinculo da mesma identidade na mesma igreja => 23505.
 		_, err := tx.Exec(testCtx, `
 			SELECT user_attach_to_tenant('novo.user@rls.local', 'hash', 'Novo User',
 			                             $1::uuid, 'secretario', NULL, true)`, fixTenantX)
 		var pgErr *pgconn.PgError
 		if !errors.As(err, &pgErr) || pgErr.Code != "23505" {
-			t.Errorf("esperava 23505 no vínculo duplicado, veio %v", err)
+			t.Errorf("esperava 23505 no vinculo duplicado, veio %v", err)
 		}
 		return nil
 	})

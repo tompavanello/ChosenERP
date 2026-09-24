@@ -11,12 +11,12 @@ import (
 )
 
 // Read extrai as linhas de uma planilha .xlsx (primeiro worksheet) como texto.
-// Suporta sharedStrings, inlineStr e valores numéricos. Não avalia fórmulas
-// (usa o último valor calculado gravado no arquivo).
+// Suporta sharedStrings, inlineStr e valores numericos. Nao avalia formulas
+// (usa o ultimo valor calculado gravado no arquivo).
 func Read(data []byte) ([][]string, error) {
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		return nil, fmt.Errorf("xlsx inválido: %w", err)
+		return nil, fmt.Errorf("xlsx invalido: %w", err)
 	}
 	files := map[string]*zip.File{}
 	for _, f := range zr.File {
@@ -117,7 +117,7 @@ func cellValue(t, v, inline string, shared []string) string {
 	}
 }
 
-// colIndex converte a referência da célula (ex.: "AB12") no índice da coluna.
+// colIndex converte a referencia da celula (ex.: "AB12") no indice da coluna.
 func colIndex(ref string) int {
 	n := 0
 	for _, r := range ref {

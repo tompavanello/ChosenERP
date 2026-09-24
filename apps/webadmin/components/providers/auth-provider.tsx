@@ -10,12 +10,12 @@ import {
 
 const isHQRole = (role: string) => role === "super_admin" || role === "admin_sede";
 
-/** A Sede enxerga todas as filiais por padrão (contexto "all"). */
+/** A Sede enxerga todas as filiais por padrao (contexto "all"). */
 function ensureDefaultBranchContext(u: User) {
   if (isHQRole(u.role) && !getBranchContext()) setBranchContext("all");
 }
 
-/** Seleção de igreja pendente (identidade com mais de um vínculo). */
+/** Selecao de igreja pendente (identidade com mais de um vinculo). */
 interface PendingSelection {
   token: string;
   tenants: TenantOption[];
@@ -31,7 +31,7 @@ interface AuthContextValue {
   switchTenant: (tenantId: string) => Promise<void>;
   logout: () => void;
   hasPerm: (perm: string) => boolean;
-  /** Recarrega o perfil (/me) e atualiza sessão + cache local. */
+  /** Recarrega o perfil (/me) e atualiza sessao + cache local. */
   refresh: () => Promise<void>;
 }
 
@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     registerSessionLost(logout);
     restoreTokens();
-    // Sem sessão (ex.: tela de login), não chama /me — evita um 401 no console.
+    // Sem sessao (ex.: tela de login), nao chama /me - evita um 401 no console.
     if (!hasSession()) {
       setReady(true);
       return;
@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ensureDefaultBranchContext(me);
         localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(me));
       } catch {
-        /* token inválido/expirado; limpeza já feita pelo cliente */
+        /* token invalido/expirado; limpeza ja feita pelo cliente */
       } finally {
         setReady(true);
       }
@@ -109,22 +109,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [persistSession]);
 
   const selectTenant = useCallback(async (tenantId: string) => {
-    if (!pendingSelection) throw new Error("nenhuma seleção de igreja pendente");
+    if (!pendingSelection) throw new Error("nenhuma selecao de igreja pendente");
     const res = await apiSelectTenant(pendingSelection.token, tenantId);
     setPendingSelection(null);
     persistSession(res.tokens, res.user);
   }, [pendingSelection, persistSession]);
 
-  // Troca de igreja de uma sessão ativa: novos tokens e recarrega os dados no
-  // novo escopo (mesmo padrão do switcher de filial).
+  // Troca de igreja de uma sessao ativa: novos tokens e recarrega os dados no
+  // novo escopo (mesmo padrao do switcher de filial).
   const switchTenant = useCallback(async (tenantId: string) => {
     const res = await apiSwitchTenant(tenantId);
     persistSession(res.tokens, res.user);
     window.location.reload();
   }, [persistSession]);
 
-  // `user` pode vir do cache do localStorage (gravado por uma versão anterior
-  // do app), então `permissions` é tratado como opcional em tempo de execução.
+  // `user` pode vir do cache do localStorage (gravado por uma versao anterior
+  // do app), entao `permissions` e tratado como opcional em tempo de execucao.
   const hasPerm = useCallback((perm: string) => !!user && (user.permissions ?? []).includes(perm), [user]);
 
   const refresh = useCallback(async () => {

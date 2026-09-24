@@ -1,7 +1,7 @@
 -- 000042_announcement_runs.up.sql
--- Histórico de execuções dos comunicados agendados (tela "Execuções").
+-- Historico de execucoes dos comunicados agendados (tela "Execucoes").
 -- Cada disparo do ScheduleWorker grava uma linha aqui, com quantos
--- destinatários foram enfileirados naquele período.
+-- destinatarios foram enfileirados naquele periodo.
 
 CREATE TABLE announcement_runs (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),

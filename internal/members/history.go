@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// HistoryEntry é um evento do histórico eclesiástico do membro (requisito 1.8).
+// HistoryEntry e um evento do historico eclesiastico do membro (requisito 1.8).
 type HistoryEntry struct {
 	ID         string    `json:"id"`
 	MemberID   string    `json:"member_id"`
@@ -18,8 +18,8 @@ type HistoryEntry struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-// historyKindForStatus mapeia a nova situação para o tipo de evento do
-// histórico. Eventos que não mudam situação são lançados à mão.
+// historyKindForStatus mapeia a nova situacao para o tipo de evento do
+// historico. Eventos que nao mudam situacao sao lancados a mao.
 func historyKindForStatus(status string) string {
 	switch status {
 	case "dismissed":
@@ -42,9 +42,9 @@ func nullStr(s string) any {
 	return s
 }
 
-// insertHistory grava um evento derivando tenant/branch do próprio membro (o
-// INSERT..SELECT garante que o RLS WITH CHECK do histórico passe e evita que o
-// chamador precise carregar o contexto). Usado pelos fluxos automáticos.
+// insertHistory grava um evento derivando tenant/branch do proprio membro (o
+// INSERT..SELECT garante que o RLS WITH CHECK do historico passe e evita que o
+// chamador precise carregar o contexto). Usado pelos fluxos automaticos.
 func insertHistory(ctx context.Context, tx pgx.Tx, memberID, kind, notes, actorID string) error {
 	_, err := tx.Exec(ctx, `
 		INSERT INTO member_history (tenant_id, branch_id, member_id, kind, notes, created_by)
@@ -54,7 +54,7 @@ func insertHistory(ctx context.Context, tx pgx.Tx, memberID, kind, notes, actorI
 	return err
 }
 
-// AddHistory insere um evento manual (batismo infantil, recebido por jurisdição,
+// AddHistory insere um evento manual (batismo infantil, recebido por jurisdicao,
 // etc.). `occurredAt` vazio usa agora.
 func (r *Repo) AddHistory(ctx context.Context, tx pgx.Tx, memberID, kind, notes, occurredAt, actorID string) (*HistoryEntry, error) {
 	var id string

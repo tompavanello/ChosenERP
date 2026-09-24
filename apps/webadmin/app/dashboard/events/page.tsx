@@ -176,7 +176,7 @@ export default function EventsPage() {
     if (!confirm("Excluir este evento, a chamada e os convocados?")) return;
     try {
       await deleteEvent(ev.id);
-      toast("Evento excluído.");
+      toast("Evento excluido.");
       await load();
       loadCalendar(calMonth);
     } catch (err) {
@@ -198,7 +198,7 @@ export default function EventsPage() {
   const fmtLocal = (d: Date) =>
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
-  // Move o evento preservando a duração (um retiro de 3 dias continua de 3 dias).
+  // Move o evento preservando a duracao (um retiro de 3 dias continua de 3 dias).
   async function dropOnDay(day: Date, e: React.DragEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -247,11 +247,11 @@ export default function EventsPage() {
     } catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
   async function removeKind(k: EventKind) {
-    try { await deleteEventKind(k.id); toast("Tipo excluído."); await load(); }
+    try { await deleteEventKind(k.id); toast("Tipo excluido."); await load(); }
     catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
   }
 
-  // Grade do calendário
+  // Grade do calendario
   const days = useMemo(() => {
     const start = startOfWeek(startOfMonth(calMonth), { weekStartsOn: 0 });
     const end = endOfWeek(endOfMonth(calMonth), { weekStartsOn: 0 });
@@ -262,14 +262,14 @@ export default function EventsPage() {
     <div className="page">
       <PageHeader
         title="Eventos"
-        description="Registro de eventos, convocados, chamada e frequência"
+        description="Registro de eventos, convocados, chamada e frequencia"
         actions={canWrite ? <Button onClick={openCreate}><Plus className="h-4 w-4" /> Novo evento</Button> : undefined}
       />
 
       <Tabs
         tabs={[
           { key: "eventos", label: "Eventos", icon: <CalendarDays className="h-4 w-4" /> },
-          { key: "calendario", label: "Calendário", icon: <CalendarDays className="h-4 w-4" /> },
+          { key: "calendario", label: "Calendario", icon: <CalendarDays className="h-4 w-4" /> },
           { key: "tipos", label: "Tipos de evento", icon: <Users className="h-4 w-4" /> },
         ]}
         active={tab}
@@ -280,7 +280,7 @@ export default function EventsPage() {
         <>
           <Card className="mb-4 flex flex-wrap items-end gap-3">
             <div><label className="label">De</label><Input type="date" className="h-8 text-sm" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} /></div>
-            <div><label className="label">Até</label><Input type="date" className="h-8 text-sm" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} /></div>
+            <div><label className="label">Ate</label><Input type="date" className="h-8 text-sm" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} /></div>
             <div>
               <label className="label">Tipo</label>
               <Select className="h-8 w-56 text-sm" value={filters.kind} onChange={(e) => setFilters({ ...filters, kind: e.target.value })}>
@@ -297,15 +297,15 @@ export default function EventsPage() {
               <EmptyState icon={<CalendarDays className="h-10 w-10" />} title="Nenhum evento" description="Registre cultos, EBD, retiros e demais eventos." />
             ) : (
               <Table>
-                <THead><TRow><TH>Período</TH><TH>Tipo</TH><TH>Presença</TH><TH className="text-right">Convocados</TH><TH className="text-right">Custo est.</TH><TH className="text-right">Custo real</TH><TH className="text-right">Ações</TH></TRow></THead>
+                <THead><TRow><TH>Periodo</TH><TH>Tipo</TH><TH>Presenca</TH><TH className="text-right">Convocados</TH><TH className="text-right">Custo est.</TH><TH className="text-right">Custo real</TH><TH className="text-right">Acoes</TH></TRow></THead>
                 <TBody>
                   {events.map((ev) => (
                     <TRow key={ev.id}>
                       <TD className="font-medium">
                         {dateTimePt(ev.starts_at)}
-                        {ev.ends_at && <span className="block text-xs text-zinc-400">até {dateTimePt(ev.ends_at)}</span>}
+                        {ev.ends_at && <span className="block text-xs text-zinc-400">ate {dateTimePt(ev.ends_at)}</span>}
                       </TD>
-                      <TD><Badge tone="sky">{ev.kind_name ?? "—"}</Badge></TD>
+                      <TD><Badge tone="sky">{ev.kind_name ?? "-"}</Badge></TD>
                       <TD>
                         <span className="text-sm">{ev.participants_count} participante(s)</span>
                         <span className="block text-xs text-zinc-400">
@@ -313,8 +313,8 @@ export default function EventsPage() {
                         </span>
                       </TD>
                       <TD className="text-right tabular-nums">{ev.invited_count}</TD>
-                      <TD className="text-right tabular-nums">{ev.estimated_cost != null ? currency(ev.estimated_cost) : "—"}</TD>
-                      <TD className="text-right tabular-nums">{ev.cost_actual > 0 ? currency(ev.cost_actual) : "—"}</TD>
+                      <TD className="text-right tabular-nums">{ev.estimated_cost != null ? currency(ev.estimated_cost) : "-"}</TD>
+                      <TD className="text-right tabular-nums">{ev.cost_actual > 0 ? currency(ev.cost_actual) : "-"}</TD>
                       <TD>
                         <div className="flex justify-end gap-1">
                           {canWrite && <Button variant="ghost" className="h-8 px-2" title="Editar" onClick={() => openEdit(ev)}><Pencil className="h-4 w-4" /></Button>}
@@ -338,7 +338,7 @@ export default function EventsPage() {
             <Button variant="outline" size="sm" onClick={() => setCalMonth((m) => addMonths(m, 1))}><ChevronRight className="h-4 w-4" /></Button>
           </div>
           <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-medium uppercase text-zinc-400">
-            {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => <div key={d} className="py-1">{d}</div>)}
+            {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"].map((d) => <div key={d} className="py-1">{d}</div>)}
           </div>
           <div className="grid grid-cols-7 gap-1">
             {days.map((day) => {
@@ -391,7 +391,7 @@ export default function EventsPage() {
                 <ul className="max-h-40 space-y-0.5 overflow-y-auto">
                   {(inviteeCache[hover.ev.id] ?? []).map((i) => (
                     <li key={i.id} className="truncate">
-                      {i.ministry_id ? `Ministério: ${i.ministry_name}` : i.member_name}
+                      {i.ministry_id ? `Ministerio: ${i.ministry_name}` : i.member_name}
                     </li>
                   ))}
                 </ul>
@@ -408,14 +408,14 @@ export default function EventsPage() {
             {canWrite && <Button size="sm" onClick={openKindCreate}><Plus className="h-4 w-4" /> Tipo</Button>}
           </div>
           <Table>
-            <THead><TRow><TH>Nome</TH><TH>Slug</TH><TH>Ordem</TH><TH>Ativo</TH><TH className="text-right">Ações</TH></TRow></THead>
+            <THead><TRow><TH>Nome</TH><TH>Slug</TH><TH>Ordem</TH><TH>Ativo</TH><TH className="text-right">Acoes</TH></TRow></THead>
             <TBody>
               {kinds.map((k) => (
                 <TRow key={k.id}>
                   <TD className="font-medium">{k.name}</TD>
                   <TD className="text-zinc-500">{k.slug}</TD>
                   <TD className="text-zinc-500">{k.sort_order}</TD>
-                  <TD><Badge tone={k.is_active ? "green" : "zinc"}>{k.is_active ? "Sim" : "Não"}</Badge></TD>
+                  <TD><Badge tone={k.is_active ? "green" : "zinc"}>{k.is_active ? "Sim" : "Nao"}</Badge></TD>
                   <TD>
                     <div className="flex justify-end gap-1">
                       {canWrite && <Button variant="ghost" className="h-8 px-2" title="Editar" onClick={() => openKindEdit(k)}><Pencil className="h-4 w-4" /></Button>}
@@ -436,29 +436,29 @@ export default function EventsPage() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Tipo de evento">
               <Select className="h-8 text-sm" value={form.kind_id} onChange={(e) => setForm({ ...form, kind_id: e.target.value })}>
-                <option value="">—</option>
+                <option value="">-</option>
                 {kinds.filter((k) => k.is_active).map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
               </Select>
             </Field>
             <Field label="Custo estimado (R$)" hint="Opcional.">
               <Input type="number" min="0" step="0.01" className="h-8 text-sm" value={form.estimated_cost} onChange={(e) => setForm({ ...form, estimated_cost: e.target.value })} />
             </Field>
-            <Field label="Início — data *"><Input required type="date" className="h-8 text-sm" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
-            <Field label="Início — hora *"><Input required type="time" className="h-8 text-sm" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} /></Field>
-            <Field label="Término — data" hint="Use para eventos de mais de um dia (retiro, acampamento).">
+            <Field label="Inicio - data *"><Input required type="date" className="h-8 text-sm" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
+            <Field label="Inicio - hora *"><Input required type="time" className="h-8 text-sm" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} /></Field>
+            <Field label="Termino - data" hint="Use para eventos de mais de um dia (retiro, acampamento).">
               <Input type="date" className="h-8 text-sm" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
             </Field>
-            <Field label="Término — hora"><Input type="time" className="h-8 text-sm" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} /></Field>
-            <Field label="Registro de presença">
+            <Field label="Termino - hora"><Input type="time" className="h-8 text-sm" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} /></Field>
+            <Field label="Registro de presenca">
               <Select className="h-8 text-sm" value={form.attendance_mode} onChange={(e) => setForm({ ...form, attendance_mode: e.target.value })}>
                 <option value="nominal">Por chamada (nominal)</option>
-                <option value="count">Apenas o número</option>
+                <option value="count">Apenas o numero</option>
               </Select>
             </Field>
             <Field label="Quantidade de presentes" hint={form.attendance_mode === "nominal" ? "Deixe vazio para usar a chamada." : "Total digitado."}>
               <Input type="number" min="0" className="h-8 text-sm" value={form.participants_count} onChange={(e) => setForm({ ...form, participants_count: e.target.value })} />
             </Field>
-            <Field label="Observações" className="sm:col-span-2 lg:col-span-3">
+            <Field label="Observacoes" className="sm:col-span-2 lg:col-span-3">
               <Textarea rows={2} className="text-sm" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </Field>
           </div>
@@ -468,11 +468,11 @@ export default function EventsPage() {
           <div className="rounded border border-zinc-200 dark:border-zinc-700">
             <div className="flex items-center gap-2 border-b border-zinc-100 p-2 text-sm font-semibold dark:border-zinc-800">
               <Users className="h-4 w-4 text-sky-600" /> Convocados (obrigados a participar)
-              <span className="ml-auto text-xs font-normal text-zinc-400">{invMembers.size} pessoa(s) · {invMinistries.size} ministério(s)</span>
+              <span className="ml-auto text-xs font-normal text-zinc-400">{invMembers.size} pessoa(s) - {invMinistries.size} ministerio(s)</span>
             </div>
             <div className="grid gap-2 p-2 sm:grid-cols-2">
               <div>
-                <p className="mb-1 text-xs font-medium uppercase text-zinc-400">Ministérios</p>
+                <p className="mb-1 text-xs font-medium uppercase text-zinc-400">Ministerios</p>
                 <ul className="max-h-36 space-y-0.5 overflow-y-auto">
                   {ministries.map((mi) => (
                     <li key={mi.id}>
@@ -482,7 +482,7 @@ export default function EventsPage() {
                       </label>
                     </li>
                   ))}
-                  {ministries.length === 0 && <li className="px-1 py-2 text-xs text-zinc-400">Sem ministérios.</li>}
+                  {ministries.length === 0 && <li className="px-1 py-2 text-xs text-zinc-400">Sem ministerios.</li>}
                 </ul>
               </div>
               <div>
@@ -539,7 +539,7 @@ export default function EventsPage() {
       <Drawer open={kindDrawer.open} onClose={() => setKindDrawer({ open: false })} title={kindDrawer.editing ? "Editar tipo" : "Novo tipo"}>
         <form onSubmit={saveKind} className="space-y-3">
           <Field label="Nome *"><Input required className="h-8 text-sm" value={kindForm.name} onChange={(e) => setKindForm({ ...kindForm, name: e.target.value })} /></Field>
-          <Field label="Slug *" hint="Identificador estável (ex.: culto)."><Input required className="h-8 text-sm" value={kindForm.slug} onChange={(e) => setKindForm({ ...kindForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9_]+/g, "_") })} /></Field>
+          <Field label="Slug *" hint="Identificador estavel (ex.: culto)."><Input required className="h-8 text-sm" value={kindForm.slug} onChange={(e) => setKindForm({ ...kindForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9_]+/g, "_") })} /></Field>
           <Field label="Ordem"><Input type="number" className="h-8 text-sm" value={kindForm.sort_order} onChange={(e) => setKindForm({ ...kindForm, sort_order: e.target.value })} /></Field>
           <Field label="Cor">
             <input
@@ -549,7 +549,7 @@ export default function EventsPage() {
               onChange={(e) => setKindForm({ ...kindForm, color: e.target.value })}
             />
           </Field>
-          <Field label="Situação">
+          <Field label="Situacao">
             <Select className="h-8 text-sm" value={kindForm.is_active} onChange={(e) => setKindForm({ ...kindForm, is_active: e.target.value })}>
               <option value="true">Ativo</option><option value="false">Inativo</option>
             </Select>

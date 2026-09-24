@@ -1,8 +1,8 @@
 -- 000047_suppliers.up.sql
--- Cadastro de FORNECEDORES (pessoas físicas ou jurídicas). No legado (IPI) os
+-- Cadastro de FORNECEDORES (pessoas fisicas ou juridicas). No legado (IPI) os
 -- fornecedores estavam misturados ao cadastro de membros (ncad_credsus_2 = 5 /
--- tipo 'FO'); aqui ganham tabela própria. CPF e CNPJ são ambos opcionais —
--- o fornecedor pode ser identificado só pelo nome.
+-- tipo 'FO'); aqui ganham tabela propria. CPF e CNPJ sao ambos opcionais -
+-- o fornecedor pode ser identificado so pelo nome.
 CREATE TABLE IF NOT EXISTS suppliers (
     id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id    uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -22,8 +22,8 @@ CREATE TABLE IF NOT EXISTS suppliers (
 CREATE INDEX IF NOT EXISTS idx_suppliers_tenant_branch ON suppliers(tenant_id, branch_id);
 CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers(tenant_id, name);
 
--- RLS: mesma regra de benefactors — branch nulo = fornecedor global do tenant.
--- Sede (branch NULL) grava em qualquer filial; filial grava na própria.
+-- RLS: mesma regra de benefactors - branch nulo = fornecedor global do tenant.
+-- Sede (branch NULL) grava em qualquer filial; filial grava na propria.
 ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS suppliers_sel ON suppliers;

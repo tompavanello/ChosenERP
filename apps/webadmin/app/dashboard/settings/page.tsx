@@ -21,7 +21,7 @@ import {
   type Tenant, type Branch,
 } from "@/lib/api";
 
-// Estrutura de governo da igreja: Matriz (Sede) > Filial (congregação) > PAE.
+// Estrutura de governo da igreja: Matriz (Sede) > Filial (congregacao) > PAE.
 const BRANCH_KINDS = [
   { v: "matriz", l: "Matriz (Sede)" },
   { v: "filial", l: "Filial / Regional" },
@@ -80,7 +80,7 @@ export default function SettingsPage() {
       });
       setBranches(b.branches);
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro ao carregar configurações", "error");
+      toast(err instanceof Error ? err.message : "Erro ao carregar configuracoes", "error");
       setBranches([]);
     }
   }, [toast]);
@@ -187,7 +187,7 @@ export default function SettingsPage() {
     }
   }
 
-  // Enquanto há QR na tela, consulta o estado até conectar.
+  // Enquanto ha QR na tela, consulta o estado ate conectar.
   useEffect(() => {
     if (!connecting || !drawer.editing) return;
     const id = drawer.editing.id;
@@ -200,7 +200,7 @@ export default function SettingsPage() {
           setConnecting(false);
         }
       } catch {
-        /* mantém a tentativa */
+        /* mantem a tentativa */
       }
     }, 3000);
     return () => clearInterval(timer);
@@ -237,7 +237,7 @@ export default function SettingsPage() {
     if (!confirm(`Excluir a filial "${b.name}"?`)) return;
     try {
       await deleteBranch(b.id);
-      toast("Filial excluída.");
+      toast("Filial excluida.");
       await load();
       mutate("branches");
     } catch (err) {
@@ -248,7 +248,7 @@ export default function SettingsPage() {
   return (
     <div className="page">
       <PageHeader
-        title="Configurações"
+        title="Configuracoes"
         description="Dados da igreja e filiais associadas ao tenant"
         actions={canWrite && tab === "filiais" ? <Button onClick={openCreate}><Plus className="h-4 w-4" /> Nova filial</Button> : undefined}
       />
@@ -269,7 +269,7 @@ export default function SettingsPage() {
               <Field label="Nome da igreja" required className="sm:col-span-2">
                 <Input required disabled={!canWrite} className="h-8 text-sm" value={tenantForm.name} onChange={(e) => setTenantForm({ ...tenantForm, name: e.target.value })} />
               </Field>
-              <Field label="Razão social">
+              <Field label="Razao social">
                 <Input disabled={!canWrite} className="h-8 text-sm" value={tenantForm.legal_name} onChange={(e) => setTenantForm({ ...tenantForm, legal_name: e.target.value })} />
               </Field>
               <Field label="CNPJ">
@@ -282,14 +282,14 @@ export default function SettingsPage() {
                   <option value="enterprise">Enterprise</option>
                 </Select>
               </Field>
-              <Field label="Fuso horário">
+              <Field label="Fuso horario">
                 <Input disabled={!canWrite} className="h-8 text-sm" value={tenantForm.timezone} onChange={(e) => setTenantForm({ ...tenantForm, timezone: e.target.value })} />
               </Field>
               <Field label="Idioma (locale)">
                 <Input disabled={!canWrite} className="h-8 text-sm" value={tenantForm.locale} onChange={(e) => setTenantForm({ ...tenantForm, locale: e.target.value })} />
               </Field>
               <p className="text-xs text-zinc-400 sm:col-span-2">Identificador do tenant: <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">{tenant.slug}</code></p>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 sm:col-span-2">White-label (subdomínio)</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 sm:col-span-2">White-label (subdominio)</p>
               <Field label="URL do logo" hint="Exibido na tela de login da igreja.">
                 <Input disabled={!canWrite} className="h-8 text-sm" placeholder="https://..." value={tenantForm.logo_url} onChange={(e) => setTenantForm({ ...tenantForm, logo_url: e.target.value })} />
               </Field>
@@ -299,7 +299,7 @@ export default function SettingsPage() {
               <Field label="URL do favicon">
                 <Input disabled={!canWrite} className="h-8 text-sm" placeholder="https://..." value={tenantForm.favicon_url} onChange={(e) => setTenantForm({ ...tenantForm, favicon_url: e.target.value })} />
               </Field>
-              <Field label="Domínio próprio" hint="Opcional (ex.: igreja.minhadominio.com).">
+              <Field label="Dominio proprio" hint="Opcional (ex.: igreja.minhadominio.com).">
                 <Input disabled={!canWrite} className="h-8 text-sm" value={tenantForm.custom_domain} onChange={(e) => setTenantForm({ ...tenantForm, custom_domain: e.target.value })} />
               </Field>
               {canWrite && (
@@ -320,14 +320,14 @@ export default function SettingsPage() {
             <EmptyState icon={<Building2 className="h-10 w-10" />} title="Nenhuma filial" description="Cadastre a Matriz, as filiais (regionais) e os PAEs." />
           ) : (
             <Table>
-              <THead><TRow><TH>Nome</TH><TH>Tipo</TH><TH>Identificador</TH><TH>CNPJ</TH><TH className="text-right">Membros</TH><TH>Situação</TH><TH className="text-right">Ações</TH></TRow></THead>
+              <THead><TRow><TH>Nome</TH><TH>Tipo</TH><TH>Identificador</TH><TH>CNPJ</TH><TH className="text-right">Membros</TH><TH>Situacao</TH><TH className="text-right">Acoes</TH></TRow></THead>
               <TBody>
                 {branches.map((b) => (
                   <TRow key={b.id}>
                     <TD className="font-medium">{b.name}</TD>
                     <TD><Badge tone="zinc">{BRANCH_KINDS.find((k) => k.v === b.kind)?.l ?? b.kind}</Badge></TD>
                     <TD className="text-sm text-zinc-500">{b.slug}</TD>
-                    <TD className="text-sm text-zinc-500">{b.cnpj ?? "—"}</TD>
+                    <TD className="text-sm text-zinc-500">{b.cnpj ?? "-"}</TD>
                     <TD className="text-right tabular-nums">{b.member_count ?? 0}</TD>
                     <TD><Badge tone={(b.is_active ?? true) ? "green" : "zinc"}>{(b.is_active ?? true) ? "Ativa" : "Inativa"}</Badge></TD>
                     <TD>
@@ -365,10 +365,10 @@ export default function SettingsPage() {
               label="Unidade superior"
               hint={
                 form.kind === "matriz"
-                  ? "A Matriz é a raiz: não tem unidade superior."
+                  ? "A Matriz e a raiz: nao tem unidade superior."
                   : form.kind === "pae"
-                    ? "Obrigatório para o PAE: vincule a uma Matriz ou Filial."
-                    : "Opcional (a Filial pode reportar à Matriz)."
+                    ? "Obrigatorio para o PAE: vincule a uma Matriz ou Filial."
+                    : "Opcional (a Filial pode reportar a Matriz)."
               }
             >
               <Select
@@ -378,14 +378,14 @@ export default function SettingsPage() {
                 value={form.kind === "matriz" ? "" : form.parent_id}
                 onChange={(e) => setForm({ ...form, parent_id: e.target.value })}
               >
-                <option value="">—</option>
+                <option value="">-</option>
                 {(branches ?? [])
                   .filter((b) => b.id !== drawer.editing?.id)
                   .filter((b) => form.kind !== "pae" || b.kind === "matriz" || b.kind === "filial")
                   .map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
               </Select>
             </Field>
-            <Field label="Situação">
+            <Field label="Situacao">
               <Select className="h-8 text-sm" value={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.value })}>
                 <option value="true">Ativa</option>
                 <option value="false">Inativa</option>
@@ -394,7 +394,7 @@ export default function SettingsPage() {
             <Field label="Logradouro" className="sm:col-span-2">
               <Input className="h-8 text-sm" value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} />
             </Field>
-            <Field label="Número">
+            <Field label="Numero">
               <Input className="h-8 text-sm" value={form.number} onChange={(e) => setForm({ ...form, number: e.target.value })} />
             </Field>
             <Field label="Bairro">
@@ -420,7 +420,7 @@ export default function SettingsPage() {
           <div className="mt-6 space-y-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
             <h3 className="text-sm font-semibold">Canais de envio</h3>
 
-            {/* WhatsApp próprio da filial (instância Evolution = id da filial) */}
+            {/* WhatsApp proprio da filial (instancia Evolution = id da filial) */}
             <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-[13px] font-medium">WhatsApp da filial</span>
@@ -428,7 +428,7 @@ export default function SettingsPage() {
                   {waStatus === "connected" ? "Conectado" : waStatus === "connecting" ? "Aguardando QR" : "Desconectado"}
                 </Badge>
               </div>
-              <Field label="Telefone (WhatsApp)" hint="Número exibido/associado à filial.">
+              <Field label="Telefone (WhatsApp)" hint="Numero exibido/associado a filial.">
                 <Input className="h-8 text-sm" placeholder="(11) 90000-0000" value={chForm.whatsapp_phone} onChange={(e) => setChForm({ ...chForm, whatsapp_phone: e.target.value })} />
               </Field>
               <div className="mt-2 flex gap-2">
@@ -448,13 +448,13 @@ export default function SettingsPage() {
                     src={qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`}
                   />
                   <p className="text-center text-xs text-zinc-500">
-                    Abra o WhatsApp da filial → Aparelhos conectados → Conectar um aparelho.
+                    Abra o WhatsApp da filial {"->"} Aparelhos conectados {"->"} Conectar um aparelho.
                   </p>
                 </div>
               )}
             </div>
 
-            {/* SMTP próprio da filial */}
+            {/* SMTP proprio da filial */}
             <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
               <span className="mb-2 block text-[13px] font-medium">E-mail (SMTP) da filial</span>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -464,7 +464,7 @@ export default function SettingsPage() {
                 <Field label="Porta">
                   <Input className="h-8 text-sm" value={chForm.smtp_port} onChange={(e) => setChForm({ ...chForm, smtp_port: e.target.value.replace(/\D/g, "") })} />
                 </Field>
-                <Field label="Usuário">
+                <Field label="Usuario">
                   <Input className="h-8 text-sm" value={chForm.smtp_user} onChange={(e) => setChForm({ ...chForm, smtp_user: e.target.value })} />
                 </Field>
                 <Field label="Senha" hint="Deixe vazio para manter a atual.">
@@ -479,7 +479,7 @@ export default function SettingsPage() {
               </div>
               <label className="mt-3 flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={chForm.smtp_secure} onChange={(e) => setChForm({ ...chForm, smtp_secure: e.target.checked })} />
-                Conexão segura (TLS implícito, porta 465)
+                Conexao segura (TLS implicito, porta 465)
               </label>
             </div>
 

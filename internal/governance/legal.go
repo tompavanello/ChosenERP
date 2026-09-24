@@ -7,9 +7,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ---- Convênios e documentação legal (G6) ----
+// ---- Convenios e documentacao legal (G6) ----
 
-// LegalDocument é um documento legal com (opcional) vencimento.
+// LegalDocument e um documento legal com (opcional) vencimento.
 type LegalDocument struct {
 	ID          string  `json:"id"`
 	BranchID    string  `json:"branch_id"`
@@ -20,14 +20,14 @@ type LegalDocument struct {
 	IssuedAt    *string `json:"issued_at,omitempty"`
 	ExpiresAt   *string `json:"expires_at,omitempty"`
 	FileURL     *string `json:"file_url,omitempty"`
-	// Dias até o vencimento (negativo = vencido). Ausente quando não há data.
+	// Dias ate o vencimento (negativo = vencido). Ausente quando nao ha data.
 	DaysToExpiry *int      `json:"days_to_expiry,omitempty"`
 	Expired      bool      `json:"expired"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-// LegalInput é o corpo de criação/edição de um documento legal.
+// LegalInput e o corpo de criacao/edicao de um documento legal.
 type LegalInput struct {
 	Kind        *string `json:"kind"`
 	Title       string  `json:"title"`
@@ -128,7 +128,7 @@ func (r *Repo) DeleteLegalDocument(ctx context.Context, tx pgx.Tx, id string) er
 
 // ---- Painel de mandatos (G5) ----
 
-// Mandate é um mandato vigente ou recém-encerrado de um membro.
+// Mandate e um mandato vigente ou recem-encerrado de um membro.
 type Mandate struct {
 	ID           string  `json:"id"`
 	MemberID     string  `json:"member_id"`
@@ -144,8 +144,8 @@ type Mandate struct {
 }
 
 // ListMandates devolve os mandatos com vencimento dentro da janela (ou vencidos),
-// além dos que não têm data. Inclui ativos e encerrados recentemente para dar o
-// histórico de quem exerceu cada cargo.
+// alem dos que nao tem data. Inclui ativos e encerrados recentemente para dar o
+// historico de quem exerceu cada cargo.
 func (r *Repo) ListMandates(ctx context.Context, tx pgx.Tx, windowDays int) ([]Mandate, error) {
 	if windowDays <= 0 {
 		windowDays = 60

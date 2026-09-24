@@ -5,11 +5,11 @@ import "testing"
 // TestPublicLink cobre a montagem do link que vai no corpo do e-mail/WhatsApp.
 //
 // O bug que originou este teste: os dois chamadores montavam
-// `AppBaseURL + "/" + token` por conta própria, formato que não corresponde a
-// rota nenhuma do webadmin (as rotas são `/`, `/dashboard/*` e `/member/[token]`)
-// — quem clicasse caía em 404. Só a carteirinha tem página pública; para os
+// `AppBaseURL + "/" + token` por conta propria, formato que nao corresponde a
+// rota nenhuma do webadmin (as rotas sao `/`, `/dashboard/*` e `/member/[token]`)
+// - quem clicasse caia em 404. So a carteirinha tem pagina publica; para os
 // demais documentos o link tem de sair vazio, porque os senders omitem a linha
-// quando é vazia (senders.go:229,368,425).
+// quando e vazia (senders.go:229,368,425).
 func TestPublicLink(t *testing.T) {
 	casos := []struct {
 		nome    string

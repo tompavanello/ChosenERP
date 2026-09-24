@@ -35,11 +35,11 @@ import {
   createTransaction,
 } from "@/lib/api";
 
-// Fetcher genérico para SWR. O caminho é relativo: a API é servida na mesma
-// origem do webadmin (ver o comentário no topo de lib/api.ts).
+// Fetcher generico para SWR. O caminho e relativo: a API e servida na mesma
+// origem do webadmin (ver o comentario no topo de lib/api.ts).
 //
-// Ressalva conhecida: este fetcher lê o token do localStorage direto e não passa
-// pelo api(), então NÃO faz refresh em 401 — o comportamento dele difere do das
+// Ressalva conhecida: este fetcher le o token do localStorage direto e nao passa
+// pelo api(), entao NAO faz refresh em 401 - o comportamento dele difere do das
 // chamadas que usam api() quando o access token expira.
 const fetcher = (url: string) => fetch(url, {
   headers: { Authorization: `Bearer ${localStorage.getItem("chosen_token") ?? ""}` },
@@ -49,7 +49,7 @@ const fetcher = (url: string) => fetch(url, {
 });
 
 // Invalida o cache SWR usando prefixo. `mutate("people")` invalida a chave
-// exata "people" e todas as que começam com "people:" (ex.: "people:{...}").
+// exata "people" e todas as que comecam com "people:" (ex.: "people:{...}").
 export function mutate(key: string) {
   return swrMutate((k) => typeof k === "string" && (k === key || k.startsWith(`${key}:`)));
 }
@@ -146,7 +146,7 @@ export function useTransfers() {
   );
 }
 
-// ---- Hooks de mutação com invalidação ----
+// ---- Hooks de mutacao com invalidacao ----
 
 export function useCreateMember() {
   return useSWRMutation(

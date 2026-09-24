@@ -11,24 +11,24 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// errUnauthorized é o erro padrão de credenciais inválidas.
+// errUnauthorized e o erro padrao de credenciais invalidas.
 var errUnauthorized = fmt.Errorf("invalid credentials")
 
-// Erros de MFA no login, distinguíveis pelo handler para orientar o frontend.
+// Erros de MFA no login, distinguiveis pelo handler para orientar o frontend.
 var (
 	ErrMFARequired = errors.New("mfa_required")
 	ErrMFAInvalid  = errors.New("mfa_invalid")
 )
 
-// ErrTenantForbidden sinaliza que a identidade não tem vínculo ativo com a
-// igreja pedida (subdomínio/seletor).
+// ErrTenantForbidden sinaliza que a identidade nao tem vinculo ativo com a
+// igreja pedida (subdominio/seletor).
 var ErrTenantForbidden = errors.New("tenant_forbidden")
 
-// selectionTTL é a validade do token de seleção de igreja (curto de propósito:
-// só serve para completar o login).
+// selectionTTL e a validade do token de selecao de igreja (curto de proposito:
+// so serve para completar o login).
 const selectionTTL = 5 * time.Minute
 
-// Membership é o vínculo de uma identidade com uma igreja (papel + filial).
+// Membership e o vinculo de uma identidade com uma igreja (papel + filial).
 type Membership struct {
 	TenantID   string `json:"tenant_id"`
 	TenantName string `json:"tenant_name"`
@@ -38,7 +38,7 @@ type Membership struct {
 	IsActive   bool   `json:"is_active"`
 }
 
-// TenantOption é uma igreja oferecida no seletor após o login.
+// TenantOption e uma igreja oferecida no seletor apos o login.
 type TenantOption struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -46,7 +46,7 @@ type TenantOption struct {
 	Role string `json:"role"`
 }
 
-// LoginResult é o desfecho do login: ou entra direto (Profile+Tokens) ou exige
+// LoginResult e o desfecho do login: ou entra direto (Profile+Tokens) ou exige
 // que a identidade escolha a igreja (RequiresTenantSelection + SelectionToken).
 type LoginResult struct {
 	Profile                 *Profile
@@ -56,7 +56,7 @@ type LoginResult struct {
 	Tenants                 []TenantOption
 }
 
-// Profile representa o usuário autenticado e seu contexto de acesso.
+// Profile representa o usuario autenticado e seu contexto de acesso.
 type Profile struct {
 	UserID       string
 	Email        string
@@ -79,7 +79,7 @@ type Tokens struct {
 	ExpiresIn int64  `json:"expires_in"`
 }
 
-// Service mantém a lógica de autenticação sobre o Store.
+// Service mantem a logica de autenticacao sobre o Store.
 type Service struct {
 	store      *store.Store
 	secret     string
@@ -91,7 +91,7 @@ func NewService(st *store.Store, secret string, accessTTL, refreshTTL time.Durat
 	return &Service{store: st, secret: secret, accessTTL: accessTTL, refreshTTL: refreshTTL}
 }
 
-// identityRow é a projeção da identidade (auth_lookup_user / auth_identity).
+// identityRow e a projecao da identidade (auth_lookup_user / auth_identity).
 type identityRow struct {
 	UserID       string
 	FullName     string
@@ -110,7 +110,7 @@ func scanIdentity(row pgx.Row) (*identityRow, error) {
 }
 
 // findIdentityByEmail carrega a identidade via SECURITY DEFINER (fora do RLS),
-// pois o tenant ainda não é conhecido na etapa de login.
+// pois o tenant ainda nao e conhecido na etapa de login.
 func (s *Service) findIdentityByEmail(ctx context.Context, email string) (*identityRow, error) {
 	id, err := scanIdentity(s.store.Pool().QueryRow(ctx, `SELECT * FROM auth_lookup_user($1)`, email))
 	if err != nil {
@@ -133,8 +133,8 @@ func (s *Service) findIdentityByID(ctx context.Context, userID string) (*identit
 	return id, nil
 }
 
-// Memberships lista as igrejas de uma identidade. Usa função SECURITY DEFINER:
-// pode ser chamada na seleção de igreja (sem tenant) e no middleware.
+// Memberships lista as igrejas de uma identidade. Usa funcao SECURITY DEFINER:
+// pode ser chamada na selecao de igreja (sem tenant) e no middleware.
 func (s *Service) Memberships(ctx context.Context, userID string) ([]Membership, error) {
 	rows, err := s.store.Pool().Query(ctx, `
 		SELECT tenant_id, tenant_name, tenant_slug, role_key, COALESCE(branch_id,''), is_active
@@ -183,8 +183,8 @@ func findMembership(ms []Membership, tenantID string) (Membership, bool) {
 
 // Login valida credenciais e resolve a igreja ativa.
 //
-//   - tenantSlug informado (subdomínio): exige membership ativa naquela igreja.
-//   - sem slug: 1 membership entra direto; >1 exige seleção (token curto + lista).
+//   - tenantSlug informado (subdominio): exige membership ativa naquela igreja.
+//   - sem slug: 1 membership entra direto; >1 exige selecao (token curto + lista).
 func (s *Service) Login(ctx context.Context, email, password, code, tenantSlug string) (*LoginResult, error) {
 	id, err := s.findIdentityByEmail(ctx, email)
 	if err != nil {
@@ -196,8 +196,8 @@ func (s *Service) Login(ctx context.Context, email, password, code, tenantSlug s
 	if !id.IsActive {
 		return nil, errUnauthorized
 	}
-	// MFA: só exige o código depois da senha correta, para não revelar que a
-	// conta tem MFA a quem não sabe a senha.
+	// MFA: so exige o codigo depois da senha correta, para nao revelar que a
+	// conta tem MFA a quem nao sabe a senha.
 	if id.MFAEnabled {
 		if strings.TrimSpace(code) == "" {
 			return nil, ErrMFARequired
@@ -298,7 +298,7 @@ func (s *Service) SelectTenant(ctx context.Context, selectionToken, tenantID str
 	return s.switchTo(ctx, claims.UserID, tenantID)
 }
 
-// SwitchTenant troca a igreja ativa de uma sessão já autenticada.
+// SwitchTenant troca a igreja ativa de uma sessao ja autenticada.
 func (s *Service) SwitchTenant(ctx context.Context, userID, tenantID string) (*Profile, *Tokens, error) {
 	return s.switchTo(ctx, userID, tenantID)
 }
@@ -323,9 +323,9 @@ func (s *Service) switchTo(ctx context.Context, userID, tenantID string) (*Profi
 	return res.Profile, res.Tokens, nil
 }
 
-// Me reconstrói o perfil completo (dados do usuário + permissões + igrejas) a
-// partir das claims do JWT. É o que sustenta o GET /api/v1/me depois de um reload,
-// quando já não existe o payload do login. Roda dentro do próprio escopo RLS.
+// Me reconstroi o perfil completo (dados do usuario + permissoes + igrejas) a
+// partir das claims do JWT. E o que sustenta o GET /api/v1/me depois de um reload,
+// quando ja nao existe o payload do login. Roda dentro do proprio escopo RLS.
 func (s *Service) Me(ctx context.Context, userID, tenantID, branchID, role string) (*Profile, error) {
 	prof := &Profile{
 		UserID:   userID,
@@ -356,7 +356,7 @@ func (s *Service) Me(ctx context.Context, userID, tenantID, branchID, role strin
 	if err != nil {
 		return nil, err
 	}
-	// As memberships vêm de função SECURITY DEFINER (independem da RLS da sessão).
+	// As memberships vem de funcao SECURITY DEFINER (independem da RLS da sessao).
 	if ms, err := s.Memberships(ctx, userID); err == nil {
 		prof.Memberships = ms
 	} else {
@@ -365,7 +365,7 @@ func (s *Service) Me(ctx context.Context, userID, tenantID, branchID, role strin
 	return prof, nil
 }
 
-// Refresh troca um refresh token válido por um novo par de tokens.
+// Refresh troca um refresh token valido por um novo par de tokens.
 func (s *Service) Refresh(ctx context.Context, raw string) (*Tokens, error) {
 	claims, err := ParseToken(s.secret, raw)
 	if err != nil {
@@ -415,7 +415,7 @@ func (s *Service) rolePermissions(ctx context.Context, tx pgx.Tx, roleKey, tenan
 
 // ---- MFA (TOTP) ----
 
-// SetupMFA gera e grava um segredo TOTP (ainda não habilitado). O segredo só
+// SetupMFA gera e grava um segredo TOTP (ainda nao habilitado). O segredo so
 // passa a valer no login depois de ConfirmMFA.
 func (s *Service) SetupMFA(ctx context.Context, b store.Bounds, userID string) (string, error) {
 	secret, err := GenerateTOTPSecret()
@@ -446,14 +446,14 @@ func (s *Service) MFASecret(ctx context.Context, b store.Bounds, userID string) 
 	return secret, enabled, err
 }
 
-// EnableMFA confere o código do autenticador e liga o MFA.
+// EnableMFA confere o codigo do autenticador e liga o MFA.
 func (s *Service) EnableMFA(ctx context.Context, b store.Bounds, userID, code string) error {
 	secret, _, err := s.MFASecret(ctx, b, userID)
 	if err != nil {
 		return err
 	}
 	if secret == "" {
-		return errors.New("mfa não iniciado")
+		return errors.New("mfa nao iniciado")
 	}
 	if !ValidateTOTP(secret, code) {
 		return ErrMFAInvalid
@@ -474,13 +474,13 @@ func (s *Service) DisableMFA(ctx context.Context, b store.Bounds, userID string)
 	})
 }
 
-// ---- Perfil do próprio usuário ----
+// ---- Perfil do proprio usuario ----
 
 // ErrWrongPassword sinaliza senha atual incorreta na troca de senha.
 var ErrWrongPassword = errors.New("senha atual incorreta")
 
-// UpdateProfile altera nome e e-mail do próprio usuário. O e-mail é único por
-// tenant; a violação de unicidade é traduzida pelo handler.
+// UpdateProfile altera nome e e-mail do proprio usuario. O e-mail e unico por
+// tenant; a violacao de unicidade e traduzida pelo handler.
 func (s *Service) UpdateProfile(ctx context.Context, b store.Bounds, userID, fullName, email string) error {
 	return s.store.WithTenant(ctx, b, func(tx pgx.Tx) error {
 		tag, e := tx.Exec(ctx, `

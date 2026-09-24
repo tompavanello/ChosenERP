@@ -21,9 +21,9 @@ import { cn } from "@/lib/utils";
 const hojeISO = () => new Date().toISOString().slice(0, 10);
 
 /**
- * Situação do mandato frente ao vencimento.
- * Retorna null quando não há vencimento (cargo sem mandato) ou quando ele está
- * longe o bastante para não valer um alerta na tela.
+ * Situacao do mandato frente ao vencimento.
+ * Retorna null quando nao ha vencimento (cargo sem mandato) ou quando ele esta
+ * longe o bastante para nao valer um alerta na tela.
  */
 function situacaoVencimento(mc: MemberCargo): { dias: number; texto: string } | null {
   if (mc.status !== "ativo" || !mc.ends_at) return null;
@@ -32,7 +32,7 @@ function situacaoVencimento(mc: MemberCargo): { dias: number; texto: string } | 
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
   const dias = Math.round((fim.getTime() - hoje.getTime()) / 86_400_000);
-  if (dias < 0) return { dias, texto: `Mandato vencido há ${Math.abs(dias)} dia(s)` };
+  if (dias < 0) return { dias, texto: `Mandato vencido ha ${Math.abs(dias)} dia(s)` };
   if (dias <= CARGO_EXPIRY_WINDOW_DAYS) {
     return { dias, texto: dias === 0 ? "Vence hoje" : `Vence em ${dias} dia(s)` };
   }
@@ -44,7 +44,7 @@ type Rascunho = {
   started_at: string;
   ends_at: string;
   notes: string;
-  /** Só usado na edição de um mandato existente. */
+  /** So usado na edicao de um mandato existente. */
   status: string;
 };
 
@@ -53,8 +53,8 @@ const RASCUNHO_VAZIO: Rascunho = {
 };
 
 /**
- * CargosSection é a aba de cargos do membro: o requisito 1.3 (mais de uma função
- * por membro) e o 1.4 (mandato com início, vencimento e situação) juntos.
+ * CargosSection e a aba de cargos do membro: o requisito 1.3 (mais de uma funcao
+ * por membro) e o 1.4 (mandato com inicio, vencimento e situacao) juntos.
  */
 export function CargosSection({
   memberId,
@@ -96,8 +96,8 @@ export function CargosSection({
     onChanged?.();
   }
 
-  // Só cargos ativos entram como opção de novo mandato; os já vigentes para este
-  // membro saem da lista para não sugerir duplicata (o backend responderia 409).
+  // So cargos ativos entram como opcao de novo mandato; os ja vigentes para este
+  // membro saem da lista para nao sugerir duplicata (o backend responderia 409).
   const disponiveis = useMemo(() => {
     const ativos = new Set((vinculos ?? []).filter((v) => v.status === "ativo").map((v) => v.cargo_id));
     return catalogo.filter((c) => c.is_active && !ativos.has(c.id));
@@ -117,7 +117,7 @@ export function CargosSection({
       });
       setRascunho({ ...RASCUNHO_VAZIO, started_at: hojeISO() });
       setCriando(false);
-      toast("Cargo atribuído.");
+      toast("Cargo atribuido.");
       reload();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao atribuir cargo", "error");
@@ -130,7 +130,7 @@ export function CargosSection({
     setSalvando(true);
     try {
       // String vazia LIMPA a data (o backend trata '' como NULL); data ausente
-      // manteria o valor antigo, então mandamos sempre os dois campos.
+      // manteria o valor antigo, entao mandamos sempre os dois campos.
       await updateMemberCargo(memberId, mc.id, {
         started_at: editRascunho.started_at,
         ends_at: editRascunho.ends_at,
@@ -170,7 +170,7 @@ export function CargosSection({
   async function remover(mc: MemberCargo) {
     try {
       await unassignCargo(memberId, mc.id);
-      toast("Mandato removido do histórico.");
+      toast("Mandato removido do historico.");
       reload();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao remover", "error");
@@ -216,12 +216,12 @@ export function CargosSection({
                   searchPlaceholder="Buscar cargo..."
                   options={disponiveis.map((c) => ({
                     value: c.id,
-                    label: `${c.name} — ${(CARGO_KINDS[c.kind] ?? CARGO_KINDS.outro).label}`,
+                    label: `${c.name} - ${(CARGO_KINDS[c.kind] ?? CARGO_KINDS.outro).label}`,
                   }))}
                   onChange={(v) => setRascunho({ ...rascunho, cargo_id: v })}
                 />
               </Field>
-              <Field label="Início">
+              <Field label="Inicio">
                 <Input
                   type="date"
                   className="h-8 text-sm"
@@ -238,7 +238,7 @@ export function CargosSection({
                 />
               </Field>
             </div>
-            <Field label="Observação" className="mt-2.5">
+            <Field label="Observacao" className="mt-2.5">
               <Input
                 className="h-8 text-sm"
                 placeholder="Ex: eleito em assembleia de 12/2025"
@@ -258,7 +258,7 @@ export function CargosSection({
         {vinculos.length === 0 ? (
           <EmptyState
             icon={<Award className="h-10 w-10" />}
-            title="Nenhum cargo atribuído"
+            title="Nenhum cargo atribuido"
             description="Atribua os cargos que este membro exerce na igreja."
           />
         ) : (
@@ -273,7 +273,7 @@ export function CargosSection({
                   {emEdicao ? (
                     <div className="space-y-2">
                       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-4">
-                        <Field label="Início">
+                        <Field label="Inicio">
                           <Input
                             type="date"
                             className="h-8 text-sm"
@@ -289,7 +289,7 @@ export function CargosSection({
                             onChange={(e) => setEditRascunho({ ...editRascunho, ends_at: e.target.value })}
                           />
                         </Field>
-                        <Field label="Situação">
+                        <Field label="Situacao">
                           <Select
                             className="h-8 text-sm"
                             value={editRascunho.status}
@@ -299,7 +299,7 @@ export function CargosSection({
                             <option value="encerrado">Encerrado</option>
                           </Select>
                         </Field>
-                        <Field label="Observação">
+                        <Field label="Observacao">
                           <Input
                             className="h-8 text-sm"
                             value={editRascunho.notes}
@@ -322,8 +322,8 @@ export function CargosSection({
                       <Badge tone={kind.tone as Tone} className="text-[10px]">{kind.label}</Badge>
                       <Badge tone={st.tone as Tone} className="text-[10px]">{st.label}</Badge>
                       <span className="tnum text-xs text-zinc-500">
-                        {mc.started_at ? datePt(mc.started_at) : "sem início definido"}
-                        {" → "}
+                        {mc.started_at ? datePt(mc.started_at) : "sem inicio definido"}
+                        {" -> "}
                         {mc.ends_at ? datePt(mc.ends_at) : "sem vencimento"}
                       </span>
                       {alerta && (
@@ -331,7 +331,7 @@ export function CargosSection({
                           <TriangleAlert className="h-3.5 w-3.5" /> {alerta.texto}
                         </span>
                       )}
-                      {mc.notes && <span className="text-xs text-zinc-400">· {mc.notes}</span>}
+                      {mc.notes && <span className="text-xs text-zinc-400">- {mc.notes}</span>}
 
                       {canWrite && (
                         <div className="ml-auto flex gap-1">
@@ -360,7 +360,7 @@ export function CargosSection({
                           >
                             <Power className={cn("h-3.5 w-3.5", mc.status === "ativo" ? "text-emerald-600" : "text-zinc-400")} />
                           </Button>
-                          <Button variant="ghost" size="sm" title="Remover do histórico" onClick={() => remover(mc)}>
+                          <Button variant="ghost" size="sm" title="Remover do historico" onClick={() => remover(mc)}>
                             <Trash2 className="h-3.5 w-3.5 text-red-500" />
                           </Button>
                         </div>

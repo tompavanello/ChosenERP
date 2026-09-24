@@ -1,5 +1,5 @@
 -- 000004_people.up.sql
--- Membros, famílias, genealogia, visitantes e benfeitores
+-- Membros, familias, genealogia, visitantes e benfeitores
 
 CREATE TABLE members (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -24,7 +24,7 @@ CREATE TABLE members (
     baptism_date  date,
     profession    text,
     office        text, -- diacono, presbitero, evangelista...
-    extra_json    jsonb NOT NULL DEFAULT '{}'::jsonb, -- campos dinâmicos por denominação
+    extra_json    jsonb NOT NULL DEFAULT '{}'::jsonb, -- campos dinamicos por denominacao
     created_at    timestamptz NOT NULL DEFAULT now(),
     updated_at    timestamptz NOT NULL DEFAULT now()
 );

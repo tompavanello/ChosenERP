@@ -1,7 +1,7 @@
-// Package governance implementa o Módulo 6 (governança institucional): livro de
-// atas digital, votação eletrônica com quórum obrigatório e voto secreto,
-// assinatura interna das atas, painel de mandatos e convênios/documentação
-// legal. O isolamento multi-tenant é responsabilidade do RLS (transação com
+// Package governance implementa o Modulo 6 (governanca institucional): livro de
+// atas digital, votacao eletronica com quorum obrigatorio e voto secreto,
+// assinatura interna das atas, painel de mandatos e convenios/documentacao
+// legal. O isolamento multi-tenant e responsabilidade do RLS (transacao com
 // app.tenant_id/app.branch_id).
 package governance
 
@@ -14,13 +14,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Repo agrupa as consultas de governança. É stateless: toda operação recebe a
-// transação já no escopo de RLS.
+// Repo agrupa as consultas de governanca. E stateless: toda operacao recebe a
+// transacao ja no escopo de RLS.
 type Repo struct{}
 
 // ---- Atas (G1) ----
 
-// Minute é uma ata do livro digital.
+// Minute e uma ata do livro digital.
 type Minute struct {
 	ID              string    `json:"id"`
 	BranchID        string    `json:"branch_id"`
@@ -37,7 +37,7 @@ type Minute struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
-// MinuteInput é o corpo de criação/edição de uma ata.
+// MinuteInput e o corpo de criacao/edicao de uma ata.
 type MinuteInput struct {
 	Title           string  `json:"title"`
 	MeetingAt       string  `json:"meeting_at"`
@@ -48,7 +48,7 @@ type MinuteInput struct {
 	AttendanceCount *int    `json:"attendance_count"`
 }
 
-// Signature é uma assinatura interna de uma ata.
+// Signature e uma assinatura interna de uma ata.
 type Signature struct {
 	ID           string    `json:"id"`
 	MinuteID     string    `json:"minute_id"`
@@ -74,7 +74,7 @@ func scanMinute(row pgx.Row) (*Minute, error) {
 	return &m, err
 }
 
-// ListMinutes devolve as atas do escopo, opcionalmente filtrando por período.
+// ListMinutes devolve as atas do escopo, opcionalmente filtrando por periodo.
 func (r *Repo) ListMinutes(ctx context.Context, tx pgx.Tx, from, to string) ([]Minute, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT `+minuteCols+`
@@ -102,8 +102,8 @@ func (r *Repo) GetMinute(ctx context.Context, tx pgx.Tx, id string) (*Minute, er
 	return scanMinute(tx.QueryRow(ctx, `SELECT `+minuteCols+` FROM minutes m WHERE m.id = $1::uuid`, id))
 }
 
-// CreateMinute insere uma ata. O status inicial é sempre rascunho (a UI pode
-// salvar como aprovada, mas não assinada — assinar é uma operação própria).
+// CreateMinute insere uma ata. O status inicial e sempre rascunho (a UI pode
+// salvar como aprovada, mas nao assinada - assinar e uma operacao propria).
 func (r *Repo) CreateMinute(ctx context.Context, tx pgx.Tx, tenantID, branchID, actorID string, in MinuteInput) (*Minute, error) {
 	meetingAt, err := parseTime(in.MeetingAt)
 	if err != nil {
@@ -130,8 +130,8 @@ func (r *Repo) CreateMinute(ctx context.Context, tx pgx.Tx, tenantID, branchID, 
 	return r.GetMinute(ctx, tx, newID)
 }
 
-// UpdateMinute edita a ata. Recusa alteração depois de assinada (o documento
-// está congelado pela assinatura).
+// UpdateMinute edita a ata. Recusa alteracao depois de assinada (o documento
+// esta congelado pela assinatura).
 func (r *Repo) UpdateMinute(ctx context.Context, tx pgx.Tx, id string, in MinuteInput) (*Minute, error) {
 	var currentStatus string
 	if err := tx.QueryRow(ctx, `SELECT status FROM minutes WHERE id = $1::uuid`, id).Scan(&currentStatus); err != nil {
@@ -181,8 +181,8 @@ func (r *Repo) DeleteMinute(ctx context.Context, tx pgx.Tx, id string) error {
 	return err
 }
 
-// SignMinute registra a assinatura interna do usuário e congela a ata
-// (status = assinada). O document_hash sela o conteúdo atual.
+// SignMinute registra a assinatura interna do usuario e congela a ata
+// (status = assinada). O document_hash sela o conteudo atual.
 func (r *Repo) SignMinute(ctx context.Context, tx pgx.Tx, id, userID, signerName, signerRole string) (*Signature, error) {
 	m, err := r.GetMinute(ctx, tx, id)
 	if err != nil {
@@ -242,7 +242,7 @@ func (r *Repo) ListSignatures(ctx context.Context, tx pgx.Tx, minuteID string) (
 }
 
 // appendMinuteResult acrescenta um bloco de texto ao corpo da ata (usado pela
-// apuração automática ao encerrar uma votação vinculada).
+// apuracao automatica ao encerrar uma votacao vinculada).
 func (r *Repo) appendMinuteResult(ctx context.Context, tx pgx.Tx, minuteID, block string) error {
 	_, err := tx.Exec(ctx, `
 		UPDATE minutes SET body = COALESCE(body, '') || $2, updated_at = now()

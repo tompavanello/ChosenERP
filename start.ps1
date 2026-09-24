@@ -3,17 +3,17 @@
     Inicializa o Chosen ERP (infra Docker + API Go + Webadmin Next.js).
 
 .DESCRIPTION
-    Arquivo ÚNICO de inicialização do projeto. Faz tudo, na ordem correta:
-       1. Cria o .env a partir do .env.example (se não existir)
-       2. Compila o binário Linux da API (necessário p/ imagem FROM scratch)
+    Arquivo UNICO de inicializacao do projeto. Faz tudo, na ordem correta:
+       1. Cria o .env a partir do .env.example (se nao existir)
+       2. Compila o binario Linux da API (necessario p/ imagem FROM scratch)
        3. Sobe os containers (postgres + api + webadmin + nginx) e aguarda o healthcheck
-       4. Verifica a saúde da API e do Nginx
+       4. Verifica a saude da API e do Nginx
 
 .PARAMETER Full
-    Sobe também redis, rabbitmq, prometheus e grafana (docker compose --profile full).
+    Sobe tambem redis, rabbitmq, prometheus e grafana (docker compose --profile full).
 
 .PARAMETER Port
-    Porta do Webadmin exibida no resumo (padrão 33000; o Compose usa WEBADMIN_PORT).
+    Porta do Webadmin exibida no resumo (padrao 33000; o Compose usa WEBADMIN_PORT).
 
 .EXAMPLE
     .\start.ps1
@@ -37,11 +37,11 @@ if (-not (Test-Path (Join-Path $root ".env"))) {
     Copy-Item (Join-Path $root ".env.example") (Join-Path $root ".env")
     Write-Ok ".env criado a partir de .env.example"
 } else {
-    Write-Ok ".env já existe"
+    Write-Ok ".env ja existe"
 }
 
-# ------------------------------------------------------------ 2. binário Go
-Write-Step "2/4 Compilando a API (binário Linux para a imagem)"
+# ------------------------------------------------------------ 2. binario Go
+Write-Step "2/4 Compilando a API (binario Linux para a imagem)"
 $env:GOOS = "linux"; $env:GOARCH = "amd64"; $env:CGO_ENABLED = "0"
 Push-Location $root
 try {
@@ -55,12 +55,12 @@ try {
 
 # ------------------------------------------------------------- 3. containers
 Write-Step "3/4 Subindo infraestrutura + API + Nginx (Docker Compose)"
-# O --env-file é obrigatório: com `-f infra/docker-compose.yml` o project
-# directory passa a ser `infra/`, e o Compose procura o .env LÁ — nunca na
-# raiz, onde este script o cria. Sem a flag, todo valor do .env é ignorado em
-# silêncio e o Compose cai nos defaults do próprio arquivo. Como os defaults
+# O --env-file e obrigatorio: com `-f infra/docker-compose.yml` o project
+# directory passa a ser `infra/`, e o Compose procura o .env LA - nunca na
+# raiz, onde este script o cria. Sem a flag, todo valor do .env e ignorado em
+# silencio e o Compose cai nos defaults do proprio arquivo. Como os defaults
 # do docker-compose.yml coincidem com o .env.example, isso passou despercebido
-# até alguém precisar de um valor diferente (o JWT_SECRET).
+# ate alguem precisar de um valor diferente (o JWT_SECRET).
 $compose = @("compose", "--env-file", (Join-Path $root ".env"), "-f", (Join-Path $root "infra/docker-compose.yml"))
 if ($Full) { $compose += @("--profile", "full") }
 $compose += @("up", "-d", "--build")
@@ -83,9 +83,9 @@ for ($i = 0; $i -lt 40; $i++) {
     } catch { }
 }
 if (-not $ok) {
-    Write-Warn "API ainda não respondeu. Verifique: docker logs chosen-api"
+    Write-Warn "API ainda nao respondeu. Verifique: docker logs chosen-api"
 } else {
-    Write-Ok "API saudável (as migrações já foram aplicadas no boot)"
+    Write-Ok "API saudavel (as migracoes ja foram aplicadas no boot)"
 }
 
 # Verificar nginx
@@ -98,17 +98,17 @@ for ($i = 0; $i -lt 20; $i++) {
     } catch { }
 }
 if (-not $nginxOk) {
-    Write-Warn "Nginx não respondeu. Verifique: docker logs chosen-nginx"
+    Write-Warn "Nginx nao respondeu. Verifique: docker logs chosen-nginx"
 } else {
     Write-Ok "Nginx funcionando (proxy para a API)"
 }
 
 # ------------------------------------------------------------- 5. webadmin
-# O webadmin agora sobe DENTRO do Docker Compose (serviço `webadmin`, imagem
+# O webadmin agora sobe DENTRO do Docker Compose (servico `webadmin`, imagem
 # standalone, porta ${WEBADMIN_PORT:-33000}), com `restart: unless-stopped`.
-# Nada é iniciado no host: ao ligar o Docker, api + webadmin + nginx voltam.
+# Nada e iniciado no host: ao ligar o Docker, api + webadmin + nginx voltam.
 Write-Step "5/5 Webadmin no Docker (http://localhost:$Port)"
-Write-Ok "serviço 'webadmin' publicado em http://localhost:$Port"
+Write-Ok "servico 'webadmin' publicado em http://localhost:$Port"
 
 # ------------------------------------------------------------------ resumo
 Write-Host @"

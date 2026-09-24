@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// MonthlyPoint é um ponto da série de balancete mensal.
+// MonthlyPoint e um ponto da serie de balancete mensal.
 type MonthlyPoint struct {
 	Month   string  `json:"month"`
 	Income  float64 `json:"income"`
@@ -20,7 +20,7 @@ type MonthlyPoint struct {
 	Net     float64 `json:"net"`
 }
 
-// DRELine é uma linha do DRE (por categoria).
+// DRELine e uma linha do DRE (por categoria).
 type DRELine struct {
 	CategoryID string  `json:"category_id"`
 	Category   string  `json:"category"`
@@ -28,7 +28,7 @@ type DRELine struct {
 	Total      float64 `json:"total"`
 }
 
-// Comparison compara o período atual com o imediatamente anterior de igual duração.
+// Comparison compara o periodo atual com o imediatamente anterior de igual duracao.
 type Comparison struct {
 	PrevIncome  float64 `json:"prev_income"`
 	PrevExpense float64 `json:"prev_expense"`
@@ -36,7 +36,7 @@ type Comparison struct {
 	DeltaPct    float64 `json:"delta_pct"`
 }
 
-// DRE é o demonstrativo de resultado do exercício (período).
+// DRE e o demonstrativo de resultado do exercicio (periodo).
 type DRE struct {
 	From       string      `json:"from"`
 	To         string      `json:"to"`
@@ -49,7 +49,7 @@ type DRE struct {
 
 const dateLayout = "2006-01-02"
 
-// resolvePeriod aplica padrão (mês corrente) e converte em limites [from, to].
+// resolvePeriod aplica padrao (mes corrente) e converte em limites [from, to].
 func resolvePeriod(from, to string) (string, string) {
 	now := time.Now().UTC()
 	f := from
@@ -63,7 +63,7 @@ func resolvePeriod(from, to string) (string, string) {
 	return f, t
 }
 
-// MonthlySeries retorna o balancete agregado por mês dentro do período.
+// MonthlySeries retorna o balancete agregado por mes dentro do periodo.
 func (r *Repo) MonthlySeries(ctx context.Context, tx pgx.Tx, from, to string) ([]MonthlyPoint, error) {
 	from, to = resolvePeriod(from, to)
 	rows, err := tx.Query(ctx, `
@@ -91,7 +91,7 @@ func (r *Repo) MonthlySeries(ctx context.Context, tx pgx.Tx, from, to string) ([
 	return out, rows.Err()
 }
 
-// BuildDRE monta o DRE do período com linhas por categoria e comparativo.
+// BuildDRE monta o DRE do periodo com linhas por categoria e comparativo.
 func (r *Repo) BuildDRE(ctx context.Context, tx pgx.Tx, from, to string) (DRE, error) {
 	from, to = resolvePeriod(from, to)
 	var dre DRE
@@ -135,7 +135,7 @@ func (r *Repo) BuildDRE(ctx context.Context, tx pgx.Tx, from, to string) (DRE, e
 		return dre, err
 	}
 
-	// Período anterior de igual duração
+	// Periodo anterior de igual duracao
 	var prevIncome, prevExpense float64
 	err = tx.QueryRow(ctx, `
 		SELECT COALESCE(SUM(amount) FILTER (WHERE type='income'),0),
@@ -169,7 +169,7 @@ func BalanceteCSV(points []MonthlyPoint) (string, error) {
 	buf.WriteString("\xEF\xBB\xBF")
 	w := csv.NewWriter(&buf)
 	w.Comma = ';'
-	_ = w.Write([]string{"Mês", "Entradas", "Saídas", "Saldo"})
+	_ = w.Write([]string{"Mes", "Entradas", "Saidas", "Saldo"})
 	for _, p := range points {
 		_ = w.Write([]string{p.Month, fmtFloat(p.Income), fmtFloat(p.Expense), fmtFloat(p.Net)})
 	}
@@ -184,21 +184,21 @@ func DRECSV(d DRE) (string, error) {
 	w := csv.NewWriter(&buf)
 	w.Comma = ';'
 	_ = w.Write([]string{"Indicador/Regra", "Tipo", "Categoria", "Total"})
-	_ = w.Write([]string{"Período", "", d.From, d.To})
+	_ = w.Write([]string{"Periodo", "", d.From, d.To})
 	for _, l := range d.Lines {
 		_ = w.Write([]string{"Categoria", l.Type, l.Category, fmtFloat(l.Total)})
 	}
 	_ = w.Write([]string{"Entradas", "", "", fmtFloat(d.Income)})
-	_ = w.Write([]string{"Saídas", "", "", fmtFloat(d.Expense)})
+	_ = w.Write([]string{"Saidas", "", "", fmtFloat(d.Expense)})
 	_ = w.Write([]string{"Resultado", "", "", fmtFloat(d.Net)})
 	if d.Comparison != nil {
-		_ = w.Write([]string{"Comparativo (período anterior)", "", "", fmtFloat(d.Comparison.DeltaPct) + "%"})
+		_ = w.Write([]string{"Comparativo (periodo anterior)", "", "", fmtFloat(d.Comparison.DeltaPct) + "%"})
 	}
 	w.Flush()
 	return buf.String(), w.Error()
 }
 
-// DREPrintHTML devolve uma versão de impressão (HTML) do DRE, renderizável em PDF.
+// DREPrintHTML devolve uma versao de impressao (HTML) do DRE, renderizavel em PDF.
 func DREPrintHTML(d DRE) string {
 	brl := func(v float64) string { return fmt.Sprintf("R$ %.2f", v) }
 	var body string
@@ -206,13 +206,13 @@ func DREPrintHTML(d DRE) string {
 		body += "<tr><td>" + htmlEsc(l.Type) + "</td><td>" + htmlEsc(l.Category) + "</td><td class=r>" + brl(l.Total) + "</td></tr>"
 	}
 	if body == "" {
-		body = "<tr><td colspan=3 class=muted>Sem lançamentos no período.</td></tr>"
+		body = "<tr><td colspan=3 class=muted>Sem lancamentos no periodo.</td></tr>"
 	}
 	return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>DRE</title>
 <style>body{font-family:ui-sans-serif,system-ui,sans-serif;padding:32px;color:#0b1020}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #e4e7ee}.r{text-align:right}.muted{color:#9ca3af}.tot{font-weight:600}.head{margin-bottom:16px}.head h1{font-size:18px;margin:0}.head p{margin:2px 0;color:#6b7280}@media print{body{padding:0}}</style></head><body>
-<div class="head"><h1>DRE — Demonstração do Resultado</h1><p>Período: ` + htmlEsc(d.From) + ` a ` + htmlEsc(d.To) + `</p></div>
+<div class="head"><h1>DRE - Demonstracao do Resultado</h1><p>Periodo: ` + htmlEsc(d.From) + ` a ` + htmlEsc(d.To) + `</p></div>
 <table><thead><tr><th>Tipo</th><th>Categoria</th><th class=r>Total</th></tr></thead><tbody>` + body + `</tbody></table>
-<p>Entradas: ` + brl(d.Income) + ` · Saídas: ` + brl(d.Expense) + ` · Resultado: ` + brl(d.Net) + `</p>
+<p>Entradas: ` + brl(d.Income) + ` - Saidas: ` + brl(d.Expense) + ` - Resultado: ` + brl(d.Net) + `</p>
 </body></html>`
 }
 

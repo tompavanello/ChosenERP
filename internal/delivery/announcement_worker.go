@@ -59,7 +59,7 @@ func (w *AnnouncementWorker) ProcessPending(ctx context.Context) error {
 	}
 	for _, p := range pending {
 		if err := w.process(ctx, p); err != nil {
-			log.Printf("[announcement-worker] delivery %s (anúncio %s → %s): %v",
+			log.Printf("[announcement-worker] delivery %s (anuncio %s -> %s): %v",
 				p.ID, p.AnnouncementID, p.Recipient, err)
 		}
 	}

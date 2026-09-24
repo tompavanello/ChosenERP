@@ -1,5 +1,5 @@
 -- 000003_users_rbac_audit.up.sql
--- RBAC granular + trilha de auditoria imutável (append-only, hash-chain)
+-- RBAC granular + trilha de auditoria imutavel (append-only, hash-chain)
 
 CREATE TABLE roles (
     id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -40,7 +40,7 @@ CREATE TABLE users (
     updated_at     timestamptz NOT NULL DEFAULT now()
 );
 
--- Trilha de auditoria imutável (nunca UPDATE/DELETE)
+-- Trilha de auditoria imutavel (nunca UPDATE/DELETE)
 CREATE TABLE audit_log (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id   uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -72,7 +72,7 @@ CREATE TRIGGER audit_log_no_update
 BEFORE UPDATE OR DELETE ON audit_log
 FOR EACH ROW EXECUTE FUNCTION audit_log_guard();
 
--- Hash de integridade (chain): SHA-256 do conteúdo + hash anterior
+-- Hash de integridade (chain): SHA-256 do conteudo + hash anterior
 CREATE OR REPLACE FUNCTION audit_log_hash() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE

@@ -16,14 +16,14 @@ func strOrEmpty(s *string) string {
 	return *s
 }
 
-// validateAges garante faixa etária coerente (0..17, min <= max). Idade nula é
+// validateAges garante faixa etaria coerente (0..17, min <= max). Idade nula e
 // permitida (turma/trilha sem faixa definida).
 func validateAges(min, max *int) error {
 	if min != nil && *min < 0 {
-		return fmt.Errorf("%w: age_min não pode ser negativo", ErrInvalidInput)
+		return fmt.Errorf("%w: age_min nao pode ser negativo", ErrInvalidInput)
 	}
 	if max != nil && *max < 0 {
-		return fmt.Errorf("%w: age_max não pode ser negativo", ErrInvalidInput)
+		return fmt.Errorf("%w: age_max nao pode ser negativo", ErrInvalidInput)
 	}
 	if min != nil && max != nil && *max < *min {
 		return fmt.Errorf("%w: age_max deve ser >= age_min", ErrInvalidInput)

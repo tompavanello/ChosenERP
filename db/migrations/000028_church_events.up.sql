@@ -1,19 +1,19 @@
 -- 000028_church_events.up.sql
--- Registro de Eventos e Frequência (requisitos C8–C10 do cliente):
---   * event_kinds: catálogo de tipos de evento, customizável (padrão cargos);
+-- Registro de Eventos e Frequencia (requisitos C8-C10 do cliente):
+--   * event_kinds: catalogo de tipos de evento, customizavel (padrao cargos);
 --   * church_events: evento com data/hora, tipo, total de participantes e notas;
---   * event_attendance: chamada nominal por pessoa (as DUAS opções: total
---     digitado E presença por membro);
---   * member_frequency_history: frequência do membro com histórico (nunca
---     sobrescreve a anterior; a linha com ended_at IS NULL é a vigente).
+--   * event_attendance: chamada nominal por pessoa (as DUAS opcoes: total
+--     digitado E presenca por membro);
+--   * member_frequency_history: frequencia do membro com historico (nunca
+--     sobrescreve a anterior; a linha com ended_at IS NULL e a vigente).
 
 -- ---------------------------------------------------------------------------
--- Catálogo de tipos de evento
+-- Catalogo de tipos de evento
 -- ---------------------------------------------------------------------------
 CREATE TABLE event_kinds (
     id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id  uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    -- NULL = tipo global do tenant (visível a todas as filiais).
+    -- NULL = tipo global do tenant (visivel a todas as filiais).
     branch_id  uuid REFERENCES branches(id) ON DELETE SET NULL,
     name       text NOT NULL,
     slug       text NOT NULL,
@@ -69,7 +69,7 @@ CREATE POLICY church_events_del ON church_events
   FOR DELETE USING (rls_write(tenant_id, branch_id, false));
 
 -- ---------------------------------------------------------------------------
--- Chamada nominal (presença por membro)
+-- Chamada nominal (presenca por membro)
 -- ---------------------------------------------------------------------------
 CREATE TABLE event_attendance (
     id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -97,7 +97,7 @@ CREATE POLICY event_attendance_del ON event_attendance
   FOR DELETE USING (rls_write(tenant_id, branch_id, false));
 
 -- ---------------------------------------------------------------------------
--- Histórico de frequência do membro (requisito 1.5)
+-- Historico de frequencia do membro (requisito 1.5)
 -- ---------------------------------------------------------------------------
 CREATE TABLE member_frequency_history (
     id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -124,21 +124,21 @@ CREATE POLICY member_freq_all ON member_frequency_history
   WITH CHECK (rls_write(tenant_id, branch_id, false));
 
 -- ---------------------------------------------------------------------------
--- Catálogo inicial de tipos (requisito C9)
+-- Catalogo inicial de tipos (requisito C9)
 -- ---------------------------------------------------------------------------
 INSERT INTO event_kinds (tenant_id, branch_id, name, slug, sort_order)
 SELECT t.id, NULL, v.name, v.slug, v.sort_order
 FROM tenants t
 CROSS JOIN (VALUES
-    ('Escola Bíblica Dominical', 'escola_biblica_dominical', 10),
+    ('Escola Biblica Dominical', 'escola_biblica_dominical', 10),
     ('Culto',                    'culto',                    20),
     ('Culto Especial',           'culto_especial',           30),
-    ('Reunião',                  'reuniao',                  40),
+    ('Reuniao',                  'reuniao',                  40),
     ('Pequeno Grupo',            'pequeno_grupo',            50),
     ('Evento de Jovens',         'evento_jovens',            60),
-    ('Escola Bíblica',           'escola_biblica',           70),
+    ('Escola Biblica',           'escola_biblica',           70),
     ('Santa Ceia',               'santa_ceia',               80),
-    ('Vigília',                  'vigilia',                  90),
+    ('Vigilia',                  'vigilia',                  90),
     ('Outros',                   'outros',                   999)
 ) AS v(name, slug, sort_order)
 ON CONFLICT (tenant_id, slug) DO NOTHING;

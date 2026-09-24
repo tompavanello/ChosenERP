@@ -1,15 +1,15 @@
 -- 000041_announcement_scheduling.up.sql
--- Comunicados agendados + segmentação salva (Fase 2, evolução de #31/#32).
+-- Comunicados agendados + segmentacao salva (Fase 2, evolucao de #31/#32).
 --
--- Até aqui o disparo era sempre manual e a segmentação era escolhida na hora.
--- Agora o comunicado guarda a segmentação e um agendamento:
---   * manual  -> só dispara pelo botão "Enviar";
+-- Ate aqui o disparo era sempre manual e a segmentacao era escolhida na hora.
+-- Agora o comunicado guarda a segmentacao e um agendamento:
+--   * manual  -> so dispara pelo botao "Enviar";
 --   * once    -> dispara uma vez em `schedule_at`;
 --   * daily   -> dispara todo dia em `schedule_time` (fuso do tenant);
 --   * event   -> dispara `schedule_offset_minutes` minutos antes (negativo) ou
---                depois (positivo) do início do evento `schedule_event_id`.
+--                depois (positivo) do inicio do evento `schedule_event_id`.
 --
--- `last_run_at` evita repetição e `run_count` dá visibilidade.
+-- `last_run_at` evita repeticao e `run_count` da visibilidade.
 
 ALTER TABLE announcements
     ADD COLUMN audience_filter jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -40,7 +40,7 @@ ALTER TABLE announcements
         (schedule_type = 'event' AND schedule_event_id IS NOT NULL)
     );
 
--- O scheduler varre só os agendados.
+-- O scheduler varre so os agendados.
 CREATE INDEX idx_announcements_scheduled
     ON announcements(schedule_type, last_run_at)
     WHERE schedule_type <> 'manual';

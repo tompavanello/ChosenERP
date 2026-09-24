@@ -1,26 +1,26 @@
 -- 000033_governance.up.sql
--- Etapa 7 — Governança (PRD Módulo 6 / itens G1–G7 do plano):
+-- Etapa 7 - Governanca (PRD Modulo 6 / itens G1-G7 do plano):
 --   * G1 livro de atas digital (minutes);
---   * G2 votação eletrônica com quórum obrigatório e voto secreto
+--   * G2 votacao eletronica com quorum obrigatorio e voto secreto
 --        (votes + vote_options + vote_registrations + vote_ballots);
---   * G3 apuração automática (result_summary jsonb em votes; a ata é atualizada
---        pelo serviço ao encerrar);
---   * G4 assinatura eletrônica interna da ata (minute_signatures);
---   * G6 convênios e documentação legal com alerta de vencimento
+--   * G3 apuracao automatica (result_summary jsonb em votes; a ata e atualizada
+--        pelo servico ao encerrar);
+--   * G4 assinatura eletronica interna da ata (minute_signatures);
+--   * G6 convenios e documentacao legal com alerta de vencimento
 --        (legal_documents);
---   * G7 trilha imutável: minute_signatures e vote_ballots são append-only com
---        hash-chain (mesmo padrão de financial_transactions/member_history).
+--   * G7 trilha imutavel: minute_signatures e vote_ballots sao append-only com
+--        hash-chain (mesmo padrao de financial_transactions/member_history).
 --
--- Decisões do cliente (§9 do plano): quórum obrigatório, voto secreto e
--- assinatura interna (não ICP-Brasil nesta fase).
+-- Decisoes do cliente (9 do plano): quorum obrigatorio, voto secreto e
+-- assinatura interna (nao ICP-Brasil nesta fase).
 --
--- Sobre o voto secreto: a PARTICIPAÇÃO (quem votou, para conferir o quórum) fica
--- em `vote_registrations`; a ESCOLHA fica em `vote_ballots`, que NÃO guarda
--- vínculo com o eleitor. Sem a correlação por linha, a apuração só devolve
--- contagens por opção.
+-- Sobre o voto secreto: a PARTICIPACAO (quem votou, para conferir o quorum) fica
+-- em `vote_registrations`; a ESCOLHA fica em `vote_ballots`, que NAO guarda
+-- vinculo com o eleitor. Sem a correlacao por linha, a apuracao so devolve
+-- contagens por opcao.
 
 -- ---------------------------------------------------------------------------
--- G1 — Livro de atas
+-- G1 - Livro de atas
 -- ---------------------------------------------------------------------------
 CREATE TABLE minutes (
     id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -29,11 +29,11 @@ CREATE TABLE minutes (
     title        text NOT NULL,
     meeting_at   timestamptz NOT NULL,
     kind         text NOT NULL DEFAULT 'assembleia',
-    -- Pauta e deliberações em texto livre (markdown simples aceito na UI).
+    -- Pauta e deliberacoes em texto livre (markdown simples aceito na UI).
     body         text,
-    -- rascunho -> aprovada -> assinada. Assinar congela a ata (não edita mais).
+    -- rascunho -> aprovada -> assinada. Assinar congela a ata (nao edita mais).
     status       text NOT NULL DEFAULT 'rascunho',
-    -- Quórum mínimo de presentes declarado na ata (0 = não exigido).
+    -- Quorum minimo de presentes declarado na ata (0 = nao exigido).
     quorum_required int NOT NULL DEFAULT 0 CHECK (quorum_required >= 0),
     attendance_count int NOT NULL DEFAULT 0 CHECK (attendance_count >= 0),
     created_by   uuid REFERENCES users(id) ON DELETE SET NULL,
@@ -59,7 +59,7 @@ CREATE POLICY minutes_del ON minutes
   FOR DELETE USING (rls_write(tenant_id, branch_id, false));
 
 -- ---------------------------------------------------------------------------
--- G4/G7 — Assinatura eletrônica interna (append-only + hash-chain)
+-- G4/G7 - Assinatura eletronica interna (append-only + hash-chain)
 -- ---------------------------------------------------------------------------
 CREATE TABLE minute_signatures (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -67,11 +67,11 @@ CREATE TABLE minute_signatures (
     branch_id     uuid NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
     minute_id     uuid NOT NULL REFERENCES minutes(id) ON DELETE CASCADE,
     user_id       uuid REFERENCES users(id) ON DELETE SET NULL,
-    -- Snapshot do assinante: o nome/função no momento da assinatura não muda
-    -- depois, mesmo que o cadastro do usuário mude.
+    -- Snapshot do assinante: o nome/funcao no momento da assinatura nao muda
+    -- depois, mesmo que o cadastro do usuario mude.
     signer_name   text NOT NULL,
     signer_role   text,
-    -- Hash do conteúdo da ata no momento da assinatura (a ata não pode ser
+    -- Hash do conteudo da ata no momento da assinatura (a ata nao pode ser
     -- alterada depois sem invalidar a assinatura).
     document_hash text NOT NULL,
     signed_at     timestamptz NOT NULL DEFAULT now(),
@@ -83,7 +83,7 @@ CREATE TABLE minute_signatures (
 CREATE INDEX idx_minute_signatures_minute ON minute_signatures(minute_id, signed_at);
 CREATE INDEX idx_minute_signatures_tenant ON minute_signatures(tenant_id, branch_id);
 
--- Imutabilidade (o guard libera DELETE em cascata quando a ata é apagada).
+-- Imutabilidade (o guard libera DELETE em cascata quando a ata e apagada).
 CREATE OR REPLACE FUNCTION minute_signatures_guard() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -98,7 +98,7 @@ CREATE TRIGGER minute_signatures_no_update
 BEFORE UPDATE OR DELETE ON minute_signatures
 FOR EACH ROW EXECUTE FUNCTION minute_signatures_guard();
 
--- Encadeia o hash por tenant, na ordem (created_at, id) — como member_history.
+-- Encadeia o hash por tenant, na ordem (created_at, id) - como member_history.
 CREATE OR REPLACE FUNCTION minute_signatures_hash() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -128,26 +128,26 @@ CREATE POLICY minute_signatures_ins ON minute_signatures
   FOR INSERT WITH CHECK (rls_write(tenant_id, branch_id, false));
 
 -- ---------------------------------------------------------------------------
--- G2 — Votação eletrônica
+-- G2 - Votacao eletronica
 -- ---------------------------------------------------------------------------
 CREATE TABLE votes (
     id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id        uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     branch_id        uuid NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
-    -- Ata à qual a votação pertence (o resultado entra nela ao encerrar).
+    -- Ata a qual a votacao pertence (o resultado entra nela ao encerrar).
     minute_id        uuid REFERENCES minutes(id) ON DELETE SET NULL,
     title            text NOT NULL,
     description      text,
     kind             text NOT NULL DEFAULT 'assembleia',
-    -- Voto secreto: a escolha nunca é ligada ao eleitor (decisão do cliente).
+    -- Voto secreto: a escolha nunca e ligada ao eleitor (decisao do cliente).
     secret           boolean NOT NULL DEFAULT true,
-    -- Quórum obrigatório: mínimo de participantes para a votação valer.
+    -- Quorum obrigatorio: minimo de participantes para a votacao valer.
     quorum_required  int NOT NULL DEFAULT 0 CHECK (quorum_required >= 0),
     min_attendance   int NOT NULL DEFAULT 0 CHECK (min_attendance >= 0),
     opens_at         timestamptz,
     closes_at        timestamptz,
     status           text NOT NULL DEFAULT 'rascunho',
-    -- Apuração gravada ao encerrar (opção -> votos, total, quórum atingido).
+    -- Apuracao gravada ao encerrar (opcao -> votos, total, quorum atingido).
     result_summary   jsonb,
     created_by       uuid REFERENCES users(id) ON DELETE SET NULL,
     created_at       timestamptz NOT NULL DEFAULT now(),
@@ -191,7 +191,7 @@ CREATE POLICY vote_options_all ON vote_options
   FOR ALL USING (rls_write(tenant_id, branch_id, false))
   WITH CHECK (rls_write(tenant_id, branch_id, false));
 
--- Quem participou (para o quórum). NÃO guarda a opção escolhida.
+-- Quem participou (para o quorum). NAO guarda a opcao escolhida.
 CREATE TABLE vote_registrations (
     id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id  uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -212,7 +212,7 @@ CREATE POLICY vote_registrations_all ON vote_registrations
   FOR ALL USING (rls_write(tenant_id, branch_id, false))
   WITH CHECK (rls_write(tenant_id, branch_id, false));
 
--- A escolha, SEM vínculo com o eleitor (voto secreto). Append-only + hash-chain.
+-- A escolha, SEM vinculo com o eleitor (voto secreto). Append-only + hash-chain.
 CREATE TABLE vote_ballots (
     id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id  uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -267,7 +267,7 @@ CREATE POLICY vote_ballots_ins ON vote_ballots
   FOR INSERT WITH CHECK (rls_write(tenant_id, branch_id, false));
 
 -- ---------------------------------------------------------------------------
--- G6 — Convênios e documentação legal (com alerta de vencimento)
+-- G6 - Convenios e documentacao legal (com alerta de vencimento)
 -- ---------------------------------------------------------------------------
 CREATE TABLE legal_documents (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -276,7 +276,7 @@ CREATE TABLE legal_documents (
     kind        text NOT NULL DEFAULT 'convenio',
     title       text NOT NULL,
     description text,
-    -- Nº do documento/processo (referência externa).
+    -- No do documento/processo (referencia externa).
     reference   text,
     issued_at   date,
     expires_at  date,

@@ -1,10 +1,10 @@
 -- 000054_tenant_branding.up.sql
--- White-label por igreja: branding no tenant + leitura pública por slug.
+-- White-label por igreja: branding no tenant + leitura publica por slug.
 --
--- O slug já existe em tenants desde a 000002; aqui entram os ativos visuais e o
--- domínio próprio opcional. A tela de login do subdomínio (igreja.dominio) lê o
--- branding por `public_tenant(slug)` — uma função SECURITY DEFINER porque o RLS
--- de tenants exige um tenant de contexto, que ainda não existe no login.
+-- O slug ja existe em tenants desde a 000002; aqui entram os ativos visuais e o
+-- dominio proprio opcional. A tela de login do subdominio (igreja.dominio) le o
+-- branding por `public_tenant(slug)` - uma funcao SECURITY DEFINER porque o RLS
+-- de tenants exige um tenant de contexto, que ainda nao existe no login.
 
 ALTER TABLE tenants
     ADD COLUMN logo_url      text,

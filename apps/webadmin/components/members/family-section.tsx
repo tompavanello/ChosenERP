@@ -28,24 +28,24 @@ const ENDERECO_VAZIO: FamilyAddress = {
   street: "", number: "", complement: "", district: "", city: "", state: "", zip: "",
 };
 
-/** Endereço em uma linha; devolve null quando não há nada preenchido. */
+/** Endereco em uma linha; devolve null quando nao ha nada preenchido. */
 function enderecoLinha(a?: FamilyAddress): string | null {
   if (!a) return null;
   const linha1 = [a.street, a.number, a.complement].filter(Boolean).join(", ");
-  const linha2 = [a.district, [a.city, a.state].filter(Boolean).join("/"), a.zip].filter(Boolean).join(" · ");
-  const txt = [linha1, linha2].filter(Boolean).join(" — ");
+  const linha2 = [a.district, [a.city, a.state].filter(Boolean).join("/"), a.zip].filter(Boolean).join(" - ");
+  const txt = [linha1, linha2].filter(Boolean).join(" - ");
   return txt || null;
 }
 
 /**
- * FamilySection é a aba "Família" do membro.
+ * FamilySection e a aba "Familia" do membro.
  *
- * Substituiu a página /dashboard/families: o agrupamento familiar só faz sentido
- * a partir da ficha de alguém, e na planilha do cliente é assim que os dados
- * aparecem (a família com as pessoas listadas abaixo, não o contrário).
+ * Substituiu a pagina /dashboard/families: o agrupamento familiar so faz sentido
+ * a partir da ficha de alguem, e na planilha do cliente e assim que os dados
+ * aparecem (a familia com as pessoas listadas abaixo, nao o contrario).
  *
- * O "chefe" da família é o anchor dos parentes: os vínculos criados aqui são
- * sempre "esta pessoa em relação ao chefe", que é o que FamilyMembers projeta.
+ * O "chefe" da familia e o anchor dos parentes: os vinculos criados aqui sao
+ * sempre "esta pessoa em relacao ao chefe", que e o que FamilyMembers projeta.
  */
 export function FamilySection({
   memberId,
@@ -82,7 +82,7 @@ export function FamilySection({
       );
       setPorFamilia(Object.fromEntries(entradas));
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Erro ao carregar famílias", "error");
+      toast(e instanceof Error ? e.message : "Erro ao carregar familias", "error");
       setFamilias([]);
     }
   }, [memberId, toast]);
@@ -92,8 +92,8 @@ export function FamilySection({
     load();
   }, [load]);
 
-  // Lista para os seletores de "vincular pessoa": o backend devolve até 100
-  // membros numa chamada só, o mesmo limite que a listagem de membros usa.
+  // Lista para os seletores de "vincular pessoa": o backend devolve ate 100
+  // membros numa chamada so, o mesmo limite que a listagem de membros usa.
   useEffect(() => {
     listMembers()
       .then((r) => setPessoas(r.members))
@@ -109,15 +109,15 @@ export function FamilySection({
     e.preventDefault();
     setSalvando(true);
     try {
-      const fam = await createFamily(nomeNova.trim() || `Família ${memberName}`);
+      const fam = await createFamily(nomeNova.trim() || `Familia ${memberName}`);
       // Sem anchor e sem chefe, quem entra primeiro VIRA o chefe (LinkMember).
       await addFamilyMember(fam.id, memberId, "", "relative");
       setCriando(false);
       setNomeNova("");
-      toast(`Família ${fam.code ? `#${fam.code} ` : ""}criada.`);
+      toast(`Familia ${fam.code ? `#${fam.code} ` : ""}criada.`);
       reload();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro ao criar família", "error");
+      toast(err instanceof Error ? err.message : "Erro ao criar familia", "error");
     } finally {
       setSalvando(false);
     }
@@ -130,7 +130,7 @@ export function FamilySection({
     try {
       await updateFamily(renomeando.id, { name: nomeEdit.trim() });
       setRenomeando(null);
-      toast("Família renomeada.");
+      toast("Familia renomeada.");
       reload();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao renomear", "error");
@@ -146,10 +146,10 @@ export function FamilySection({
     try {
       await updateFamily(editandoEndereco.id, { address: endereco });
       setEditandoEndereco(null);
-      toast("Endereço atualizado.");
+      toast("Endereco atualizado.");
       reload();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro ao salvar endereço", "error");
+      toast(err instanceof Error ? err.message : "Erro ao salvar endereco", "error");
     } finally {
       setSalvando(false);
     }
@@ -158,7 +158,7 @@ export function FamilySection({
   async function definirChefe(fam: Family) {
     try {
       await updateFamily(fam.id, { head_id: memberId });
-      toast("Chefe da família atualizado.");
+      toast("Chefe da familia atualizado.");
       reload();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao definir chefe", "error");
@@ -170,11 +170,11 @@ export function FamilySection({
     if (!vinculando || !alvo.member_id) return;
     setSalvando(true);
     try {
-      // relate_id vazio => o backend ancora no chefe atual da família.
+      // relate_id vazio => o backend ancora no chefe atual da familia.
       await addFamilyMember(vinculando.id, alvo.member_id, "", alvo.relation);
       setVinculando(null);
       setAlvo({ member_id: "", relation: "relative" });
-      toast("Pessoa vinculada à família.");
+      toast("Pessoa vinculada a familia.");
       reload();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao vincular", "error");
@@ -186,7 +186,7 @@ export function FamilySection({
   async function desvincular(fam: Family, pessoa: FamilyMemberRow | { id: string; full_name: string }) {
     try {
       await removeFamilyMember(fam.id, pessoa.id);
-      toast(`${pessoa.full_name} saiu da família.`);
+      toast(`${pessoa.full_name} saiu da familia.`);
       reload();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao desvincular", "error");
@@ -196,17 +196,17 @@ export function FamilySection({
   async function excluir(fam: Family) {
     try {
       await deleteFamily(fam.id);
-      toast("Família excluída.");
+      toast("Familia excluida.");
       reload();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro ao excluir família", "error");
+      toast(err instanceof Error ? err.message : "Erro ao excluir familia", "error");
     }
   }
 
   const nomeSugerido = useMemo(() => {
     const partes = memberName.trim().split(/\s+/);
     const sobrenome = partes.length > 1 ? partes[partes.length - 1] : memberName;
-    return `Família ${sobrenome}`.trim();
+    return `Familia ${sobrenome}`.trim();
   }, [memberName]);
 
   if (familias === null) return <Card><SkeletonRows rows={3} /></Card>;
@@ -217,11 +217,11 @@ export function FamilySection({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <Users className="h-4 w-4 text-sky-600" /> Famílias
+              <Users className="h-4 w-4 text-sky-600" /> Familias
             </h3>
             <p className="mt-0.5 text-xs text-zinc-400">
-              A família agrupa as pessoas por residência. O parentesco é sempre registrado em
-              relação ao chefe da família.
+              A familia agrupa as pessoas por residencia. O parentesco e sempre registrado em
+              relacao ao chefe da familia.
             </p>
           </div>
           {canWrite && (
@@ -232,7 +232,7 @@ export function FamilySection({
                 setCriando(true);
               }}
             >
-              <Plus className="h-4 w-4" /> Criar família
+              <Plus className="h-4 w-4" /> Criar familia
             </Button>
           )}
         </div>
@@ -242,8 +242,8 @@ export function FamilySection({
         <Card>
           <EmptyState
             icon={<Home className="h-10 w-10" />}
-            title="Este membro ainda não está em uma família"
-            description="Crie uma família para agrupar quem mora junto e registrar o parentesco."
+            title="Este membro ainda nao esta em uma familia"
+            description="Crie uma familia para agrupar quem mora junto e registrar o parentesco."
           />
         </Card>
       ) : (
@@ -273,12 +273,12 @@ export function FamilySection({
                   <p className="mt-0.5 flex items-center gap-1 text-xs text-zinc-400">
                     <Crown className="h-3 w-3" />
                     {fam.head_name ? `Chefe: ${fam.head_name}` : "Sem chefe definido"}
-                    <span className="mx-1">·</span>
+                    <span className="mx-1">-</span>
                     {fam.member_count} pessoa(s)
                   </p>
                   <p className="mt-0.5 flex items-start gap-1 text-xs text-zinc-400">
                     <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
-                    {enderecoTxt ?? "Endereço não informado"}
+                    {enderecoTxt ?? "Endereco nao informado"}
                   </p>
                 </div>
 
@@ -292,7 +292,7 @@ export function FamilySection({
                         setEndereco({ ...ENDERECO_VAZIO, ...(fam.address ?? {}) });
                       }}
                     >
-                      <MapPin className="h-3.5 w-3.5" /> Endereço
+                      <MapPin className="h-3.5 w-3.5" /> Endereco
                     </Button>
                     <Button
                       variant="outline"
@@ -331,7 +331,7 @@ export function FamilySection({
               </div>
 
               {linhas.length === 0 ? (
-                <p className="mt-3 text-xs text-zinc-400">Nenhuma pessoa vinculada além do chefe.</p>
+                <p className="mt-3 text-xs text-zinc-400">Nenhuma pessoa vinculada alem do chefe.</p>
               ) : (
                 <ul className="mt-3 divide-y divide-zinc-100 dark:divide-zinc-800">
                   {linhas.map((p) => {
@@ -351,12 +351,12 @@ export function FamilySection({
                           </Link>
                           <p className="text-xs text-zinc-400">
                             {[
-                              p.is_head ? "Chefe da família" : (RELATION_LABELS[p.kind ?? ""] ?? p.relation),
+                              p.is_head ? "Chefe da familia" : (RELATION_LABELS[p.kind ?? ""] ?? p.relation),
                               p.birth_date ? datePt(p.birth_date) : null,
                               p.whatsapp ?? p.phone ?? p.email,
                             ]
                               .filter(Boolean)
-                              .join(" · ")}
+                              .join(" - ")}
                           </p>
                         </div>
                         <div className="ml-auto flex items-center gap-1.5">
@@ -368,7 +368,7 @@ export function FamilySection({
                             <Button
                               variant="ghost"
                               size="sm"
-                              title="Remover da família"
+                              title="Remover da familia"
                               onClick={() => desvincular(fam, p)}
                             >
                               <UserMinus className="h-3.5 w-3.5 text-red-500" />
@@ -385,21 +385,21 @@ export function FamilySection({
         })
       )}
 
-      {/* Criar família */}
-      <Modal open={criando} onClose={() => setCriando(false)} title="Nova família" size="sm">
+      {/* Criar familia */}
+      <Modal open={criando} onClose={() => setCriando(false)} title="Nova familia" size="sm">
         <form onSubmit={criar} className="space-y-3">
-          <Field label="Nome da família *" hint="O código (#NNN) é gerado automaticamente.">
+          <Field label="Nome da familia *" hint="O codigo (#NNN) e gerado automaticamente.">
             <Input
               required
               className="h-8 text-sm"
               value={nomeNova}
               onChange={(e) => setNomeNova(e.target.value)}
-              placeholder="Ex: Família Amaral"
+              placeholder="Ex: Familia Amaral"
             />
           </Field>
           <p className="text-xs text-zinc-400">
-            {memberName} entra como chefe desta família; os próximos vínculos serão registrados
-            em relação a ele(a).
+            {memberName} entra como chefe desta familia; os proximos vinculos serao registrados
+            em relacao a ele(a).
           </p>
           <div className="flex justify-end gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
             <Button variant="ghost" size="sm" type="button" onClick={() => setCriando(false)}>Cancelar</Button>
@@ -409,7 +409,7 @@ export function FamilySection({
       </Modal>
 
       {/* Renomear */}
-      <Modal open={renomeando !== null} onClose={() => setRenomeando(null)} title="Renomear família" size="sm">
+      <Modal open={renomeando !== null} onClose={() => setRenomeando(null)} title="Renomear familia" size="sm">
         <form onSubmit={renomear} className="space-y-3">
           <Field label="Nome *">
             <Input
@@ -426,18 +426,18 @@ export function FamilySection({
         </form>
       </Modal>
 
-      {/* Endereço */}
+      {/* Endereco */}
       <Modal
         open={editandoEndereco !== null}
         onClose={() => setEditandoEndereco(null)}
-        title={`Endereço — ${editandoEndereco?.name ?? ""}`}
+        title={`Endereco - ${editandoEndereco?.name ?? ""}`}
       >
         <form onSubmit={salvarEndereco} className="space-y-3">
-          <Section title="Endereço da família">
+          <Section title="Endereco da familia">
             <Field label="Logradouro" className="sm:col-span-2">
               <Input className="h-8 text-sm" value={endereco.street ?? ""} onChange={(e) => setEndereco({ ...endereco, street: e.target.value })} />
             </Field>
-            <Field label="Número">
+            <Field label="Numero">
               <Input className="h-8 text-sm" value={endereco.number ?? ""} onChange={(e) => setEndereco({ ...endereco, number: e.target.value })} />
             </Field>
             <Field label="Complemento">
@@ -458,7 +458,7 @@ export function FamilySection({
           </Section>
           <div className="flex justify-end gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
             <Button variant="ghost" size="sm" type="button" onClick={() => setEditandoEndereco(null)}>Cancelar</Button>
-            <Button size="sm" type="submit" disabled={salvando}>{salvando ? "Salvando..." : "Salvar endereço"}</Button>
+            <Button size="sm" type="submit" disabled={salvando}>{salvando ? "Salvando..." : "Salvar endereco"}</Button>
           </div>
         </form>
       </Modal>
@@ -467,7 +467,7 @@ export function FamilySection({
       <Modal
         open={vinculando !== null}
         onClose={() => setVinculando(null)}
-        title={`Vincular pessoa — ${vinculando?.name ?? ""}`}
+        title={`Vincular pessoa - ${vinculando?.name ?? ""}`}
         size="sm"
       >
         <form onSubmit={vincular} className="space-y-3">

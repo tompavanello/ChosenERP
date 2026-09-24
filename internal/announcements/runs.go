@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Run é uma execução de comunicado agendado (histórico).
+// Run e uma execucao de comunicado agendado (historico).
 type Run struct {
 	ID                string    `json:"id"`
 	AnnouncementID    string    `json:"announcement_id"`
@@ -18,7 +18,7 @@ type Run struct {
 	FiredAt           time.Time `json:"fired_at"`
 }
 
-// CreateRun registra uma execução do agendamento.
+// CreateRun registra uma execucao do agendamento.
 func (r *Repo) CreateRun(ctx context.Context, tx pgx.Tx, a *Announcement, periodKey string, count int) error {
 	var p *string
 	if periodKey != "" {
@@ -32,7 +32,7 @@ func (r *Repo) CreateRun(ctx context.Context, tx pgx.Tx, a *Announcement, period
 	return err
 }
 
-// ListRuns devolve as execuções mais recentes no escopo RLS da sessão.
+// ListRuns devolve as execucoes mais recentes no escopo RLS da sessao.
 func (r *Repo) ListRuns(ctx context.Context, tx pgx.Tx, limit int) ([]Run, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100

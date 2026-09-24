@@ -10,8 +10,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// issueReceipt gera um recibo digital (documento) para um lançamento e retorna
-// o id do documento, ref e token (o id permite enfileirar o envio automático).
+// issueReceipt gera um recibo digital (documento) para um lancamento e retorna
+// o id do documento, ref e token (o id permite enfileirar o envio automatico).
 func (r *Repo) issueReceipt(ctx context.Context, tx pgx.Tx, tenantID, branchID string, t Transaction) (string, string, string, error) {
 	ref := "REC-" + hex.EncodeToString([]byte(t.Hash))[:8]
 	token := randomToken(12)
@@ -40,13 +40,13 @@ func (r *Repo) issueReceipt(ctx context.Context, tx pgx.Tx, tenantID, branchID s
 	return docID, ref, token, nil
 }
 
-// CardRef devolve o número estável da carteirinha de um membro.
+// CardRef devolve o numero estavel da carteirinha de um membro.
 //
-// A fórmula anterior — "CARD-" + hex.EncodeToString([]byte(memberID))[:6] —
+// A formula anterior - "CARD-" + hex.EncodeToString([]byte(memberID))[:6] -
 // hex-encodava o TEXTO do UUID e pegava os 6 primeiros caracteres, ou seja, os
-// 3 primeiros caracteres do UUID. Todos os membros saíam com o mesmo número
-// (CARD-646464 nos fixtures), então o número não identificava ninguém.
-// Agora são os 8 primeiros dígitos hex do UUID (32 bits).
+// 3 primeiros caracteres do UUID. Todos os membros saiam com o mesmo numero
+// (CARD-646464 nos fixtures), entao o numero nao identificava ninguem.
+// Agora sao os 8 primeiros digitos hex do UUID (32 bits).
 func CardRef(memberID string) string {
 	h := strings.ToUpper(strings.ReplaceAll(memberID, "-", ""))
 	if len(h) > 8 {
@@ -56,14 +56,14 @@ func CardRef(memberID string) string {
 }
 
 // IssueMembershipCard devolve (ref, token) da carteirinha do membro, criando-a
-// se ainda não existir. Idempotente: cliques repetidos devolvem a MESMA
-// carteirinha, garantido pelo índice único parcial
-// uq_documents_membership_card_per_member (migração 000020).
+// se ainda nao existir. Idempotente: cliques repetidos devolvem a MESMA
+// carteirinha, garantido pelo indice unico parcial
+// uq_documents_membership_card_per_member (migracao 000020).
 //
 // Por que a CTE em vez de ON CONFLICT ... DO UPDATE: o DO UPDATE reavalia a
-// policy WITH CHECK da linha existente, e rls_write é branch exato. Se a
-// carteirinha foi criada pela filial A e quem clica é um usuário de escopo Sede
-// (branch vazio), o upsert falharia com violação de RLS. A CTE nunca faz UPDATE.
+// policy WITH CHECK da linha existente, e rls_write e branch exato. Se a
+// carteirinha foi criada pela filial A e quem clica e um usuario de escopo Sede
+// (branch vazio), o upsert falharia com violacao de RLS. A CTE nunca faz UPDATE.
 func (r *Repo) IssueMembershipCard(ctx context.Context, tx pgx.Tx, tenantID, branchID, memberID, memberName string) (string, string, error) {
 	ref := CardRef(memberID)
 	token := randomToken(16)
@@ -98,7 +98,7 @@ func (r *Repo) IssueMembershipCard(ctx context.Context, tx pgx.Tx, tenantID, bra
 	return gotRef, gotToken, nil
 }
 
-// GetMembershipCard devolve (ref, token) da carteirinha já emitida, sem criar
+// GetMembershipCard devolve (ref, token) da carteirinha ja emitida, sem criar
 // nada. Usado por GET /members/{id}/card.
 func (r *Repo) GetMembershipCard(ctx context.Context, tx pgx.Tx, memberID string) (string, string, error) {
 	var ref, token string

@@ -1,11 +1,11 @@
 -- 000056_branch_channels.up.sql
--- Canais de envio POR FILIAL (white-label de comunicação):
---   * WhatsApp via Evolution API — cada filial tem a própria instância, nomeada
+-- Canais de envio POR FILIAL (white-label de comunicacao):
+--   * WhatsApp via Evolution API - cada filial tem a propria instancia, nomeada
 --     com o id da filial, conectada por QR Code.
---   * SMTP de e-mail próprio da filial.
+--   * SMTP de e-mail proprio da filial.
 --
--- As credenciais ficam em `branches` (RLS já cobre a tabela). A senha do SMTP
--- nunca é devolvida pela API — só um flag `smtp_password_set`.
+-- As credenciais ficam em `branches` (RLS ja cobre a tabela). A senha do SMTP
+-- nunca e devolvida pela API - so um flag `smtp_password_set`.
 ALTER TABLE branches
     ADD COLUMN whatsapp_phone    text,
     ADD COLUMN whatsapp_instance text,

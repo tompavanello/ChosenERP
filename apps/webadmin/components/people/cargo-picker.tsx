@@ -11,13 +11,13 @@ import { listCargos, type Cargo } from "@/lib/api";
 import { CARGO_KINDS } from "@/lib/constants";
 
 /**
- * CargoPicker é o seletor múltiplo de cargos do membro (requisito 1.3: "um mesmo
- * membro pode ter MAIS DE UMA função"). Substituiu o Combobox de valor único que
- * lia o dicionário fixo OFFICES do frontend — agora o catálogo vem do banco, e a
- * própria igreja cria os cargos pelo diálogo "Gerenciar".
+ * CargoPicker e o seletor multiplo de cargos do membro (requisito 1.3: "um mesmo
+ * membro pode ter MAIS DE UMA funcao"). Substituiu o Combobox de valor unico que
+ * lia o dicionario fixo OFFICES do frontend - agora o catalogo vem do banco, e a
+ * propria igreja cria os cargos pelo dialogo "Gerenciar".
  *
- * O componente só cuida da SELEÇÃO: quem grava é o pai, chamando
- * syncMemberCargos() depois de salvar o membro (na criação o id ainda não existe).
+ * O componente so cuida da SELECAO: quem grava e o pai, chamando
+ * syncMemberCargos() depois de salvar o membro (na criacao o id ainda nao existe).
  */
 export function CargoPicker({
   value,
@@ -57,7 +57,7 @@ export function CargoPicker({
         <div className="min-w-0 flex-1">
           <Combobox
             value=""
-            placeholder={disponiveis.length === 0 ? "Todos os cargos já atribuídos" : "Adicionar cargo..."}
+            placeholder={disponiveis.length === 0 ? "Todos os cargos ja atribuidos" : "Adicionar cargo..."}
             searchPlaceholder="Buscar cargo..."
             options={[
               { value: "", label: "Adicionar cargo..." },
@@ -79,7 +79,7 @@ export function CargoPicker({
 
       {selecionados.length === 0 ? (
         <p className="text-xs text-zinc-400">
-          Nenhum cargo atribuído. Use o campo acima para adicionar quantos quiser.
+          Nenhum cargo atribuido. Use o campo acima para adicionar quantos quiser.
         </p>
       ) : (
         <ul className="flex flex-wrap gap-1.5">
@@ -107,7 +107,7 @@ export function CargoPicker({
       {cargos.length === 0 && (
         <p className="flex items-center gap-1.5 text-xs text-amber-600">
           <Plus className="h-3.5 w-3.5" />
-          O catálogo está vazio — crie o primeiro cargo em <strong>Gerenciar</strong>.
+          O catalogo esta vazio - crie o primeiro cargo em <strong>Gerenciar</strong>.
         </p>
       )}
 

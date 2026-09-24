@@ -1,6 +1,6 @@
 -- 000010_auth_functions.up.sql
--- Funções SECURITY DEFINER que operam fora do escopo RLS (executadas como owner = migrator).
--- Necessárias para a autenticação: o login precisa localizar o usuário antes de
+-- Funcoes SECURITY DEFINER que operam fora do escopo RLS (executadas como owner = migrator).
+-- Necessarias para a autenticacao: o login precisa localizar o usuario antes de
 -- resolver o contexto de tenant/filial.
 
 CREATE OR REPLACE FUNCTION auth_lookup_user(p_email citext)
@@ -27,7 +27,7 @@ AS $$
     LIMIT 1;
 $$;
 
--- Contadores base para métricas (usado fora do scopo RLS quando necessário, p.ex. Sede).
+-- Contadores base para metricas (usado fora do scopo RLS quando necessario, p.ex. Sede).
 CREATE OR REPLACE FUNCTION sys_health()
 RETURNS TABLE (works boolean)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public

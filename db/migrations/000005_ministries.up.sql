@@ -1,5 +1,5 @@
 -- 000005_ministries.up.sql
--- Ministérios, voluntariado, células/pequenos grupos e frequência
+-- Ministerios, voluntariado, celulas/pequenos grupos e frequencia
 
 CREATE TABLE ministries (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -35,7 +35,7 @@ CREATE TABLE small_groups (
     address       jsonb,
     geo           jsonb, -- { lat, lng } para mapa de calor
     max_members   int,
-    weekday       smallint, -- 0 = domingo ... 6 = sábado
+    weekday       smallint, -- 0 = domingo ... 6 = sabado
     meeting_time  time,
     is_active     boolean NOT NULL DEFAULT true,
     created_at    timestamptz NOT NULL DEFAULT now()

@@ -1,7 +1,7 @@
 -- 000019_finance_attachments.up.sql
--- Anexos de documentos comprovatórios (fotos de recibos, notas fiscais)
--- associados a lançamentos financeiros. Como financial_transactions é
--- append-only, os anexos vivem em uma tabela própria com FK para a transação.
+-- Anexos de documentos comprovatorios (fotos de recibos, notas fiscais)
+-- associados a lancamentos financeiros. Como financial_transactions e
+-- append-only, os anexos vivem em uma tabela propria com FK para a transacao.
 
 CREATE TABLE financial_attachments (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),

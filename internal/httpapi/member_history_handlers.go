@@ -9,7 +9,7 @@ import (
 	"chosenerp/internal/store"
 )
 
-// ---- Histórico eclesiástico do membro (requisito 1.8) ----
+// ---- Historico eclesiastico do membro (requisito 1.8) ----
 
 func (a *App) handleListMemberHistory(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())

@@ -1,7 +1,7 @@
 -- 000044_kids_hq_write.up.sql
 -- Permite que a Sede (papel super_admin/admin_sede sem filial) gerencie as
--- tabelas do Kids por filial, como já vale para repasses (`transfers`). Sem
--- isso, um usuário de Sede não conseguia criar turma/encontro (a RLS de
+-- tabelas do Kids por filial, como ja vale para repasses (`transfers`). Sem
+-- isso, um usuario de Sede nao conseguia criar turma/encontro (a RLS de
 -- escrita exige a filial exata).
 
 DROP POLICY IF EXISTS kids_classes_all ON kids_classes;

@@ -54,7 +54,7 @@ export default function MonthlyStatementPage() {
     <div className="page">
       <PageHeader
         title="Demonstrativo Mensal"
-        description="Regime de caixa — entradas e saídas por semana"
+        description="Regime de caixa - entradas e saidas por semana"
         actions={
           <ExportButtons
             path="/api/v1/reports/monthly-statement/export"
@@ -66,7 +66,7 @@ export default function MonthlyStatementPage() {
 
       <Card className="mb-6 flex flex-wrap items-end gap-3">
         <div>
-          <label className="label">Mês</label>
+          <label className="label">Mes</label>
           <Input type="month" className="h-8 text-sm" value={month} onChange={(e) => setMonth(e.target.value)} />
         </div>
       </Card>
@@ -78,7 +78,7 @@ export default function MonthlyStatementPage() {
           <div className="mb-6 grid gap-4 md:grid-cols-4">
             <Card><p className="text-sm text-zinc-500">Saldo inicial</p><p className="mt-1 text-2xl font-semibold">{currency(st.opening_balance)}</p></Card>
             <Card><p className="text-sm text-zinc-500">Entradas</p><p className="mt-1 text-2xl font-semibold text-emerald-600">{currency(st.total_income)}</p></Card>
-            <Card><p className="text-sm text-zinc-500">Saídas</p><p className="mt-1 text-2xl font-semibold text-red-600">{currency(st.total_expense)}</p></Card>
+            <Card><p className="text-sm text-zinc-500">Saidas</p><p className="mt-1 text-2xl font-semibold text-red-600">{currency(st.total_expense)}</p></Card>
             <Card><p className="text-sm text-zinc-500">Saldo final</p><p className={`mt-1 text-2xl font-semibold ${st.closing_balance >= 0 ? "text-sky-700" : "text-red-600"}`}>{currency(st.closing_balance)}</p></Card>
           </div>
 
@@ -87,7 +87,7 @@ export default function MonthlyStatementPage() {
             <Table>
               <THead>
                 <TRow>
-                  <TH>Cód</TH><TH>Descrição</TH>
+                  <TH>Cod</TH><TH>Descricao</TH>
                   {st.weeks.map((w) => <TH key={w.label} className="text-right">{w.label}</TH>)}
                   <TH className="text-right">Total</TH>
                 </TRow>
@@ -105,20 +105,20 @@ export default function MonthlyStatementPage() {
           </Card>
 
           <Card className="overflow-hidden p-0">
-            <h3 className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-red-700 dark:border-zinc-800 dark:text-red-400">Saídas</h3>
+            <h3 className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-red-700 dark:border-zinc-800 dark:text-red-400">Saidas</h3>
             <Table>
               <THead>
                 <TRow>
-                  <TH>Cód</TH><TH>Descrição</TH>
+                  <TH>Cod</TH><TH>Descricao</TH>
                   {st.weeks.map((w) => <TH key={w.label} className="text-right">{w.label}</TH>)}
                   <TH className="text-right">Total</TH>
                 </TRow>
               </THead>
               <TBody>
                 {st.expense.map(linha)}
-                {st.expense.length === 0 && <TRow><TD colSpan={8} className="py-6 text-center text-zinc-400">Sem contas de saída.</TD></TRow>}
+                {st.expense.length === 0 && <TRow><TD colSpan={8} className="py-6 text-center text-zinc-400">Sem contas de saida.</TD></TRow>}
                 <TRow>
-                  <TD /><TD className="font-semibold">Total das saídas</TD>
+                  <TD /><TD className="font-semibold">Total das saidas</TD>
                   {st.weeks.map((_, i) => <TD key={i} />)}
                   <TD className="text-right font-semibold text-red-600">{currency(st.total_expense)}</TD>
                 </TRow>
@@ -127,7 +127,7 @@ export default function MonthlyStatementPage() {
           </Card>
 
           <p className="mt-4 text-xs text-zinc-400">
-            Saldo inicial: líquido acumulado até o mês anterior. Saldo final = saldo inicial + entradas − saídas.
+            Saldo inicial: liquido acumulado ate o mes anterior. Saldo final = saldo inicial + entradas  saidas.
           </p>
         </>
       )}

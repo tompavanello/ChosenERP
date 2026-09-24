@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// receiptContent espelha o JSON gravado na criação do recibo (internal/finance/receipt.go).
+// receiptContent espelha o JSON gravado na criacao do recibo (internal/finance/receipt.go).
 type receiptContent struct {
 	Kind       string  `json:"kind"`
 	Ref        string  `json:"ref"`
@@ -25,10 +25,10 @@ type receiptContent struct {
 
 var typeLabel = map[string]string{
 	"income":  "Entrada",
-	"expense": "Saída",
+	"expense": "Saida",
 }
 
-// RenderReceiptHTML devolve um recibo pronto para impressão/visualização (HTML).
+// RenderReceiptHTML devolve um recibo pronto para impressao/visualizacao (HTML).
 func RenderReceiptHTML(doc *Document, tenantName string) (string, error) {
 	var c receiptContent
 	if len(doc.Content) > 0 {
@@ -54,7 +54,7 @@ func RenderReceiptHTML(doc *Document, tenantName string) (string, error) {
 			"Carteirinha de Membro",
 			html.EscapeString(c.Member),
 			html.EscapeString(doc.DocumentRef),
-			when, "—", strings.Repeat("·", 24),
+			when, "-", strings.Repeat("-", 24),
 			html.EscapeString(doc.QRToken),
 		), nil
 	}
@@ -62,9 +62,9 @@ func RenderReceiptHTML(doc *Document, tenantName string) (string, error) {
 		html.EscapeString(tenantName),
 		html.EscapeString(doc.Title),
 		label,
-		"Contribuição/dízimo",
+		"Contribuicao/dizimo",
 		html.EscapeString(doc.DocumentRef),
-		when, brl(c.Amount), strings.Repeat("·", 24),
+		when, brl(c.Amount), strings.Repeat("-", 24),
 		html.EscapeString(doc.QRToken),
 	), nil
 }
@@ -104,15 +104,15 @@ const receiptTemplate = `<!doctype html>
     </div>
     <hr />
     <div class="row"><span class="label">Tipo</span><span>%[3]s</span></div>
-    <div class="row"><span class="label">Descrição</span><span>%[4]s</span></div>
-    <div class="row"><span class="label">Referência</span><span>%[5]s</span></div>
+    <div class="row"><span class="label">Descricao</span><span>%[4]s</span></div>
+    <div class="row"><span class="label">Referencia</span><span>%[5]s</span></div>
     <div class="row"><span class="label">Data</span><span>%[6]s</span></div>
     <hr />
     <div class="amount">%[7]s</div>
     <div class="kind">%[3]s</div>
     <hr />
     <div class="sep">%[8]s</div>
-    <p class="foot">Código de validação: %[9]s<br/>Emitido via Chosen ERP</p>
+    <p class="foot">Codigo de validacao: %[9]s<br/>Emitido via Chosen ERP</p>
   </div>
 </body>
 </html>`

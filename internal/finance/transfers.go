@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Transfer representa um repasse entre filiais (split de contribuição/recurso).
+// Transfer representa um repasse entre filiais (split de contribuicao/recurso).
 type Transfer struct {
 	ID            string    `json:"id"`
 	BranchID      string    `json:"branch_id"`
@@ -29,7 +29,7 @@ type CreateTransferInput struct {
 	TransactionID *string `json:"transaction_id"`
 }
 
-// CreateTransfer registra um repasse entre filiais no escopo RLS da sessão.
+// CreateTransfer registra um repasse entre filiais no escopo RLS da sessao.
 func (r *Repo) CreateTransfer(ctx context.Context, tx pgx.Tx, tenantID, branchID string, in CreateTransferInput) (*Transfer, error) {
 	if in.Amount <= 0 {
 		return nil, pgx.ErrNoRows
@@ -51,7 +51,7 @@ func (r *Repo) CreateTransfer(ctx context.Context, tx pgx.Tx, tenantID, branchID
 	return &t, nil
 }
 
-// ListTransfers retorna os repasses visíveis no escopo (origem/destino da sessão).
+// ListTransfers retorna os repasses visiveis no escopo (origem/destino da sessao).
 func (r *Repo) ListTransfers(ctx context.Context, tx pgx.Tx) ([]Transfer, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT tr.id::text, tr.from_branch_id::text, bf.name,

@@ -13,7 +13,7 @@ import { datePt } from "@/lib/format";
 import { ExportButtons } from "@/components/reports/export-buttons";
 
 const MONTHS = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
@@ -42,7 +42,7 @@ export default function BirthdaysReportPage() {
     <div className="page">
       <PageHeader
         title="Aniversariantes"
-        description="Aniversários de nascimento e de casamento"
+        description="Aniversarios de nascimento e de casamento"
         actions={
           <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2">
@@ -67,7 +67,7 @@ export default function BirthdaysReportPage() {
 
       <Card className="mb-6 flex flex-wrap items-end gap-3">
         <div>
-          <label className="label">Mês</label>
+          <label className="label">Mes</label>
           <Select className="h-8 w-44 text-sm" value={String(month)} onChange={(e) => setMonth(Number(e.target.value))}>
             {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
           </Select>
@@ -93,7 +93,7 @@ export default function BirthdaysReportPage() {
                     <TD className="text-right">{b.age}</TD>
                   </TRow>
                 ))}
-                {(data?.birthdays.length ?? 0) === 0 && <TRow><TD colSpan={4} className="py-8 text-center text-zinc-400">Nenhum aniversariante neste mês.</TD></TRow>}
+                {(data?.birthdays.length ?? 0) === 0 && <TRow><TD colSpan={4} className="py-8 text-center text-zinc-400">Nenhum aniversariante neste mes.</TD></TRow>}
               </TBody>
             </Table>
           </Card>
@@ -113,7 +113,7 @@ export default function BirthdaysReportPage() {
                     <TD className="text-right">{m.years}</TD>
                   </TRow>
                 ))}
-                {(data?.marriages.length ?? 0) === 0 && <TRow><TD colSpan={4} className="py-8 text-center text-zinc-400">Nenhum aniversário de casamento neste mês.</TD></TRow>}
+                {(data?.marriages.length ?? 0) === 0 && <TRow><TD colSpan={4} className="py-8 text-center text-zinc-400">Nenhum aniversario de casamento neste mes.</TD></TRow>}
               </TBody>
             </Table>
           </Card>

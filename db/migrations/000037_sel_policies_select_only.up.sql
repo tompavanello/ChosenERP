@@ -1,14 +1,14 @@
 -- 000037_sel_policies_select_only.up.sql
--- Correção de política latente: as políticas `*_sel` foram criadas (000007,
--- 000016 e seguintes) como `FOR ALL` por omissão — sem `FOR SELECT`. Pela regra
--- do PostgreSQL, uma política ALL sem `WITH CHECK` reaproveita o `USING` também
--- para gravar. Ou seja: quem podia LER a linha também podia INSERIR/ALTERAR
--- (a política `_all` somava-se por OR, não restringia).
+-- Correcao de politica latente: as politicas `*_sel` foram criadas (000007,
+-- 000016 e seguintes) como `FOR ALL` por omissao - sem `FOR SELECT`. Pela regra
+-- do PostgreSQL, uma politica ALL sem `WITH CHECK` reaproveita o `USING` tambem
+-- para gravar. Ou seja: quem podia LER a linha tambem podia INSERIR/ALTERAR
+-- (a politica `_all` somava-se por OR, nao restringia).
 --
--- Enquanto a leitura era o branch exato, isso não aparecia. Com a leitura
--- hierárquica (000036), a filial passaria a gravar na sub-congregação pela
--- política de leitura. Esta migração torna cada `*_sel` realmente `FOR SELECT`;
--- a escrita continua coberta pelas políticas `*_all` / `*_ins` / `*_upd`, que
+-- Enquanto a leitura era o branch exato, isso nao aparecia. Com a leitura
+-- hierarquica (000036), a filial passaria a gravar na sub-congregacao pela
+-- politica de leitura. Esta migracao torna cada `*_sel` realmente `FOR SELECT`;
+-- a escrita continua coberta pelas politicas `*_all` / `*_ins` / `*_upd`, que
 -- usam rls_write (branch exato).
 --
 -- Verificado pelos testes: TestRLS_BranchWriteStaysExact.

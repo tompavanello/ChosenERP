@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Ministry é um ministério/área de voluntariado da igreja.
+// Ministry e um ministerio/area de voluntariado da igreja.
 type Ministry struct {
 	ID          string    `json:"id"`
 	BranchID    string    `json:"branch_id"`
@@ -21,7 +21,7 @@ type Ministry struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// MinistryMember é um voluntário de um ministério.
+// MinistryMember e um voluntario de um ministerio.
 type MinistryMember struct {
 	MinistryID string  `json:"ministry_id"`
 	MemberID   string  `json:"member_id"`
@@ -45,7 +45,7 @@ type UpdateInput struct {
 
 type Repo struct{}
 
-// List retorna os ministérios do escopo.
+// List retorna os ministerios do escopo.
 func (r *Repo) List(ctx context.Context, tx pgx.Tx) ([]Ministry, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT m.id::text, m.branch_id::text, m.name, m.slug, m.description,
@@ -60,7 +60,7 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx) ([]Ministry, error) {
 	out := []Ministry{}
 	for rows.Next() {
 		var m Ministry
-		// LEFT JOIN: lm.full_name é NULL quando o ministério não tem líder.
+		// LEFT JOIN: lm.full_name e NULL quando o ministerio nao tem lider.
 		var leader *string
 		if err := rows.Scan(&m.ID, &m.BranchID, &m.Name, &m.Slug, &m.Description,
 			&m.LeaderID, &leader, &m.IsActive, &m.CreatedAt); err != nil {
@@ -74,7 +74,7 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx) ([]Ministry, error) {
 	return out, rows.Err()
 }
 
-// Create insere um ministério no escopo RLS da sessão.
+// Create insere um ministerio no escopo RLS da sessao.
 func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string, in CreateInput) (*Ministry, error) {
 	if in.Name == "" {
 		return nil, pgx.ErrNoRows
@@ -90,7 +90,7 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 	return &m, err
 }
 
-// Update edita nome/descrição/responsável/situação do ministério.
+// Update edita nome/descricao/responsavel/situacao do ministerio.
 func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput) (*Ministry, error) {
 	var m Ministry
 	err := tx.QueryRow(ctx, `
@@ -106,7 +106,7 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput)
 	return &m, err
 }
 
-// Delete remove um ministério (vínculos e referência de grupo caem por FK).
+// Delete remove um ministerio (vinculos e referencia de grupo caem por FK).
 func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
 	tag, err := tx.Exec(ctx, `DELETE FROM ministries WHERE id = $1::uuid`, id)
 	if err != nil {
@@ -118,7 +118,7 @@ func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
 	return nil
 }
 
-// ListMembers retorna os voluntários de um ministério.
+// ListMembers retorna os voluntarios de um ministerio.
 func (r *Repo) ListMembers(ctx context.Context, tx pgx.Tx, ministryID string) ([]MinistryMember, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT mm.ministry_id::text, mm.member_id::text, mb.full_name,
@@ -142,7 +142,7 @@ func (r *Repo) ListMembers(ctx context.Context, tx pgx.Tx, ministryID string) ([
 	return out, rows.Err()
 }
 
-// AddMember vincula um voluntário a um ministério.
+// AddMember vincula um voluntario a um ministerio.
 func (r *Repo) AddMember(ctx context.Context, tx pgx.Tx, tenantID, ministryID, memberID, role string) error {
 	_, err := tx.Exec(ctx, `
 		INSERT INTO ministry_members (ministry_id, member_id, role)
@@ -150,7 +150,7 @@ func (r *Repo) AddMember(ctx context.Context, tx pgx.Tx, tenantID, ministryID, m
 	return err
 }
 
-// RemoveMember remove um voluntário de um ministério.
+// RemoveMember remove um voluntario de um ministerio.
 func (r *Repo) RemoveMember(ctx context.Context, tx pgx.Tx, ministryID, memberID string) error {
 	_, err := tx.Exec(ctx, `
 		DELETE FROM ministry_members

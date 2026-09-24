@@ -27,7 +27,7 @@ func TestWriteProducesValidZipWithParts(t *testing.T) {
 	}
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		t.Fatalf("zip inválido: %v", err)
+		t.Fatalf("zip invalido: %v", err)
 	}
 	found := map[string]bool{}
 	for _, f := range zr.File {
@@ -49,6 +49,6 @@ func TestWriteProducesValidZipWithParts(t *testing.T) {
 	defer rc.Close()
 	body, _ := io.ReadAll(rc)
 	if !strings.Contains(string(body), "Ana &amp; &quot;Bia&quot;") {
-		t.Errorf("conteúdo escapado não encontrado: %s", string(body))
+		t.Errorf("conteudo escapado nao encontrado: %s", string(body))
 	}
 }

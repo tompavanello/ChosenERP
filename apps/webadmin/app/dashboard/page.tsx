@@ -24,11 +24,11 @@ const QUICK_ACTIONS = [
   { label: "Novo Membro", icon: UserPlus, href: "/dashboard/members", perm: "members.write" },
   { label: "Novo Visitante", icon: DoorOpen, href: "/dashboard/visitors", perm: "members.write" },
   { label: "Novo Benfeitor", icon: HandHeart, href: "/dashboard/benefactors", perm: "members.write" },
-  // "Nova Família" saiu: a família agora é criada dentro da ficha do membro
-  // (aba Família), que é onde o agrupamento tem contexto.
-  { label: "Ver Famílias", icon: Users, href: "/dashboard/members", perm: "families.read" },
-  { label: "Lançar Financeiro", icon: Wallet, href: "/dashboard/finance", perm: "finance.write" },
-  { label: "Relatórios", icon: BarChart3, href: "/dashboard/reports", perm: "reports.read" },
+  // "Nova Familia" saiu: a familia agora e criada dentro da ficha do membro
+  // (aba Familia), que e onde o agrupamento tem contexto.
+  { label: "Ver Familias", icon: Users, href: "/dashboard/members", perm: "families.read" },
+  { label: "Lancar Financeiro", icon: Wallet, href: "/dashboard/finance", perm: "finance.write" },
+  { label: "Relatorios", icon: BarChart3, href: "/dashboard/reports", perm: "reports.read" },
 ];
 
 export default function OverviewPage() {
@@ -68,7 +68,7 @@ export default function OverviewPage() {
   if (loading) {
     return (
       <div>
-        <PageHeader title="Visão Geral" />
+        <PageHeader title="Visao Geral" />
         <div className="grid gap-4 md:grid-cols-3">
           {[0, 1, 2].map((i) => <Skeleton key={i} className="h-24" />)}
         </div>
@@ -76,16 +76,16 @@ export default function OverviewPage() {
     );
   }
 
-  const chartData = series.map((p) => ({ name: monthLabel(p.month), Saldo: p.net, Entradas: p.income, Saídas: p.expense }));
+  const chartData = series.map((p) => ({ name: monthLabel(p.month), Saldo: p.net, Entradas: p.income, Saidas: p.expense }));
   const visibleActions = QUICK_ACTIONS.filter((a) => hasPerm(a.perm));
 
   return (
     <div className="page space-y-6">
-      <PageHeader title="Visão Geral" description="Resumo operacional e financeiro da sua unidade." />
+      <PageHeader title="Visao Geral" description="Resumo operacional e financeiro da sua unidade." />
 
       {/* Quick Nav Cards */}
       <div className="mb-4">
-        <h3 className="text-sm font-medium text-zinc-500 mb-3">Acesso rápido</h3>
+        <h3 className="text-sm font-medium text-zinc-500 mb-3">Acesso rapido</h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {visibleActions.map((action) => {
             const Icon = action.icon;
@@ -110,7 +110,7 @@ export default function OverviewPage() {
         {hasPerm("finance.read") ? (
           <>
             <StatCard label="Entradas" value={balance ? currency(balance.income) : "..."} icon={ArrowUpRight} tone="green" />
-            <StatCard label="Saídas" value={balance ? currency(balance.expense) : "..."} icon={ArrowDownRight} tone="red" />
+            <StatCard label="Saidas" value={balance ? currency(balance.expense) : "..."} icon={ArrowDownRight} tone="red" />
             <StatCard label="Saldo" value={balance ? currency(balance.net) : "..."} icon={Wallet} tone="sky" />
           </>
         ) : (
@@ -120,7 +120,7 @@ export default function OverviewPage() {
         <StatCard label="Visitantes" value={visitors != null ? number(visitors) : "..."} icon={DoorOpen} tone="amber" />
       </div>
 
-      {/* Aniversariantes do mês — resumo (total do mês e quantos hoje) */}
+      {/* Aniversariantes do mes - resumo (total do mes e quantos hoje) */}
       {hasPerm("members.read") && <BirthdaysSummaryCard className="mt-6" />}
 
       {/* Chart */}
@@ -128,10 +128,10 @@ export default function OverviewPage() {
         <Card className="p-6">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-700">
-              <TrendingUp className="h-4 w-4 text-sky-600" /> Evolução do saldo (mensal)
+              <TrendingUp className="h-4 w-4 text-sky-600" /> Evolucao do saldo (mensal)
             </h3>
             <span className="flex items-center gap-2 text-xs text-zinc-400">
-              <Activity className="h-3.5 w-3.5" /> {series.length} mês(es)
+              <Activity className="h-3.5 w-3.5" /> {series.length} mes(es)
             </span>
           </div>
           <div className="h-64">
@@ -157,8 +157,8 @@ export default function OverviewPage() {
       {/* Recent activity placeholder */}
       {hasPerm("finance.read") && balance && balance.net > 0 && (
         <Card className="p-6">
-          <h3 className="mb-3 text-sm font-semibold text-zinc-700">Últimos lançamentos</h3>
-          <p className="text-sm text-zinc-500">Sem lançamentos recentes.</p>
+          <h3 className="mb-3 text-sm font-semibold text-zinc-700">Ultimos lancamentos</h3>
+          <p className="text-sm text-zinc-500">Sem lancamentos recentes.</p>
         </Card>
       )}
     </div>

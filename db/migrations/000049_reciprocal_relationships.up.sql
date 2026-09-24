@@ -1,9 +1,9 @@
 -- 000049_reciprocal_relationships.up.sql
--- Backfill dos vínculos de membro para o formato recíproco: cada linha
+-- Backfill dos vinculos de membro para o formato reciproco: cada linha
 -- member_id -> related_id ganha a linha inversa related_id -> member_id, com o
--- kind invertido (pai<->filho, discipulador<->discípulo; cônjuge/parente/
--- dependente são simétricos). Sem isso, a referência ficaria correta só na ficha
--- de um lado. Idempotente (ON CONFLICT) e não toca auto-vínculos.
+-- kind invertido (pai<->filho, discipulador<->discipulo; conjuge/parente/
+-- dependente sao simetricos). Sem isso, a referencia ficaria correta so na ficha
+-- de um lado. Idempotente (ON CONFLICT) e nao toca auto-vinculos.
 INSERT INTO member_relationships (member_id, related_id, kind)
 SELECT r.related_id, r.member_id,
        CASE r.kind

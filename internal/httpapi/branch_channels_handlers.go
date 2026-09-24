@@ -19,7 +19,7 @@ func (a *App) evolution() *delivery.EvolutionClient {
 	}
 }
 
-// handleGetBranchChannels lê a configuração de canais (WhatsApp/SMTP) da filial.
+// handleGetBranchChannels le a configuracao de canais (WhatsApp/SMTP) da filial.
 func (a *App) handleGetBranchChannels(w http.ResponseWriter, r *http.Request) {
 	claims, ok := a.adminClaims(w, r)
 	if !ok {
@@ -35,7 +35,7 @@ func (a *App) handleGetBranchChannels(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "filial não encontrada")
+			writeErr(w, http.StatusNotFound, "filial nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -44,7 +44,7 @@ func (a *App) handleGetBranchChannels(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// handleUpdateBranchChannels grava a configuração de canais da filial.
+// handleUpdateBranchChannels grava a configuracao de canais da filial.
 func (a *App) handleUpdateBranchChannels(w http.ResponseWriter, r *http.Request) {
 	claims, ok := a.adminClaims(w, r)
 	if !ok {
@@ -65,7 +65,7 @@ func (a *App) handleUpdateBranchChannels(w http.ResponseWriter, r *http.Request)
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "filial não encontrada")
+			writeErr(w, http.StatusNotFound, "filial nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -74,27 +74,27 @@ func (a *App) handleUpdateBranchChannels(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, out)
 }
 
-// handleConnectBranchWhatsApp cria (ou reconecta) a instância Evolution cujo
-// nome é o id da filial e devolve o QR Code para leitura no WhatsApp.
+// handleConnectBranchWhatsApp cria (ou reconecta) a instancia Evolution cujo
+// nome e o id da filial e devolve o QR Code para leitura no WhatsApp.
 func (a *App) handleConnectBranchWhatsApp(w http.ResponseWriter, r *http.Request) {
 	claims, ok := a.adminClaims(w, r)
 	if !ok {
 		return
 	}
 	if a.Config.EvolutionAPIURL == "" || a.Config.EvolutionAPIKey == "" {
-		writeErr(w, http.StatusBadRequest, "integração WhatsApp (Evolution) não configurada no servidor")
+		writeErr(w, http.StatusBadRequest, "integracao WhatsApp (Evolution) nao configurada no servidor")
 		return
 	}
 	id := r.PathValue("id")
 	b := boundsFromClaims(claims)
 
-	// Confirma que a filial existe no escopo e usa o id como nome da instância.
+	// Confirma que a filial existe no escopo e usa o id como nome da instancia.
 	if err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
 		_, err := a.Org.GetBranchChannels(r.Context(), tx, id)
 		return err
 	}); err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "filial não encontrada")
+			writeErr(w, http.StatusNotFound, "filial nao encontrada")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -104,10 +104,10 @@ func (a *App) handleConnectBranchWhatsApp(w http.ResponseWriter, r *http.Request
 	client := a.evolution()
 	qr, err := client.CreateInstance(r.Context(), id)
 	if err != nil {
-		// Instância provavelmente já existe: tenta apenas reconectar.
+		// Instancia provavelmente ja existe: tenta apenas reconectar.
 		qr, err = client.Connect(r.Context(), id)
 		if err != nil {
-			writeErr(w, http.StatusBadGateway, "não foi possível conectar ao WhatsApp: "+err.Error())
+			writeErr(w, http.StatusBadGateway, "nao foi possivel conectar ao WhatsApp: "+err.Error())
 			return
 		}
 	}
@@ -123,7 +123,7 @@ func (a *App) handleConnectBranchWhatsApp(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// handleBranchWhatsAppState consulta o estado da conexão e sincroniza o banco.
+// handleBranchWhatsAppState consulta o estado da conexao e sincroniza o banco.
 func (a *App) handleBranchWhatsAppState(w http.ResponseWriter, r *http.Request) {
 	claims, ok := a.adminClaims(w, r)
 	if !ok {
@@ -147,7 +147,7 @@ func (a *App) handleBranchWhatsAppState(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// handleDisconnectBranchWhatsApp desconecta a instância da filial.
+// handleDisconnectBranchWhatsApp desconecta a instancia da filial.
 func (a *App) handleDisconnectBranchWhatsApp(w http.ResponseWriter, r *http.Request) {
 	claims, ok := a.adminClaims(w, r)
 	if !ok {

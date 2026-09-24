@@ -43,7 +43,7 @@ export default function TransfersPage() {
     <div className="page">
       <PageHeader
         title="Repasses"
-        description="Transferência de recursos entre filiais (splits)"
+        description="Transferencia de recursos entre filiais (splits)"
         actions={<Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Novo Repasse</Button>}
       />
 
@@ -51,7 +51,7 @@ export default function TransfersPage() {
         {transfers === null ? (
           <SkeletonRows />
         ) : transfers.length === 0 ? (
-          <EmptyState icon={<Wallet className="h-10 w-10" />} title="Nenhum repasse" description="Registre a transferência de recursos entre filiais." />
+          <EmptyState icon={<Wallet className="h-10 w-10" />} title="Nenhum repasse" description="Registre a transferencia de recursos entre filiais." />
         ) : (
           <Table>
             <THead><TRow><TH>Origem</TH><TH>Destino</TH><TH>Regra</TH><TH className="text-right">Valor</TH><TH className="text-right">Data</TH></TRow></THead>

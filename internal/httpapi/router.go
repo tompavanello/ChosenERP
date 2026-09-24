@@ -27,7 +27,7 @@ import (
 	"chosenerp/internal/visitors"
 )
 
-// App agrega as dependências dos handlers HTTP.
+// App agrega as dependencias dos handlers HTTP.
 type App struct {
 	Config        *Config
 	Store         *store.Store
@@ -86,13 +86,13 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	}
 	mux := http.NewServeMux()
 
-	// Público
+	// Publico
 	mux.HandleFunc("GET /healthz", app.handleHealth)
 	mux.HandleFunc("GET /metrics", app.handleMetrics)
 	mux.HandleFunc("POST /api/v1/auth/login", app.handleLogin)
 	mux.HandleFunc("POST /api/v1/auth/refresh", app.handleRefresh)
 	mux.HandleFunc("POST /api/v1/auth/select-tenant", app.handleSelectTenant)
-	// Branding da igreja por slug (tela de login do subdomínio).
+	// Branding da igreja por slug (tela de login do subdominio).
 	mux.Handle("GET /api/v1/public/tenant/{slug}", app.publico(app.handlePublicTenant))
 
 	// Autenticado
@@ -114,11 +114,11 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("DELETE /api/v1/members/{id}/photo", authed(http.HandlerFunc(app.handleDeleteMemberPhoto)))
 	mux.Handle("GET /api/v1/members/{id}/families", authed(http.HandlerFunc(app.handleMemberFamilies)))
 
-	// Histórico eclesiástico do membro (requisito 1.8)
+	// Historico eclesiastico do membro (requisito 1.8)
 	mux.Handle("GET /api/v1/members/{id}/history", authed(http.HandlerFunc(app.handleListMemberHistory)))
 	mux.Handle("POST /api/v1/members/{id}/history", authed(http.HandlerFunc(app.handleAddMemberHistory)))
 
-	// Cargos (funções/ministérios) e mandatos do membro
+	// Cargos (funcoes/ministerios) e mandatos do membro
 	mux.Handle("GET /api/v1/cargos", authed(http.HandlerFunc(app.handleListCargos)))
 	mux.Handle("POST /api/v1/cargos", authed(http.HandlerFunc(app.handleCreateCargo)))
 	mux.Handle("PATCH /api/v1/cargos/{id}", authed(http.HandlerFunc(app.handleUpdateCargo)))
@@ -128,7 +128,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("PATCH /api/v1/members/{id}/cargos/{linkId}", authed(http.HandlerFunc(app.handleUpdateMemberCargo)))
 	mux.Handle("DELETE /api/v1/members/{id}/cargos/{linkId}", authed(http.HandlerFunc(app.handleUnassignCargo)))
 
-	// Famílias
+	// Familias
 	mux.Handle("GET /api/v1/families", authed(http.HandlerFunc(app.handleListFamilies)))
 	mux.Handle("POST /api/v1/families", authed(http.HandlerFunc(app.handleCreateFamily)))
 	mux.Handle("GET /api/v1/families/{id}", authed(http.HandlerFunc(app.handleGetFamily)))
@@ -174,7 +174,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/finance/transactions/{id}/attachments", authed(http.HandlerFunc(app.handleUploadAttachment)))
 	mux.Handle("GET /api/v1/finance/balance", authed(http.HandlerFunc(app.handleBalance)))
 
-	// Auditoria analítica do financeiro (documento imutável após fechamento)
+	// Auditoria analitica do financeiro (documento imutavel apos fechamento)
 	mux.Handle("GET /api/v1/finance/audits", authed(http.HandlerFunc(app.handleListAudits)))
 	mux.Handle("POST /api/v1/finance/audits", authed(http.HandlerFunc(app.handleCreateAudit)))
 	mux.Handle("GET /api/v1/finance/audits/{id}", authed(http.HandlerFunc(app.handleGetAudit)))
@@ -183,18 +183,18 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/finance/audits/{id}/export", authed(http.HandlerFunc(app.handleExportAudit)))
 	mux.Handle("DELETE /api/v1/finance/audits/{id}", authed(http.HandlerFunc(app.handleDeleteAudit)))
 
-	// Download de anexos (arquivo por nome — opaco, não requer auth)
+	// Download de anexos (arquivo por nome - opaco, nao requer auth)
 	mux.Handle("GET /api/v1/attachments/{filename}", http.HandlerFunc(app.handleDownloadAttachment))
 
 	// Documentos digitais (leitura por token do QR)
 	mux.Handle("GET /api/v1/documents/by-token/{token}", authed(http.HandlerFunc(app.handleGetDocumentByToken)))
 
-	// Recibos: renderização e envio (prefixo próprio evita ambiguidade de rotas)
+	// Recibos: renderizacao e envio (prefixo proprio evita ambiguidade de rotas)
 	mux.Handle("GET /api/v1/receipts/{id}", authed(http.HandlerFunc(app.handleRenderReceipt)))
 	mux.Handle("POST /api/v1/receipts/{id}/send", authed(http.HandlerFunc(app.handleSendDocument)))
 	mux.Handle("GET /api/v1/receipts/{id}/deliveries", authed(http.HandlerFunc(app.handleListDeliveries)))
 
-	// Relatórios
+	// Relatorios
 	mux.Handle("GET /api/v1/reports/balance", authed(http.HandlerFunc(app.handleMonthlyBalance)))
 	mux.Handle("GET /api/v1/reports/dre", authed(http.HandlerFunc(app.handleDRE)))
 	mux.Handle("GET /api/v1/reports/balance/export", authed(http.HandlerFunc(app.handleExportBalance)))
@@ -209,7 +209,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/reports/assembly", authed(http.HandlerFunc(app.handleAssemblyReport)))
 	mux.Handle("GET /api/v1/reports/assembly/export", authed(http.HandlerFunc(app.handleExportAssembly)))
 
-	// Branches (seleção de filial em repasses) + configuração do tenant
+	// Branches (selecao de filial em repasses) + configuracao do tenant
 	mux.Handle("GET /api/v1/branches", authed(http.HandlerFunc(app.handleListBranches)))
 	mux.Handle("POST /api/v1/branches", authed(http.HandlerFunc(app.handleCreateBranch)))
 	mux.Handle("PATCH /api/v1/branches/{id}", authed(http.HandlerFunc(app.handleUpdateBranch)))
@@ -228,12 +228,12 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/finance/transfers", authed(http.HandlerFunc(app.handleListTransfers)))
 	mux.Handle("POST /api/v1/finance/transfers", authed(http.HandlerFunc(app.handleCreateTransfer)))
 
-	// Doações recorrentes
+	// Doacoes recorrentes
 	mux.Handle("GET /api/v1/finance/recurring", authed(http.HandlerFunc(app.handleListRecurring)))
 	mux.Handle("POST /api/v1/finance/recurring", authed(http.HandlerFunc(app.handleCreateRecurring)))
 	mux.Handle("PATCH /api/v1/finance/recurring/{id}", authed(http.HandlerFunc(app.handleUpdateRecurring)))
 
-	// Ministérios / escalas
+	// Ministerios / escalas
 	mux.Handle("GET /api/v1/ministries", authed(http.HandlerFunc(app.handleListMinistries)))
 	mux.Handle("POST /api/v1/ministries", authed(http.HandlerFunc(app.handleCreateMinistry)))
 	mux.Handle("PATCH /api/v1/ministries/{id}", authed(http.HandlerFunc(app.handleUpdateMinistry)))
@@ -243,7 +243,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/ministries/{id}/members/batch", authed(http.HandlerFunc(app.handleAddMinistryMembersBatch)))
 	mux.Handle("DELETE /api/v1/ministries/{id}/members/{memberId}", authed(http.HandlerFunc(app.handleRemoveMinistryMember)))
 
-	// Escalas de voluntários
+	// Escalas de voluntarios
 	mux.Handle("GET /api/v1/rosters", authed(http.HandlerFunc(app.handleListRosters)))
 	mux.Handle("POST /api/v1/rosters", authed(http.HandlerFunc(app.handleCreateRoster)))
 	mux.Handle("GET /api/v1/rosters/suggestions", authed(http.HandlerFunc(app.handleRosterSuggestions)))
@@ -254,7 +254,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("PATCH /api/v1/rosters/{id}/assignments/{assignmentId}", authed(http.HandlerFunc(app.handleRespondRosterAssignment)))
 	mux.Handle("GET /api/v1/rosters/{id}/conflicts", authed(http.HandlerFunc(app.handleRosterConflicts)))
 
-	// Pequenos grupos / células + check-in
+	// Pequenos grupos / celulas + check-in
 	mux.Handle("GET /api/v1/groups", authed(http.HandlerFunc(app.handleListGroups)))
 	mux.Handle("POST /api/v1/groups", authed(http.HandlerFunc(app.handleCreateGroup)))
 	mux.Handle("PATCH /api/v1/groups/{id}", authed(http.HandlerFunc(app.handleUpdateGroup)))
@@ -262,7 +262,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/groups/{id}/attendance", authed(http.HandlerFunc(app.handleCheckIn)))
 	mux.Handle("GET /api/v1/groups/{id}/attendance", authed(http.HandlerFunc(app.handleListEventAttendance)))
 
-	// Avisos (app do membro) — gestão + disparo
+	// Avisos (app do membro) - gestao + disparo
 	mux.Handle("GET /api/v1/announcements", authed(http.HandlerFunc(app.handleListAnnouncements)))
 	mux.Handle("POST /api/v1/announcements", authed(http.HandlerFunc(app.handleCreateAnnouncement)))
 	mux.Handle("PATCH /api/v1/announcements/{id}", authed(http.HandlerFunc(app.handleUpdateAnnouncement)))
@@ -272,15 +272,15 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/announcements/{id}/deliveries", authed(http.HandlerFunc(app.handleListAnnouncementDeliveries)))
 	mux.Handle("POST /api/v1/announcements/send-test", authed(http.HandlerFunc(app.handleSendTestMessage)))
 
-	// Histórico de disparos agendados (tela Execuções)
+	// Historico de disparos agendados (tela Execucoes)
 	mux.Handle("GET /api/v1/notification-runs", authed(http.HandlerFunc(app.handleListNotificationRuns)))
 
-	// Automações de WhatsApp (#31): aniversário, lembrete de escala e boas-vindas
+	// Automacoes de WhatsApp (#31): aniversario, lembrete de escala e boas-vindas
 	mux.Handle("GET /api/v1/notifications/settings", authed(http.HandlerFunc(app.handleGetNotificationSettings)))
 	mux.Handle("PATCH /api/v1/notifications/settings", authed(http.HandlerFunc(app.handleUpdateNotificationSettings)))
 	mux.Handle("POST /api/v1/notifications/run", authed(http.HandlerFunc(app.handleRunNotifications)))
 
-	// Usuários e acessos (autorização por papel no handler; RLS isola o tenant)
+	// Usuarios e acessos (autorizacao por papel no handler; RLS isola o tenant)
 	mux.Handle("GET /api/v1/users", authed(http.HandlerFunc(app.handleListUsers)))
 	mux.Handle("POST /api/v1/users", authed(http.HandlerFunc(app.handleCreateUser)))
 	mux.Handle("PATCH /api/v1/users/{id}", authed(http.HandlerFunc(app.handleUpdateUser)))
@@ -288,13 +288,13 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/roles", authed(http.HandlerFunc(app.handleListRoles)))
 	mux.Handle("GET /api/v1/permissions", authed(http.HandlerFunc(app.handleListPermissions)))
 
-	// MFA (TOTP) do próprio usuário
+	// MFA (TOTP) do proprio usuario
 	mux.Handle("GET /api/v1/auth/mfa", authed(http.HandlerFunc(app.handleMFAStatus)))
 	mux.Handle("POST /api/v1/auth/mfa/setup", authed(http.HandlerFunc(app.handleMFASetup)))
 	mux.Handle("POST /api/v1/auth/mfa/enable", authed(http.HandlerFunc(app.handleMFAEnable)))
 	mux.Handle("POST /api/v1/auth/mfa/disable", authed(http.HandlerFunc(app.handleMFADisable)))
 
-	// Eventos, tipos de evento, chamada nominal e frequência do membro
+	// Eventos, tipos de evento, chamada nominal e frequencia do membro
 	mux.Handle("GET /api/v1/event-kinds", authed(http.HandlerFunc(app.handleListEventKinds)))
 	mux.Handle("POST /api/v1/event-kinds", authed(http.HandlerFunc(app.handleCreateEventKind)))
 	mux.Handle("PATCH /api/v1/event-kinds/{id}", authed(http.HandlerFunc(app.handleUpdateEventKind)))
@@ -311,7 +311,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/members/{id}/frequency", authed(http.HandlerFunc(app.handleListFrequency)))
 	mux.Handle("POST /api/v1/members/{id}/frequency", authed(http.HandlerFunc(app.handleSetFrequency)))
 
-	// LGPD: consentimento, portabilidade e anonimização
+	// LGPD: consentimento, portabilidade e anonimizacao
 	mux.Handle("GET /api/v1/consent-terms", authed(http.HandlerFunc(app.handleListConsentTerms)))
 	mux.Handle("POST /api/v1/consent-terms", authed(http.HandlerFunc(app.handleCreateConsentTerm)))
 	mux.Handle("GET /api/v1/members/{id}/consents", authed(http.HandlerFunc(app.handleListMemberConsents)))
@@ -319,7 +319,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/members/{id}/export", authed(http.HandlerFunc(app.handleExportMemberData)))
 	mux.Handle("POST /api/v1/members/{id}/anonymize", authed(http.HandlerFunc(app.handleAnonymizeMember)))
 
-	// Governança (Módulo 6): atas, assinatura interna, votação e convênios
+	// Governanca (Modulo 6): atas, assinatura interna, votacao e convenios
 	mux.Handle("GET /api/v1/minutes", authed(http.HandlerFunc(app.handleListMinutes)))
 	mux.Handle("POST /api/v1/minutes", authed(http.HandlerFunc(app.handleCreateMinute)))
 	mux.Handle("GET /api/v1/minutes/{id}", authed(http.HandlerFunc(app.handleGetMinute)))
@@ -342,8 +342,8 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("DELETE /api/v1/legal-documents/{id}", authed(http.HandlerFunc(app.handleDeleteLegalDocument)))
 	mux.Handle("GET /api/v1/governance/mandates", authed(http.HandlerFunc(app.handleListMandates)))
 
-	// Ministério Infantil (Kids): trilha/conteúdo, turmas, participantes,
-	// encontros, check-in e evolução.
+	// Ministerio Infantil (Kids): trilha/conteudo, turmas, participantes,
+	// encontros, check-in e evolucao.
 	mux.Handle("GET /api/v1/kids/tracks", authed(http.HandlerFunc(app.handleListKidsTracks)))
 	mux.Handle("POST /api/v1/kids/tracks", authed(http.HandlerFunc(app.handleCreateKidsTrack)))
 	mux.Handle("PATCH /api/v1/kids/tracks/{id}", authed(http.HandlerFunc(app.handleUpdateKidsTrack)))
@@ -373,10 +373,10 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/kids/sessions/{id}/absence", authed(http.HandlerFunc(app.handleKidsAbsence)))
 	mux.Handle("GET /api/v1/kids/classes/{id}/evolution", authed(http.HandlerFunc(app.handleKidsEvolution)))
 
-	// App do membro (público por token do QR). As três rotas são as únicas sem
+	// App do membro (publico por token do QR). As tres rotas sao as unicas sem
 	// auth: passam pelo `publico`, que aplica noindex e limite por IP. A foto
-	// tem endpoint próprio para o Access poder liberar só ela, e não
-	// /api/v1/attachments/{arquivo}, que serve também comprovante financeiro.
+	// tem endpoint proprio para o Access poder liberar so ela, e nao
+	// /api/v1/attachments/{arquivo}, que serve tambem comprovante financeiro.
 	mux.Handle("GET /api/v1/public/card/{token}", app.publico(app.handlePublicCard))
 	mux.Handle("GET /api/v1/public/card/{token}/print", app.publico(app.handleMemberCardHTML))
 	mux.Handle("GET /api/v1/public/card/{token}/photo", app.publico(app.handlePublicCardPhoto))

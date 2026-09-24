@@ -6,11 +6,11 @@ import { downloadExport, openPrint } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 
 /**
- * Botões de exportação de um relatório nos três formatos.
+ * Botoes de exportacao de um relatorio nos tres formatos.
  *
  * - CSV e Excel (XLSX) baixam o arquivo.
- * - PDF abre a versão de impressão numa aba nova (o navegador salva em PDF),
- *   porque o endpoint exige auth e uma navegação nova não envia o Bearer.
+ * - PDF abre a versao de impressao numa aba nova (o navegador salva em PDF),
+ *   porque o endpoint exige auth e uma navegacao nova nao envia o Bearer.
  */
 export function ExportButtons({
   path,

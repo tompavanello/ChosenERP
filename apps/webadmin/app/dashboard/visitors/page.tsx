@@ -78,7 +78,7 @@ export default function VisitorsPage() {
     try {
       await updateVisitorStage(v.id, next);
       setVisitors(await listVisitors().then((r) => r.visitors));
-      toast(`Trilha avançada para "${JOURNEY_STAGES[next]?.label}".`);
+      toast(`Trilha avancada para "${JOURNEY_STAGES[next]?.label}".`);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro", "error");
     }
@@ -103,14 +103,14 @@ export default function VisitorsPage() {
     <div className="page">
       <PageHeader
         title="Visitantes"
-        description="Trilha de acolhimento e conversão"
+        description="Trilha de acolhimento e conversao"
         actions={<Button onClick={() => setOpen(true)}><UserPlus className="h-4 w-4" /> Novo Visitante</Button>}
       />
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <StatCard label="Visitantes" value={visitors ? String(stats.total) : "…"} icon={DoorOpen} />
-        <StatCard label="Em trilha" value={visitors ? String(stats.inJourney) : "…"} tone="sky" />
-        <StatCard label="Convertidos" value={visitors ? String(stats.converted) : "…"} tone="green" />
+        <StatCard label="Visitantes" value={visitors ? String(stats.total) : "..."} icon={DoorOpen} />
+        <StatCard label="Em trilha" value={visitors ? String(stats.inJourney) : "..."} tone="sky" />
+        <StatCard label="Convertidos" value={visitors ? String(stats.converted) : "..."} tone="green" />
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -133,7 +133,7 @@ export default function VisitorsPage() {
           <>
             <Table>
               <THead>
-                <TRow><TH>Nome</TH><TH>Contato</TH><TH>Origem</TH><TH>Trilha de acolhimento</TH><TH>Entrada</TH><TH className="text-right">Ação</TH></TRow>
+                <TRow><TH>Nome</TH><TH>Contato</TH><TH>Origem</TH><TH>Trilha de acolhimento</TH><TH>Entrada</TH><TH className="text-right">Acao</TH></TRow>
               </THead>
               <TBody>
                 {pageItems.map((v) => {
@@ -143,10 +143,10 @@ export default function VisitorsPage() {
                     <TRow key={v.id}>
                       <TD className="font-medium">{v.full_name}</TD>
                       <TD>
-                        <p>{v.phone ?? v.whatsapp ?? "—"}</p>
+                        <p>{v.phone ?? v.whatsapp ?? "-"}</p>
                         <p className="text-xs text-zinc-400">{v.email ?? ""}</p>
                       </TD>
-                      <TD className="text-zinc-500">{v.source ?? "—"}</TD>
+                      <TD className="text-zinc-500">{v.source ?? "-"}</TD>
                       <TD>
                         <div className="flex items-center gap-2">
                           <div className="flex gap-1">
@@ -167,7 +167,7 @@ export default function VisitorsPage() {
                             </Button>
                           )}
                           <Button variant="ghost" size="sm" onClick={() => advance(v)}>
-                            Avançar <ArrowRight className="h-3.5 w-3.5" />
+                            Avancar <ArrowRight className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </TD>
@@ -192,7 +192,7 @@ export default function VisitorsPage() {
           <Field label="WhatsApp"><Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} /></Field>
           <Field label="Como nos conheceu?" className="col-span-2">
             <Select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>
-              <option value="">—</option>
+              <option value="">-</option>
               {SOURCES.map((s) => (<option key={s} value={s}>{s}</option>))}
             </Select>
           </Field>

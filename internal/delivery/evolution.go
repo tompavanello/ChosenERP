@@ -11,16 +11,16 @@ import (
 )
 
 // EvolutionClient fala com a Evolution API (WhatsApp Web self-hosted) para
-// gerenciar instâncias por filial: criar, conectar (QR Code), consultar estado
-// e desconectar. A URL/chave do servidor Evolution são globais (env); a
-// instância é identificada pelo id da filial.
+// gerenciar instancias por filial: criar, conectar (QR Code), consultar estado
+// e desconectar. A URL/chave do servidor Evolution sao globais (env); a
+// instancia e identificada pelo id da filial.
 type EvolutionClient struct {
 	BaseURL string
 	APIKey  string
 	HTTP    *http.Client
 }
 
-// EvolutionQR é o retorno do QR Code (base64 pronto para <img> e o código
+// EvolutionQR e o retorno do QR Code (base64 pronto para <img> e o codigo
 // textual, quando houver).
 type EvolutionQR struct {
 	Base64 string `json:"base64"`
@@ -65,7 +65,7 @@ func (c *EvolutionClient) do(ctx context.Context, method, path string, body any)
 	return buf.Bytes(), resp.StatusCode, nil
 }
 
-// parseQR extrai o QR de respostas que variam entre versões da Evolution
+// parseQR extrai o QR de respostas que variam entre versoes da Evolution
 // (v1 costuma devolver base64/code no topo; v2 aninha em "qrcode").
 func parseQR(raw []byte) EvolutionQR {
 	var top map[string]json.RawMessage
@@ -85,7 +85,7 @@ func parseQR(raw []byte) EvolutionQR {
 	if out.Base64 == "" {
 		_ = json.Unmarshal(top["base64"], &out.Base64)
 	}
-	// `code` no topo pode ser o status HTTP (número) em algumas versões; o
+	// `code` no topo pode ser o status HTTP (numero) em algumas versoes; o
 	// unmarshal para string simplesmente falha e o campo fica vazio.
 	if out.Code == "" {
 		_ = json.Unmarshal(top["code"], &out.Code)
@@ -93,7 +93,7 @@ func parseQR(raw []byte) EvolutionQR {
 	return out
 }
 
-// CreateInstance cria a instância com o nome dado e já pede o QR Code.
+// CreateInstance cria a instancia com o nome dado e ja pede o QR Code.
 func (c *EvolutionClient) CreateInstance(ctx context.Context, instance string) (EvolutionQR, error) {
 	raw, _, err := c.do(ctx, http.MethodPost, "/instance/create", map[string]any{
 		"instanceName": instance,
@@ -106,7 +106,7 @@ func (c *EvolutionClient) CreateInstance(ctx context.Context, instance string) (
 	return parseQR(raw), nil
 }
 
-// Connect (re)obtém o QR Code de conexão de uma instância existente.
+// Connect (re)obtem o QR Code de conexao de uma instancia existente.
 func (c *EvolutionClient) Connect(ctx context.Context, instance string) (EvolutionQR, error) {
 	raw, _, err := c.do(ctx, http.MethodGet, "/instance/connect/"+instance, nil)
 	if err != nil {
@@ -148,7 +148,7 @@ func normalizeEvolutionState(s string) string {
 	}
 }
 
-// Logout desconecta a instância (mantém a instância criada).
+// Logout desconecta a instancia (mantem a instancia criada).
 func (c *EvolutionClient) Logout(ctx context.Context, instance string) error {
 	_, _, err := c.do(ctx, http.MethodDelete, "/instance/logout/"+instance, nil)
 	return err

@@ -9,10 +9,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// migrator aplica as migrações *.up.sql embutidas, em ordem de versão,
-// rastreando o que já foi aplicado na tabela schema_migrations.
+// migrator aplica as migracoes *.up.sql embutidas, em ordem de versao,
+// rastreando o que ja foi aplicado na tabela schema_migrations.
 func (s *Store) Migrate(ctx context.Context) error {
-	// Conexão simples (simple protocol) para suportar múltiplos comandos por arquivo.
+	// Conexao simples (simple protocol) para suportar multiplos comandos por arquivo.
 	conn, err := pgx.Connect(ctx, s.migrateDSN)
 	if err != nil {
 		return fmt.Errorf("connect for migrate: %w", err)

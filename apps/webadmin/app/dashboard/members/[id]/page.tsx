@@ -56,8 +56,8 @@ export default function MemberDetailPage() {
     const [m, t] = await Promise.all([getMember(id), getMemberTree(id)]);
     setMember(m);
     setRels(t.relationships.filter((r) => r.kind !== "self"));
-    // A árvore já traz os nomes de quem está vinculado; a lista completa só
-    // serve ao seletor de "adicionar vínculo".
+    // A arvore ja traz os nomes de quem esta vinculado; a lista completa so
+    // serve ao seletor de "adicionar vinculo".
     const todos = await listMembers();
     setOthers(todos.members.filter((x) => x.id !== m.id));
     setLoading(false);
@@ -70,8 +70,8 @@ export default function MemberDetailPage() {
     });
   }, [load, toast]);
 
-  // Deep link vindo do grid ("Família e vínculos" => ?tab=familia). Lido do
-  // window em vez de useSearchParams() para não exigir Suspense no prerender.
+  // Deep link vindo do grid ("Familia e vinculos" => ?tab=familia). Lido do
+  // window em vez de useSearchParams() para nao exigir Suspense no prerender.
   useEffect(() => {
     const alvo = new URLSearchParams(window.location.search).get("tab");
     if (alvo) setTab(alvo);
@@ -100,7 +100,7 @@ export default function MemberDetailPage() {
       await addRelationship(id, rel.relate_member_id, rel.kind);
       setRel({ relate_member_id: "", kind: "spouse" });
       await load();
-      toast("Vínculo adicionado.");
+      toast("Vinculo adicionado.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao vincular", "error");
     }
@@ -120,7 +120,7 @@ export default function MemberDetailPage() {
       <div className="page">
         <EmptyState
           icon={<Users className="h-10 w-10" />}
-          title="Membro não encontrado"
+          title="Membro nao encontrado"
           description="O cadastro pode ter sido removido ou movido para outra filial."
         />
       </div>
@@ -149,7 +149,7 @@ export default function MemberDetailPage() {
           branchName(member.branch_id),
         ]
           .filter(Boolean)
-          .join(" · ")}
+          .join(" - ")}
         actions={
           <>
             <CardCell
@@ -187,7 +187,7 @@ export default function MemberDetailPage() {
                 member.joined_at ? `membro desde ${datePt(member.joined_at)}` : null,
               ]
                 .filter(Boolean)
-                .join(" · ") || "Sem dados de contato"}
+                .join(" - ") || "Sem dados de contato"}
             </p>
           </div>
         </div>
@@ -197,14 +197,14 @@ export default function MemberDetailPage() {
         open={editando}
         onClose={() => setEditando(false)}
         size="lg"
-        title={`Editar — ${member.full_name}`}
+        title={`Editar - ${member.full_name}`}
       >
         {editando && (
           <MemberForm
             memberId={member.id}
             initial={member}
             saving={salvando}
-            submitLabel="Salvar alterações"
+            submitLabel="Salvar alteracoes"
             onSubmit={salvar}
             onCancel={() => setEditando(false)}
             onPhotoChange={(url) => setMember((m) => (m ? { ...m, photo_url: url } : m))}
@@ -217,11 +217,11 @@ export default function MemberDetailPage() {
           { key: "dados", label: "Dados Pessoais", icon: <User className="h-4 w-4" /> },
           { key: "contato", label: "Contato", icon: <Phone className="h-4 w-4" /> },
           { key: "cargos", label: "Cargos", icon: <Award className="h-4 w-4" /> },
-          { key: "familia", label: "Família", icon: <Users className="h-4 w-4" /> },
-          { key: "vinc", label: "Vínculos", icon: <GitBranch className="h-4 w-4" /> },
+          { key: "familia", label: "Familia", icon: <Users className="h-4 w-4" /> },
+          { key: "vinc", label: "Vinculos", icon: <GitBranch className="h-4 w-4" /> },
           { key: "espiritual", label: "Espiritual", icon: <Sparkles className="h-4 w-4" /> },
-          { key: "freq", label: "Frequência", icon: <Activity className="h-4 w-4" /> },
-          { key: "hist", label: "Histórico", icon: <History className="h-4 w-4" /> },
+          { key: "freq", label: "Frequencia", icon: <Activity className="h-4 w-4" /> },
+          { key: "hist", label: "Historico", icon: <History className="h-4 w-4" /> },
           { key: "docs", label: "Documentos", icon: <FileText className="h-4 w-4" /> },
           { key: "lgpd", label: "LGPD", icon: <ShieldCheck className="h-4 w-4" /> },
         ]}
@@ -235,26 +235,26 @@ export default function MemberDetailPage() {
             <Info label="Nome completo" value={member.full_name} />
             <Info label="Apelido" value={member.nickname} />
             <Info label="Nascimento" value={datePt(member.birth_date)} />
-            <Info label="Sexo" value={member.gender ? GENDER[member.gender] : "—"} />
-            <Info label="Estado civil" value={member.marital_status ? MARITAL_STATUS[member.marital_status] : "—"} />
-            <Info label="Profissão" value={member.profession} />
+            <Info label="Sexo" value={member.gender ? GENDER[member.gender] : "-"} />
+            <Info label="Estado civil" value={member.marital_status ? MARITAL_STATUS[member.marital_status] : "-"} />
+            <Info label="Profissao" value={member.profession} />
             <Info
               label="Cargos"
-              value={member.cargos?.length ? member.cargos.map((c) => c.name).join(", ") : "—"}
+              value={member.cargos?.length ? member.cargos.map((c) => c.name).join(", ") : "-"}
             />
             <Info label="CPF" value={member.cpf} />
             <Info label="RG" value={member.rg} />
             <Info label="Status" value={st.label} />
-            <Info label="Classificação no Rol" value={member.roll_class === "professo" ? "Professo" : "Não professo"} />
+            <Info label="Classificacao no Rol" value={member.roll_class === "professo" ? "Professo" : "Nao professo"} />
             <Info label="Filial" value={branchName(member.branch_id)} />
             {member.exit_reason && (
               <Info label="Motivo da baixa" value={EXIT_REASONS[member.exit_reason] ?? member.exit_reason} />
             )}
-            {member.exited_at && <Info label="Data de saída" value={datePt(member.exited_at)} />}
+            {member.exited_at && <Info label="Data de saida" value={datePt(member.exited_at)} />}
           </dl>
           <p className="mt-4 border-t border-zinc-100 pt-2 text-xs text-zinc-400 dark:border-zinc-800">
-            Para alterar estes dados use <span className="font-medium">Editar</span> — o mesmo
-            formulário da inclusão, com foto, documentos e cargos.
+            Para alterar estes dados use <span className="font-medium">Editar</span> - o mesmo
+            formulario da inclusao, com foto, documentos e cargos.
           </p>
         </Card>
       )}
@@ -265,7 +265,7 @@ export default function MemberDetailPage() {
             <Info label="E-mail" value={member.email} />
             <Info label="Telefone" value={member.phone} />
             <Info label="WhatsApp" value={member.whatsapp} />
-            <Info label="Endereço" value={addressLine(member.address)} />
+            <Info label="Endereco" value={addressLine(member.address)} />
           </dl>
         </Card>
       )}
@@ -287,7 +287,7 @@ export default function MemberDetailPage() {
         <div className="space-y-4">
           {canWrite && (
             <Card className="p-3">
-              <h3 className="mb-3 text-sm font-semibold">Adicionar vínculo</h3>
+              <h3 className="mb-3 text-sm font-semibold">Adicionar vinculo</h3>
               <form onSubmit={doLink} className="flex flex-wrap items-end gap-3">
                 <Field label="Pessoa" className="min-w-48 flex-1">
                   <Select
@@ -317,19 +317,19 @@ export default function MemberDetailPage() {
                 </Button>
               </form>
               <p className="mt-2 text-xs text-zinc-400">
-                Para agrupar por residência (com endereço e chefe da família), use a aba{" "}
-                <span className="font-medium">Família</span>.
+                Para agrupar por residencia (com endereco e chefe da familia), use a aba{" "}
+                <span className="font-medium">Familia</span>.
               </p>
             </Card>
           )}
 
           <Card className="p-3">
-            <h3 className="mb-3 text-sm font-semibold">Árvore de relacionamentos</h3>
+            <h3 className="mb-3 text-sm font-semibold">Arvore de relacionamentos</h3>
             {rels.length === 0 ? (
               <EmptyState
                 icon={<GitBranch className="h-8 w-8" />}
-                title="Sem vínculos"
-                description="Adicione cônjuge, filhos, discipulado e outros relacionamentos."
+                title="Sem vinculos"
+                description="Adicione conjuge, filhos, discipulado e outros relacionamentos."
               />
             ) : (
               <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -368,7 +368,7 @@ export default function MemberDetailPage() {
               value={
                 member.birth_date && age(member.birth_date) !== null
                   ? `${age(member.birth_date)} anos`
-                  : "—"
+                  : "-"
               }
             />
             <Info label="Cadastrado em" value={datePt(member.created_at)} />
@@ -390,7 +390,7 @@ export default function MemberDetailPage() {
             <div>
               <p className="font-medium">Carteirinha de membro</p>
               <p className="text-xs text-zinc-400">
-                QR Code com vínculo digital à igreja. O número é único e estável: emitir de novo
+                QR Code com vinculo digital a igreja. O numero e unico e estavel: emitir de novo
                 devolve a mesma carteirinha.
               </p>
             </div>
@@ -412,16 +412,16 @@ function Info({ label, value }: { label: string; value: string | undefined | nul
   return (
     <div>
       <dt className="text-xs font-medium uppercase tracking-wide text-zinc-400">{label}</dt>
-      <dd className="mt-0.5 text-sm font-medium">{value || "—"}</dd>
+      <dd className="mt-0.5 text-sm font-medium">{value || "-"}</dd>
     </div>
   );
 }
 
-/** Monta uma linha de endereço para exibição. */
+/** Monta uma linha de endereco para exibicao. */
 function addressLine(a?: MemberAddress): string {
-  if (!a) return "—";
+  if (!a) return "-";
   const line1 = [a.street, a.number, a.complement].filter(Boolean).join(", ");
-  const line2 = [a.district, a.city, a.state].filter(Boolean).join(" · ");
+  const line2 = [a.district, a.city, a.state].filter(Boolean).join(" - ");
   const cep = a.zip_code ? `CEP ${a.zip_code}` : "";
-  return [line1, line2, cep].filter(Boolean).join(" — ") || "—";
+  return [line1, line2, cep].filter(Boolean).join(" - ") || "-";
 }

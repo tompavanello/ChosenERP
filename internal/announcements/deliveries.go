@@ -12,7 +12,7 @@ const (
 	StatusSent    = "sent"
 	StatusFailed  = "failed"
 
-	// Origens da fila de envio (mirror do CHECK da migração 000040).
+	// Origens da fila de envio (mirror do CHECK da migracao 000040).
 	SourceManual         = "manual"
 	SourceBirthday       = "birthday"
 	SourceRoster         = "roster"
@@ -68,8 +68,8 @@ func (r *Repo) CreateDelivery(ctx context.Context, tx pgx.Tx, tenantID, branchID
 	return &d, err
 }
 
-// AutomatedDelivery é uma mensagem avulsa (sem announcement) enfileirada pelas
-// automações (#31): aniversário, lembrete de escala e boas-vindas a visitante.
+// AutomatedDelivery e uma mensagem avulsa (sem announcement) enfileirada pelas
+// automacoes (#31): aniversario, lembrete de escala e boas-vindas a visitante.
 type AutomatedDelivery struct {
 	TenantID      string
 	BranchID      string
@@ -83,9 +83,9 @@ type AutomatedDelivery struct {
 	DedupeKey     string
 }
 
-// CreateAutomatedDelivery enfileira uma mensagem avulsa. A chave de dedupe é
-// única por tenant: quando já existe, devolve (false, nil) sem inserir — é o que
-// impede o mesmo "feliz aniversário" de sair duas vezes no mesmo dia.
+// CreateAutomatedDelivery enfileira uma mensagem avulsa. A chave de dedupe e
+// unica por tenant: quando ja existe, devolve (false, nil) sem inserir - e o que
+// impede o mesmo "feliz aniversario" de sair duas vezes no mesmo dia.
 func (r *Repo) CreateAutomatedDelivery(ctx context.Context, tx pgx.Tx, in AutomatedDelivery) (bool, error) {
 	var id string
 	err := tx.QueryRow(ctx, `
@@ -159,9 +159,9 @@ type PendingAnnouncementDelivery struct {
 	Source         string
 }
 
-// PendingDeliveries lista a fila pendente/falha. Mensagens avulsas (automações)
-// não têm announcement_id associado, então o título/corpo vêm do snapshot
-// gravado na própria linha; para os comunicados eles vêm de `announcements`.
+// PendingDeliveries lista a fila pendente/falha. Mensagens avulsas (automacoes)
+// nao tem announcement_id associado, entao o titulo/corpo vem do snapshot
+// gravado na propria linha; para os comunicados eles vem de `announcements`.
 func (r *Repo) PendingDeliveries(ctx context.Context, tx pgx.Tx, limit, maxAttempts int) ([]PendingAnnouncementDelivery, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT ad.id::text, ad.tenant_id::text, COALESCE(ad.branch_id::text,''),

@@ -6,12 +6,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// KindMembershipCard é o `kind` da carteirinha de membro. É o único documento
-// com página pública no webadmin (/member/{token}), então quem monta link de
-// envio precisa distinguí-lo — ver delivery.PublicLink.
+// KindMembershipCard e o `kind` da carteirinha de membro. E o unico documento
+// com pagina publica no webadmin (/member/{token}), entao quem monta link de
+// envio precisa distingui-lo - ver delivery.PublicLink.
 const KindMembershipCard = "membership_card"
 
-// Document é um artefato gerado (recibo, carteirinha, certificado...).
+// Document e um artefato gerado (recibo, carteirinha, certificado...).
 type Document struct {
 	ID          string `json:"id"`
 	Kind        string `json:"kind"`
@@ -44,7 +44,7 @@ func (r *Repo) GetByID(ctx context.Context, tx pgx.Tx, id string) (*Document, er
 	return &d, err
 }
 
-// TenantName devolve o nome do tenant do contexto (usado no cabeçalho do recibo).
+// TenantName devolve o nome do tenant do contexto (usado no cabecalho do recibo).
 func (r *Repo) TenantName(ctx context.Context, tx pgx.Tx) (string, error) {
 	var name string
 	err := tx.QueryRow(ctx, `SELECT name FROM tenants LIMIT 1`).Scan(&name)
@@ -63,8 +63,8 @@ type CardInfo struct {
 	TenantID   string  `json:"tenant_id"`
 	BranchID   string  `json:"branch_id"`
 	// PhotoURL e BranchName alimentam a carteirinha impressa; a foto vem do
-	// cadastro do membro (members.photo_url) e a filial é o nome legível, não o
-	// UUID — a versão anterior imprimia "Ref: CARD-XXXX" sem foto nem filial.
+	// cadastro do membro (members.photo_url) e a filial e o nome legivel, nao o
+	// UUID - a versao anterior imprimia "Ref: CARD-XXXX" sem foto nem filial.
 	PhotoURL   *string `json:"photo_url,omitempty"`
 	BranchName *string `json:"branch_name,omitempty"`
 }

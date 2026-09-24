@@ -15,7 +15,7 @@ import (
 	"chosenerp/internal/store"
 )
 
-// ---- Relatórios financeiros ----
+// ---- Relatorios financeiros ----
 
 func (a *App) handleMonthlyBalance(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -59,7 +59,7 @@ func (a *App) handleDRE(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, dre)
 }
 
-// exportPeriod resolve o período a partir de query (from/to ou year).
+// exportPeriod resolve o periodo a partir de query (from/to ou year).
 func exportPeriod(q map[string][]string) (string, string) {
 	year := first(q["year"])
 	if year == "" {
@@ -76,7 +76,7 @@ func first(v []string) string {
 	return ""
 }
 
-// money formata um valor para os relatórios exportados.
+// money formata um valor para os relatorios exportados.
 func money(v float64) string { return fmt.Sprintf("%.2f", v) }
 
 func (a *App) handleExportBalance(w http.ResponseWriter, r *http.Request) {
@@ -104,8 +104,8 @@ func (a *App) handleExportBalance(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, []string{p.Month, money(p.Income), money(p.Expense), money(p.Net)})
 	}
 	writeReport(w, "balancete-"+from+"-"+to, "Balancete mensal",
-		"Período: "+from+" a "+to, format,
-		[]exportSection{{Headers: []string{"Mês", "Entradas", "Saídas", "Saldo"}, Rows: rows}})
+		"Periodo: "+from+" a "+to, format,
+		[]exportSection{{Headers: []string{"Mes", "Entradas", "Saidas", "Saldo"}, Rows: rows}})
 }
 
 func (a *App) handleExportDRE(w http.ResponseWriter, r *http.Request) {
@@ -132,30 +132,30 @@ func (a *App) handleExportDRE(w http.ResponseWriter, r *http.Request) {
 	for _, l := range dre.Lines {
 		tipo := "Entrada"
 		if l.Type == "expense" {
-			tipo = "Saída"
+			tipo = "Saida"
 		}
 		lines = append(lines, []string{tipo, l.Category, money(l.Total)})
 	}
 	totais := [][]string{
 		{"Entradas", "", money(dre.Income)},
-		{"Saídas", "", money(dre.Expense)},
+		{"Saidas", "", money(dre.Expense)},
 		{"Resultado", "", money(dre.Net)},
 	}
 	if dre.Comparison != nil {
-		totais = append(totais, []string{"Comparativo (período anterior)", fmt.Sprintf("%.1f%%", dre.Comparison.DeltaPct), ""})
+		totais = append(totais, []string{"Comparativo (periodo anterior)", fmt.Sprintf("%.1f%%", dre.Comparison.DeltaPct), ""})
 	}
-	writeReport(w, "dre-"+from+"-"+to, "DRE — Demonstração do Resultado",
-		"Período: "+from+" a "+to, format,
+	writeReport(w, "dre-"+from+"-"+to, "DRE - Demonstracao do Resultado",
+		"Periodo: "+from+" a "+to, format,
 		[]exportSection{
-			{Title: "Por conta contábil", Headers: []string{"Tipo", "Conta contábil", "Total"}, Rows: lines},
-			{Title: "Totais", Headers: []string{"Indicador", "Observação", "Valor"}, Rows: totais},
+			{Title: "Por conta contabil", Headers: []string{"Tipo", "Conta contabil", "Total"}, Rows: lines},
+			{Title: "Totais", Headers: []string{"Indicador", "Observacao", "Valor"}, Rows: totais},
 		})
 }
 
-// ---- Aniversariantes e demográficos (pessoas) ----
+// ---- Aniversariantes e demograficos (pessoas) ----
 
 // handleBirthdays devolve os aniversariantes de nascimento e de casamento de um
-// mês (1-12; padrão: mês corrente).
+// mes (1-12; padrao: mes corrente).
 func (a *App) handleBirthdays(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -184,8 +184,8 @@ func (a *App) handleBirthdays(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleDemographics devolve o painel demográfico (pirâmide etária, status,
-// estado civil, sexo e distribuição geográfica) do escopo da sessão.
+// handleDemographics devolve o painel demografico (piramide etaria, status,
+// estado civil, sexo e distribuicao geografica) do escopo da sessao.
 func (a *App) handleDemographics(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -206,9 +206,9 @@ func (a *App) handleDemographics(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, d)
 }
 
-// ---- Exportação: aniversariantes e demográficos ----
+// ---- Exportacao: aniversariantes e demograficos ----
 
-// monthParam lê o mês (1-12) da query; padrão mês corrente.
+// monthParam le o mes (1-12) da query; padrao mes corrente.
 func monthParam(r *http.Request) int {
 	month := int(time.Now().Month())
 	if m := r.URL.Query().Get("month"); m != "" {
@@ -219,22 +219,22 @@ func monthParam(r *http.Request) int {
 	return month
 }
 
-var monthNamesPT = [...]string{"", "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"}
+var monthNamesPT = [...]string{"", "janeiro", "fevereiro", "marco", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"}
 
 var statusLabels = map[string]string{
-	"active": "Ativo (professo)", "member": "Não professo", "inactive": "Inativo",
+	"active": "Ativo (professo)", "member": "Nao professo", "inactive": "Inativo",
 	"dismissed": "Baixado do Rol", "transferred": "Transferido", "deceased": "Falecido", "other": "Outros",
 }
 
 var maritalLabels = map[string]string{
-	"single": "Solteiro(a)", "married": "Casado(a)", "divorced": "Divorciado(a)", "widowed": "Viúvo(a)",
+	"single": "Solteiro(a)", "married": "Casado(a)", "divorced": "Divorciado(a)", "widowed": "Viuvo(a)",
 }
 
 var genderLabels = map[string]string{"male": "Masculino", "female": "Feminino", "other": "Outro"}
 
 func labelOf(m map[string]string, k string) string {
 	if k == "" || k == "nao_informado" {
-		return "Não informado"
+		return "Nao informado"
 	}
 	if v, ok := m[k]; ok {
 		return v
@@ -278,26 +278,26 @@ func (a *App) handleExportBirthdays(w http.ResponseWriter, r *http.Request) {
 		}
 		mrows = append(mrows, []string{strconv.Itoa(m.Day), casal, m.MarriageDate, strconv.Itoa(m.Years)})
 	}
-	// Nascimento e casamento podem ser exportados juntos ou como relatórios
+	// Nascimento e casamento podem ser exportados juntos ou como relatorios
 	// separados (part=nascimento|casamento).
 	sections := []exportSection{}
 	if part != "casamento" {
-		sections = append(sections, exportSection{Title: "Aniversários de nascimento", Headers: []string{"Dia", "Nome", "Nascimento", "Idade"}, Rows: brows})
+		sections = append(sections, exportSection{Title: "Aniversarios de nascimento", Headers: []string{"Dia", "Nome", "Nascimento", "Idade"}, Rows: brows})
 	}
 	if part != "nascimento" {
-		sections = append(sections, exportSection{Title: "Aniversários de casamento", Headers: []string{"Dia", "Casal", "Data", "Anos"}, Rows: mrows})
+		sections = append(sections, exportSection{Title: "Aniversarios de casamento", Headers: []string{"Dia", "Casal", "Data", "Anos"}, Rows: mrows})
 	}
 	title := "Aniversariantes"
 	fname := fmt.Sprintf("aniversariantes-%d-%02d", time.Now().Year(), month)
 	switch part {
 	case "nascimento":
-		title = "Aniversariantes — Nascimento"
+		title = "Aniversariantes - Nascimento"
 		fname += "-nascimento"
 	case "casamento":
-		title = "Aniversariantes — Casamento"
+		title = "Aniversariantes - Casamento"
 		fname += "-casamento"
 	}
-	writeReport(w, fname, title, "Mês: "+monthNamesPT[month], format, sections)
+	writeReport(w, fname, title, "Mes: "+monthNamesPT[month], format, sections)
 }
 
 func (a *App) handleExportDemographics(w http.ResponseWriter, r *http.Request) {
@@ -330,13 +330,13 @@ func (a *App) handleExportDemographics(w http.ResponseWriter, r *http.Request) {
 		pyramid = append(pyramid, []string{p.Bucket, strconv.Itoa(p.Male), strconv.Itoa(p.Female), strconv.Itoa(p.Total)})
 	}
 	writeReport(w, fmt.Sprintf("demograficos-%d", time.Now().Year()),
-		"Painel demográfico", fmt.Sprintf("Total de membros: %d", d.Total), format,
+		"Painel demografico", fmt.Sprintf("Total de membros: %d", d.Total), format,
 		[]exportSection{
-			{Title: "Pirâmide etária", Headers: []string{"Faixa", "Masculino", "Feminino", "Total"}, Rows: pyramid},
-			{Title: "Situação no Rol", Headers: []string{"Situação", "Total"}, Rows: counts(d.ByStatus, statusLabels)},
+			{Title: "Piramide etaria", Headers: []string{"Faixa", "Masculino", "Feminino", "Total"}, Rows: pyramid},
+			{Title: "Situacao no Rol", Headers: []string{"Situacao", "Total"}, Rows: counts(d.ByStatus, statusLabels)},
 			{Title: "Estado civil", Headers: []string{"Estado civil", "Total"}, Rows: counts(d.ByMaritalStatus, maritalLabels)},
 			{Title: "Sexo", Headers: []string{"Sexo", "Total"}, Rows: counts(d.ByGender, genderLabels)},
-			{Title: "Distribuição por UF", Headers: []string{"UF", "Total"}, Rows: counts(d.ByState, nil)},
+			{Title: "Distribuicao por UF", Headers: []string{"UF", "Total"}, Rows: counts(d.ByState, nil)},
 			{Title: "Cidades", Headers: []string{"Cidade", "Total"}, Rows: counts(d.ByCity, nil)},
 		})
 }
@@ -383,7 +383,7 @@ func (a *App) handleExportMonthlyStatement(w http.ResponseWriter, r *http.Reques
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	headers := []string{"Cód", "Descrição"}
+	headers := []string{"Cod", "Descricao"}
 	for _, wk := range st.Weeks {
 		headers = append(headers, wk.Label)
 	}
@@ -401,20 +401,20 @@ func (a *App) handleExportMonthlyStatement(w http.ResponseWriter, r *http.Reques
 		return out
 	}
 	writeReport(w, "demonstrativo-"+st.Month, "Demonstrativo Mensal (Regime de Caixa)",
-		"Período: "+st.From+" a "+st.To, format,
+		"Periodo: "+st.From+" a "+st.To, format,
 		[]exportSection{
 			{Title: "Entradas", Headers: headers, Rows: lines(st.Income)},
-			{Title: "Saídas", Headers: headers, Rows: lines(st.Expense)},
+			{Title: "Saidas", Headers: headers, Rows: lines(st.Expense)},
 			{Title: "Resumo", Headers: []string{"Indicador", "Valor"}, Rows: [][]string{
 				{"Saldo inicial", money(st.OpeningBalance)},
 				{"Soma das entradas", money(st.TotalIncome)},
-				{"Soma das saídas", money(st.TotalExpense)},
+				{"Soma das saidas", money(st.TotalExpense)},
 				{"Saldo final", money(st.ClosingBalance)},
 			}},
 		})
 }
 
-// ---- Recibos: renderização e envio ----
+// ---- Recibos: renderizacao e envio ----
 
 func (a *App) handleRenderReceipt(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -463,7 +463,7 @@ func (a *App) handleSendDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	b := boundsFromClaims(claims)
 
-	// Fase 1 (dentro da transação RLS): enfileira a entrega e monta a mensagem.
+	// Fase 1 (dentro da transacao RLS): enfileira a entrega e monta a mensagem.
 	var d *documents.Delivery
 	var msg delivery.Message
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
@@ -483,7 +483,7 @@ func (a *App) handleSendDocument(w http.ResponseWriter, r *http.Request) {
 		msg = delivery.Message{
 			Channel: in.Channel, Recipient: in.Recipient,
 			Subject: doc.Title, HTML: html,
-			Text:       "Código de validação: " + doc.QRToken,
+			Text:       "Codigo de validacao: " + doc.QRToken,
 			Link:       delivery.PublicLink(a.Config.AppBaseURL, doc.Kind, doc.QRToken),
 			TenantName: tenant,
 			TenantID:   claims.TenantID, BranchID: claims.BranchID,
@@ -499,7 +499,7 @@ func (a *App) handleSendDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fase 2: envio real (fora da transação) + registro do resultado na outbox.
+	// Fase 2: envio real (fora da transacao) + registro do resultado na outbox.
 	if err := a.Dispatch.Send(r.Context(), msg); err != nil {
 		_ = a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
 			return a.Documents.MarkFailed(r.Context(), tx, d.ID, err.Error())
@@ -541,8 +541,8 @@ func (a *App) handleListDeliveries(w http.ResponseWriter, r *http.Request) {
 
 // ---- Demonstrativo para Assembleia ----
 
-// handleAssemblyReport resume o período (entradas, saídas, resultado, por conta
-// e evolução mensal) num formato pronto para apresentação em assembleia.
+// handleAssemblyReport resume o periodo (entradas, saidas, resultado, por conta
+// e evolucao mensal) num formato pronto para apresentacao em assembleia.
 func (a *App) handleAssemblyReport(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -582,22 +582,22 @@ func assemblySections(bal finance.Balance, months []finance.MonthlyPoint, from, 
 	}
 	resumo := [][]string{
 		{"Entradas", money(bal.Income)},
-		{"Saídas", money(bal.Expense)},
-		{"Resultado do período", money(bal.Net)},
+		{"Saidas", money(bal.Expense)},
+		{"Resultado do periodo", money(bal.Net)},
 	}
 	mrows := make([][]string, 0, len(months))
 	for _, m := range months {
 		mrows = append(mrows, []string{m.Month, money(m.Income), money(m.Expense), money(m.Net)})
 	}
 	return []exportSection{
-		{Title: "Resumo do período (" + from + " a " + to + ")", Headers: []string{"Indicador", "Valor"}, Rows: resumo},
-		{Title: "Entradas por conta", Headers: []string{"Conta contábil", "Total"}, Rows: entradas},
-		{Title: "Saídas por conta", Headers: []string{"Conta contábil", "Total"}, Rows: saidas},
-		{Title: "Evolução mensal", Headers: []string{"Mês", "Entradas", "Saídas", "Saldo"}, Rows: mrows},
-		{Title: "Aprovação em assembleia", Headers: []string{"Assinatura", "Função", "Data"}, Rows: [][]string{
+		{Title: "Resumo do periodo (" + from + " a " + to + ")", Headers: []string{"Indicador", "Valor"}, Rows: resumo},
+		{Title: "Entradas por conta", Headers: []string{"Conta contabil", "Total"}, Rows: entradas},
+		{Title: "Saidas por conta", Headers: []string{"Conta contabil", "Total"}, Rows: saidas},
+		{Title: "Evolucao mensal", Headers: []string{"Mes", "Entradas", "Saidas", "Saldo"}, Rows: mrows},
+		{Title: "Aprovacao em assembleia", Headers: []string{"Assinatura", "Funcao", "Data"}, Rows: [][]string{
 			{"", "Presidente da assembleia", ""},
 			{"", "Tesoureiro(a)", ""},
-			{"", "Secretário(a)", ""},
+			{"", "Secretario(a)", ""},
 		}},
 	}
 }
@@ -627,6 +627,6 @@ func (a *App) handleExportAssembly(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeReport(w, "demonstrativo-assembleia-"+from+"-"+to,
-		"Demonstrativo financeiro para assembleia", "Período: "+from+" a "+to, format,
+		"Demonstrativo financeiro para assembleia", "Periodo: "+from+" a "+to, format,
 		assemblySections(bal, months, from, to))
 }

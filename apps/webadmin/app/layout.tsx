@@ -5,7 +5,7 @@ import { ToastProvider } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
   title: "Chosen ERP",
-  description: "Gestão eclesiástica completa",
+  description: "Gestao eclesiastica completa",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

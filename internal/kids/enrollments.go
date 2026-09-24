@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Enrollment é a matrícula de um membro criança em uma turma.
+// Enrollment e a matricula de um membro crianca em uma turma.
 type Enrollment struct {
 	ID                  string    `json:"id"`
 	ClassID             string    `json:"class_id"`
@@ -74,9 +74,9 @@ func (r *Repo) GetEnrollment(ctx context.Context, tx pgx.Tx, id string) (*Enroll
 
 func (r *Repo) CreateEnrollment(ctx context.Context, tx pgx.Tx, classID string, in EnrollmentInput) (*Enrollment, error) {
 	if in.MemberID == nil || *in.MemberID == "" {
-		return nil, fmt.Errorf("%w: member_id é obrigatório", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: member_id e obrigatorio", ErrInvalidInput)
 	}
-	// A filial da matrícula segue a turma (garante coerência de escopo).
+	// A filial da matricula segue a turma (garante coerencia de escopo).
 	class, err := r.GetClass(ctx, tx, classID)
 	if err != nil {
 		return nil, err
@@ -136,7 +136,7 @@ func (r *Repo) DeleteEnrollment(ctx context.Context, tx pgx.Tx, id string) error
 }
 
 // ---------------------------------------------------------------------------
-// Responsáveis
+// Responsaveis
 // ---------------------------------------------------------------------------
 
 type Guardian struct {
@@ -180,7 +180,7 @@ func (r *Repo) ListGuardians(ctx context.Context, tx pgx.Tx, enrollmentID string
 
 func (r *Repo) AddGuardian(ctx context.Context, tx pgx.Tx, enrollmentID string, in GuardianInput) (*Guardian, error) {
 	if in.MemberID == nil || *in.MemberID == "" {
-		return nil, fmt.Errorf("%w: member_id é obrigatório", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: member_id e obrigatorio", ErrInvalidInput)
 	}
 	enr, err := r.GetEnrollment(ctx, tx, enrollmentID)
 	if err != nil {

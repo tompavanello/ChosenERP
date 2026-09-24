@@ -1,12 +1,12 @@
 -- 000038_rosters.up.sql
--- Escalas de voluntários (Fase 2 / itens #24–#26):
---   * rosters: uma escala (culto/evento/ministério) em um período;
---   * roster_assignments: quem foi escalado, com função e situação
---     (convidado / confirmado / recusado) — é a "confirmação de presença".
+-- Escalas de voluntarios (Fase 2 / itens #24-#26):
+--   * rosters: uma escala (culto/evento/ministerio) em um periodo;
+--   * roster_assignments: quem foi escalado, com funcao e situacao
+--     (convidado / confirmado / recusado) - e a "confirmacao de presenca".
 --
--- Conflito de agenda (#25) e sugestão inteligente (#26) são calculados em
--- internal/rosters a partir destas tabelas (não há coluna extra). O isolamento
--- é do RLS.
+-- Conflito de agenda (#25) e sugestao inteligente (#26) sao calculados em
+-- internal/rosters a partir destas tabelas (nao ha coluna extra). O isolamento
+-- e do RLS.
 
 CREATE TABLE rosters (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -48,7 +48,7 @@ CREATE TABLE roster_assignments (
     branch_id    uuid NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
     roster_id    uuid NOT NULL REFERENCES rosters(id) ON DELETE CASCADE,
     member_id    uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-    role         text, -- função na escala (vocal, guitarra, diaconia...)
+    role         text, -- funcao na escala (vocal, guitarra, diaconia...)
     status       text NOT NULL DEFAULT 'convidado',
     responded_at timestamptz,
     notes        text,

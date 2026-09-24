@@ -10,7 +10,7 @@ BEGIN
     aid := COALESCE(NEW.audit_id, OLD.audit_id);
     SELECT status INTO st FROM financial_audits WHERE id = aid;
     IF st = 'fechada' THEN
-        RAISE EXCEPTION 'auditoria fechada: sem manutenção nos itens';
+        RAISE EXCEPTION 'auditoria fechada: sem manutencao nos itens';
     END IF;
     RETURN COALESCE(NEW, OLD);
 END;

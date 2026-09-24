@@ -1,19 +1,19 @@
 -- 000053_identity_memberships.up.sql
--- Identidade global + vínculo N:N com a igreja (membership).
+-- Identidade global + vinculo N:N com a igreja (membership).
 --
--- Antes: `users` guardava a própria identidade E o contexto de acesso
+-- Antes: `users` guardava a propria identidade E o contexto de acesso
 -- (tenant_id/branch_id/role_id), com e-mail UNIQUE global. Isso impedia que a
 -- mesma pessoa acessasse mais de uma igreja.
 --
--- Agora: `users` é a identidade (global). `memberships` liga pessoa ↔ igreja,
+-- Agora: `users` e a identidade (global). `memberships` liga pessoa  igreja,
 -- guardando papel e filial. O JWT continua carregando o tenant ATIVO (tid/bid/role)
--- resolvido a partir do membership — o RLS não muda de eixo.
+-- resolvido a partir do membership - o RLS nao muda de eixo.
 --
--- Rollout: a tabela é criada e populada (backfill) ANTES das colunas antigas
--- serem removidas, tudo na mesma transação (o runner migra em transação).
+-- Rollout: a tabela e criada e populada (backfill) ANTES das colunas antigas
+-- serem removidas, tudo na mesma transacao (o runner migra em transacao).
 
 -- ---------------------------------------------------------------------------
--- 1) Vínculo pessoa ↔ igreja
+-- 1) Vinculo pessoa  igreja
 -- ---------------------------------------------------------------------------
 CREATE TABLE memberships (
     id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -30,7 +30,7 @@ CREATE INDEX idx_memberships_user   ON memberships(user_id);
 CREATE INDEX idx_memberships_tenant ON memberships(tenant_id, branch_id);
 
 -- ---------------------------------------------------------------------------
--- 2) Backfill: cada usuário atual vira 1 membership (idempotente)
+-- 2) Backfill: cada usuario atual vira 1 membership (idempotente)
 -- ---------------------------------------------------------------------------
 INSERT INTO memberships (user_id, tenant_id, role_id, branch_id, is_active, created_at)
 SELECT id, tenant_id, role_id, branch_id, is_active, created_at
@@ -40,8 +40,8 @@ ON CONFLICT (user_id, tenant_id) DO NOTHING;
 -- ---------------------------------------------------------------------------
 -- 3) Helpers de identidade
 -- ---------------------------------------------------------------------------
--- current_user_id() lê o GUC app.user_id (sessão RLS). É o que permite ao RLS
--- reconhecer a própria identidade mesmo sem tenant (ex.: seletor de igreja).
+-- current_user_id() le o GUC app.user_id (sessao RLS). E o que permite ao RLS
+-- reconhecer a propria identidade mesmo sem tenant (ex.: seletor de igreja).
 CREATE OR REPLACE FUNCTION current_user_id() RETURNS uuid
 LANGUAGE sql STABLE AS $$
     SELECT NULLIF(current_setting('app.user_id', true), '')::uuid
@@ -49,7 +49,7 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- 4) users passa a ser global: remove o contexto de acesso
---    (as políticas atuais dependem de tenant_id => precisam sair antes)
+--    (as politicas atuais dependem de tenant_id => precisam sair antes)
 -- ---------------------------------------------------------------------------
 DROP POLICY IF EXISTS users_sel ON users;
 DROP POLICY IF EXISTS users_all ON users;
@@ -61,7 +61,7 @@ ALTER TABLE users
 -- email UNIQUE global permanece.
 
 -- ---------------------------------------------------------------------------
--- 5) RLS das identidades e dos vínculos
+-- 5) RLS das identidades e dos vinculos
 -- ---------------------------------------------------------------------------
 CREATE POLICY users_sel ON users FOR SELECT USING (
     is_system()
@@ -72,7 +72,7 @@ CREATE POLICY users_sel ON users FOR SELECT USING (
     )
 );
 
--- INSERT só via função SECURITY DEFINER user_attach_to_tenant().
+-- INSERT so via funcao SECURITY DEFINER user_attach_to_tenant().
 CREATE POLICY users_ins ON users FOR INSERT WITH CHECK (false);
 
 CREATE POLICY users_upd ON users FOR UPDATE USING (
@@ -93,7 +93,7 @@ CREATE POLICY users_upd ON users FOR UPDATE USING (
 
 ALTER TABLE memberships ENABLE ROW LEVEL SECURITY;
 
--- Self enxerga todos os próprios vínculos (necessário para o seletor de igreja);
+-- Self enxerga todos os proprios vinculos (necessario para o seletor de igreja);
 -- os demais seguem o escopo do tenant.
 CREATE POLICY memberships_sel ON memberships FOR SELECT USING (
     is_system()
@@ -109,7 +109,7 @@ CREATE POLICY memberships_del ON memberships FOR DELETE
     USING (rls_write(tenant_id, branch_id, false));
 
 -- ---------------------------------------------------------------------------
--- 6) Funções de autenticação (SECURITY DEFINER => fora do RLS)
+-- 6) Funcoes de autenticacao (SECURITY DEFINER => fora do RLS)
 -- ---------------------------------------------------------------------------
 -- auth_lookup_user passa a devolver a IDENTIDADE (sem tenant/role).
 DROP FUNCTION IF EXISTS auth_lookup_user(citext);
@@ -182,8 +182,8 @@ AS $$
     ORDER BY m.is_active DESC, t.name;
 $$;
 
--- user_attach_to_tenant: cria a identidade (se o e-mail é novo) e anexa o
--- membership. Se a identidade já existe, NÃO altera a senha existente.
+-- user_attach_to_tenant: cria a identidade (se o e-mail e novo) e anexa o
+-- membership. Se a identidade ja existe, NAO altera a senha existente.
 CREATE FUNCTION user_attach_to_tenant(
     p_email         citext,
     p_password_hash text,

@@ -8,16 +8,16 @@ import (
 	"chosenerp/internal/xlsx"
 )
 
-// exportSection é um bloco de um relatório (título opcional + cabeçalho + linhas).
+// exportSection e um bloco de um relatorio (titulo opcional + cabecalho + linhas).
 type exportSection struct {
 	Title   string
 	Headers []string
 	Rows    [][]string
 }
 
-// writeReport serve um relatório em CSV, XLSX (Excel) ou PDF (HTML de impressão,
-// que o navegador salva como PDF). Centraliza os três formatos para todos os
-// relatórios.
+// writeReport serve um relatorio em CSV, XLSX (Excel) ou PDF (HTML de impressao,
+// que o navegador salva como PDF). Centraliza os tres formatos para todos os
+// relatorios.
 func writeReport(w http.ResponseWriter, filenameBase, title, subtitle, format string, sections []exportSection) {
 	switch format {
 	case "xlsx", "excel":

@@ -7,8 +7,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Attachment é um documento comprobatório anexado a um lançamento
-// (foto de recibo, nota fiscal, comprovante bancário, etc.).
+// Attachment e um documento comprobatorio anexado a um lancamento
+// (foto de recibo, nota fiscal, comprovante bancario, etc.).
 type Attachment struct {
 	ID            string    `json:"id"`
 	TransactionID string    `json:"transaction_id"`
@@ -19,7 +19,7 @@ type Attachment struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-// CreateAttachmentInput é o payload para anexar um documento a um lançamento.
+// CreateAttachmentInput e o payload para anexar um documento a um lancamento.
 type CreateAttachmentInput struct {
 	FileName    string  `json:"file_name"`
 	FileURL     string  `json:"file_url"`
@@ -27,7 +27,7 @@ type CreateAttachmentInput struct {
 	FileSize    int64   `json:"file_size"`
 }
 
-// ListAttachments retorna os anexos de um lançamento no escopo atual.
+// ListAttachments retorna os anexos de um lancamento no escopo atual.
 func (r *Repo) ListAttachments(ctx context.Context, tx pgx.Tx, transactionID string) ([]Attachment, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT id::text, transaction_id::text, file_name, file_url, content_type, file_size, created_at
@@ -50,7 +50,7 @@ func (r *Repo) ListAttachments(ctx context.Context, tx pgx.Tx, transactionID str
 	return out, rows.Err()
 }
 
-// CreateAttachment registra um anexo para um lançamento no escopo.
+// CreateAttachment registra um anexo para um lancamento no escopo.
 func (r *Repo) CreateAttachment(ctx context.Context, tx pgx.Tx, tenantID, branchID, transactionID string, in CreateAttachmentInput) (*Attachment, error) {
 	var a Attachment
 	err := tx.QueryRow(ctx, `

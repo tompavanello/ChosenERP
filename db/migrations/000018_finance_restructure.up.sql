@@ -1,14 +1,14 @@
 -- 000018_finance_restructure.up.sql
--- Reestruturação do módulo financeiro:
---   1) financial_classification_types: tipos de classificação parametrizáveis
---      para entradas (income) e saídas (expense), por tenant/filial.
---   2) financial_accounts: cadastro de contas bancárias do tenant.
---   3) Associação de lançamentos (financial_transactions) e recorrências
---      a uma conta bancária.
---   4) Atualização da função de hash-chain para incluir account_id.
+-- Reestruturacao do modulo financeiro:
+--   1) financial_classification_types: tipos de classificacao parametrizaveis
+--      para entradas (income) e saidas (expense), por tenant/filial.
+--   2) financial_accounts: cadastro de contas bancarias do tenant.
+--   3) Associacao de lancamentos (financial_transactions) e recorrencias
+--      a uma conta bancaria.
+--   4) Atualizacao da funcao de hash-chain para incluir account_id.
 
 -- ---------------------------------------------------------------------------
--- 1) Tipos de classificação parametrizáveis (entrada | saída)
+-- 1) Tipos de classificacao parametrizaveis (entrada | saida)
 -- ---------------------------------------------------------------------------
 CREATE TABLE financial_classification_types (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -36,7 +36,7 @@ CREATE POLICY fintype_all ON financial_classification_types
   WITH CHECK (rls_write(tenant_id, branch_id, true));
 
 -- ---------------------------------------------------------------------------
--- 2) Contas bancárias
+-- 2) Contas bancarias
 -- ---------------------------------------------------------------------------
 CREATE TABLE financial_accounts (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -65,23 +65,23 @@ CREATE POLICY finacct_all ON financial_accounts
   WITH CHECK (rls_write(tenant_id, branch_id, true));
 
 -- ---------------------------------------------------------------------------
--- 3) Associação de lançamentos e recorrências a contas bancárias
+-- 3) Associacao de lancamentos e recorrencias a contas bancarias
 -- ---------------------------------------------------------------------------
 
--- Lançamentos: associar a conta de origem/destino da movimentação.
+-- Lancamentos: associar a conta de origem/destino da movimentacao.
 ALTER TABLE financial_transactions
     ADD COLUMN account_id uuid REFERENCES financial_accounts(id) ON DELETE SET NULL;
 
 CREATE INDEX idx_fin_tx_account ON financial_transactions(account_id);
 
--- Recorrências: associar conta para os lançamentos automáticos.
+-- Recorrencias: associar conta para os lancamentos automaticos.
 ALTER TABLE recurring_donations
     ADD COLUMN account_id uuid REFERENCES financial_accounts(id) ON DELETE SET NULL;
 
 CREATE INDEX idx_recurring_account ON recurring_donations(account_id);
 
 -- ---------------------------------------------------------------------------
--- 4) Atualização da função de hash-chain (inclui account_id)
+-- 4) Atualizacao da funcao de hash-chain (inclui account_id)
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION fin_tx_hash() RETURNS trigger
 LANGUAGE plpgsql AS $$
@@ -93,8 +93,8 @@ BEGIN
             COALESCE(NEW.donor_member_id::text,'') || '|' || COALESCE(NEW.benefactor_id::text,'') || '|' ||
             NEW.payment_method || '|' || COALESCE(NEW.account_id::text,'') || '|' ||
             NEW.occurred_at::text || '|' || COALESCE(NEW.description,'');
-    -- Chain cronológico dentro do TENANT (created_at, id) — UUID ordering
-    -- produzia cadeia não-temporal e podia atravessar tenants.
+    -- Chain cronologico dentro do TENANT (created_at, id) - UUID ordering
+    -- produzia cadeia nao-temporal e podia atravessar tenants.
     NEW.prev_hash := (SELECT hash FROM financial_transactions
                       WHERE tenant_id = NEW.tenant_id
                         AND (created_at, id) < (NEW.created_at, NEW.id)
@@ -105,21 +105,21 @@ END;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 5) Seed: tipos de classificação e contas padrão para o tenant demo
+-- 5) Seed: tipos de classificacao e contas padrao para o tenant demo
 -- ---------------------------------------------------------------------------
 INSERT INTO financial_classification_types (tenant_id, branch_id, direction, code, name)
 SELECT t.id, NULL, v.direction, v.code, v.name
 FROM tenants t
 CROSS JOIN (VALUES
-    ('income',  '1.1', 'Dízimo'),
+    ('income',  '1.1', 'Dizimo'),
     ('income',  '1.2', 'Oferta'),
-    ('income',  '1.3', 'Doação'),
+    ('income',  '1.3', 'Doacao'),
     ('income',  '1.4', 'Evento'),
     ('expense', '2.1', 'Utilidades'),
-    ('expense', '2.2', 'Salário'),
-    ('expense', '2.3', 'Ação Social'),
-    ('expense', '2.4', 'Mídia'),
-    ('expense', '2.5', 'Manutenção')
+    ('expense', '2.2', 'Salario'),
+    ('expense', '2.3', 'Acao Social'),
+    ('expense', '2.4', 'Midia'),
+    ('expense', '2.5', 'Manutencao')
 ) AS v(direction, code, name)
 WHERE t.slug = 'demo'
   AND NOT EXISTS (

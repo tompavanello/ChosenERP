@@ -79,10 +79,10 @@ export default function AuditReportPage() {
   }
 
   async function removeAudit(a: FinancialAudit) {
-    if (!confirm(`Excluir a auditoria "${a.title}"? Esta ação remove a auditoria e suas marcações.`)) return;
+    if (!confirm(`Excluir a auditoria "${a.title}"? Esta acao remove a auditoria e suas marcacoes.`)) return;
     try {
       await deleteAudit(a.id);
-      toast("Auditoria excluída.");
+      toast("Auditoria excluida.");
       setSelected(null);
       await loadAudits();
     } catch (e) {
@@ -121,7 +121,7 @@ export default function AuditReportPage() {
     try {
       await markAudit(selected.id, { transaction_ids: [], audited });
       await reloadItems(selected.id);
-      toast(audited ? "Todos os lançamentos marcados como auditados." : "Marcações removidas.");
+      toast(audited ? "Todos os lancamentos marcados como auditados." : "Marcacoes removidas.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro", "error");
     }
@@ -168,7 +168,7 @@ export default function AuditReportPage() {
       <div className="page">
         <PageHeader
           title={selected.title}
-          description={`Período: ${datePt(selected.period_start)} a ${datePt(selected.period_end)}`}
+          description={`Periodo: ${datePt(selected.period_start)} a ${datePt(selected.period_end)}`}
           actions={
             <div className="flex items-center gap-2">
               <Button variant="ghost" onClick={() => { setSelected(null); loadAudits(); }}>
@@ -188,14 +188,14 @@ export default function AuditReportPage() {
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <Badge tone={isOpen ? "amber" : "green"}>{isOpen ? "Aberta" : "Fechada"}</Badge>
           <span className="text-sm text-zinc-500">
-            Auditados {auditedCount}/{items.length} · Total {currency(selected.total_amount)} · Auditado {currency(selected.audited_amount)}
+            Auditados {auditedCount}/{items.length} - Total {currency(selected.total_amount)} - Auditado {currency(selected.audited_amount)}
           </span>
           {isOpen && (
             <div className="ml-auto flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => markAll(true)}>
                 <CheckCircle2 className="h-4 w-4" /> Marcar todos
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => markAll(false)}>Limpar marcações</Button>
+              <Button size="sm" variant="ghost" onClick={() => markAll(false)}>Limpar marcacoes</Button>
               <Button size="sm" onClick={() => setCloseOpen(true)}>
                 <Lock className="h-4 w-4" /> Fechar e assinar
               </Button>
@@ -205,11 +205,11 @@ export default function AuditReportPage() {
 
         {!isOpen && selected.signer_name && (
           <Card className="mb-4 text-sm">
-            <p className="font-medium">Documento auditado (imutável)</p>
+            <p className="font-medium">Documento auditado (imutavel)</p>
             <p className="mt-1 text-zinc-500">
-              Responsável: <strong>{selected.signer_name}</strong>
+              Responsavel: <strong>{selected.signer_name}</strong>
               {selected.signer_role ? ` (${selected.signer_role})` : ""}
-              {selected.closed_at ? ` · Fechado em ${dateTimePt(selected.closed_at)}` : ""}
+              {selected.closed_at ? ` - Fechado em ${dateTimePt(selected.closed_at)}` : ""}
             </p>
             {selected.signature_hash && (
               <p className="mt-1 break-all text-xs text-zinc-400">Hash: {selected.signature_hash}</p>
@@ -221,7 +221,7 @@ export default function AuditReportPage() {
           {loadingItems ? (
             <SkeletonRows />
           ) : items.length === 0 ? (
-            <EmptyState icon={<ShieldCheck className="h-10 w-10" />} title="Sem lançamentos" description="Nenhum lançamento no período desta auditoria." />
+            <EmptyState icon={<ShieldCheck className="h-10 w-10" />} title="Sem lancamentos" description="Nenhum lancamento no periodo desta auditoria." />
           ) : (
             <Table>
               <THead>
@@ -229,8 +229,8 @@ export default function AuditReportPage() {
                   <TH className="w-16">Auditado</TH>
                   <TH>Data</TH>
                   <TH>Tipo</TH>
-                  <TH>Conta contábil</TH>
-                  <TH>Descrição</TH>
+                  <TH>Conta contabil</TH>
+                  <TH>Descricao</TH>
                   <TH className="text-right">Valor</TH>
                   <TH className="w-16"></TH>
                 </TRow>
@@ -250,14 +250,14 @@ export default function AuditReportPage() {
                     <TD className="text-zinc-500">{datePt(it.occurred_at)}</TD>
                     <TD>
                       <Badge tone={it.type === "income" ? "green" : "red"}>
-                        {it.type === "income" ? "Entrada" : "Saída"}
+                        {it.type === "income" ? "Entrada" : "Saida"}
                       </Badge>
                     </TD>
-                    <TD className="text-zinc-500">{it.category_name ?? "—"}</TD>
-                    <TD className="text-zinc-500">{it.description ?? "—"}</TD>
+                    <TD className="text-zinc-500">{it.category_name ?? "-"}</TD>
+                    <TD className="text-zinc-500">{it.description ?? "-"}</TD>
                     <TD className={`text-right font-medium ${it.type === "income" ? "text-emerald-600" : "text-red-600"}`}>{currency(it.amount)}</TD>
                     <TD className="text-center">
-                      <Button variant="ghost" className="h-7 px-2 text-xs" title="Detalhes do lançamento" onClick={() => openDetail(it)}>
+                      <Button variant="ghost" className="h-7 px-2 text-xs" title="Detalhes do lancamento" onClick={() => openDetail(it)}>
                         <Eye className="h-4 w-4" />
                         {it.attachment_count > 0 && <span className="ml-0.5 text-[10px]">{it.attachment_count}</span>}
                       </Button>
@@ -272,13 +272,13 @@ export default function AuditReportPage() {
         <Modal open={closeOpen} onClose={() => setCloseOpen(false)} title="Fechar e assinar auditoria">
           <form onSubmit={doClose} className="space-y-3 text-sm">
             <p className="text-zinc-500">
-              Ao fechar, a auditoria vira um documento imutável: não será possível marcar/desmarcar
-              lançamentos nem estornar os lançamentos auditados.
+              Ao fechar, a auditoria vira um documento imutavel: nao sera possivel marcar/desmarcar
+              lancamentos nem estornar os lancamentos auditados.
             </p>
-            <Field label="Nome do responsável *">
+            <Field label="Nome do responsavel *">
               <Input required value={signerName} onChange={(e) => setSignerName(e.target.value)} />
             </Field>
-            <Field label="Função / cargo">
+            <Field label="Funcao / cargo">
               <Input value={signerRole} onChange={(e) => setSignerRole(e.target.value)} placeholder="Ex.: Tesoureiro(a)" />
             </Field>
             <div className="flex justify-end gap-2 pt-2">
@@ -288,7 +288,7 @@ export default function AuditReportPage() {
           </form>
         </Modal>
 
-        <Drawer open={!!detailItem} onClose={() => setDetailItem(null)} title="Detalhes do lançamento">
+        <Drawer open={!!detailItem} onClose={() => setDetailItem(null)} title="Detalhes do lancamento">
           {detailItem && (
             <div className="space-y-3 text-sm">
               <div className="flex items-center justify-between">
@@ -297,17 +297,17 @@ export default function AuditReportPage() {
                   {detailItem.type === "income" ? "+" : "-"}{currency(detailItem.amount)}
                 </span>
               </div>
-              <DetRow label="Tipo" value={detailItem.type === "income" ? "Entrada" : "Saída"} />
+              <DetRow label="Tipo" value={detailItem.type === "income" ? "Entrada" : "Saida"} />
               <DetRow label="Data" value={dateTimePt(detailItem.occurred_at)} />
-              <DetRow label="Conta contábil" value={detailItem.category_name ?? "—"} />
-              <DetRow label="Conta bancária" value={detailItem.account_name ?? "—"} />
-              <DetRow label="Fornecedor" value={detailItem.supplier_name ?? "—"} />
-              <DetRow label="Forma de pagamento" value={detailItem.payment_method ? (PAYMENT_METHODS[detailItem.payment_method] ?? detailItem.payment_method) : "—"} />
-              <DetRow label="Origem" value={detailItem.is_anonymous ? "Anônimo" : (detailItem.donor_name ?? "—")} />
+              <DetRow label="Conta contabil" value={detailItem.category_name ?? "-"} />
+              <DetRow label="Conta bancaria" value={detailItem.account_name ?? "-"} />
+              <DetRow label="Fornecedor" value={detailItem.supplier_name ?? "-"} />
+              <DetRow label="Forma de pagamento" value={detailItem.payment_method ? (PAYMENT_METHODS[detailItem.payment_method] ?? detailItem.payment_method) : "-"} />
+              <DetRow label="Origem" value={detailItem.is_anonymous ? "Anonimo" : (detailItem.donor_name ?? "-")} />
               {detailItem.receipt_ref && <DetRow label="Recibo" value={detailItem.receipt_ref} />}
               <div>
-                <span className="text-zinc-500">Descrição</span>
-                <p className="mt-0.5 whitespace-pre-wrap">{detailItem.description ?? "—"}</p>
+                <span className="text-zinc-500">Descricao</span>
+                <p className="mt-0.5 whitespace-pre-wrap">{detailItem.description ?? "-"}</p>
               </div>
               {detailItem.allocations.length > 0 && (
                 <div>
@@ -356,7 +356,7 @@ export default function AuditReportPage() {
     <div className="page">
       <PageHeader
         title="Auditoria financeira"
-        description="Lista lançamentos do período, permite marcar como auditado e fechar com assinatura"
+        description="Lista lancamentos do periodo, permite marcar como auditado e fechar com assinatura"
         actions={<Button onClick={() => setShowNew(true)}><Plus className="h-4 w-4" /> Nova auditoria</Button>}
       />
 
@@ -364,11 +364,11 @@ export default function AuditReportPage() {
         {audits === null ? (
           <SkeletonRows />
         ) : audits.length === 0 ? (
-          <EmptyState icon={<ShieldCheck className="h-10 w-10" />} title="Nenhuma auditoria" description="Crie uma auditoria para um período e marque os lançamentos." />
+          <EmptyState icon={<ShieldCheck className="h-10 w-10" />} title="Nenhuma auditoria" description="Crie uma auditoria para um periodo e marque os lancamentos." />
         ) : (
           <Table>
             <THead>
-              <TRow><TH>Título</TH><TH>Período</TH><TH>Situação</TH><TH className="text-right">Auditados</TH><TH></TH></TRow>
+              <TRow><TH>Titulo</TH><TH>Periodo</TH><TH>Situacao</TH><TH className="text-right">Auditados</TH><TH></TH></TRow>
             </THead>
             <TBody>
               {audits.map((a) => (
@@ -396,9 +396,9 @@ export default function AuditReportPage() {
 
       <Drawer open={showNew} onClose={() => setShowNew(false)} title="Nova auditoria">
         <form onSubmit={createNew} className="space-y-3">
-          <Field label="Título"><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
-          <Field label="Período — de *"><Input type="date" required value={form.period_start} onChange={(e) => setForm({ ...form, period_start: e.target.value })} /></Field>
-          <Field label="Período — até *"><Input type="date" required value={form.period_end} onChange={(e) => setForm({ ...form, period_end: e.target.value })} /></Field>
+          <Field label="Titulo"><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
+          <Field label="Periodo - de *"><Input type="date" required value={form.period_start} onChange={(e) => setForm({ ...form, period_start: e.target.value })} /></Field>
+          <Field label="Periodo - ate *"><Input type="date" required value={form.period_end} onChange={(e) => setForm({ ...form, period_end: e.target.value })} /></Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" type="button" onClick={() => setShowNew(false)}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Criando..." : "Criar"}</Button>

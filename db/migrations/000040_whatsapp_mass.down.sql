@@ -1,7 +1,7 @@
 -- 000040_whatsapp_mass.down.sql
 DROP TABLE IF EXISTS notification_settings;
 
--- Restaura as políticas originais do outbox (000017).
+-- Restaura as politicas originais do outbox (000017).
 DROP POLICY IF EXISTS ann_dlv_all ON announcement_deliveries;
 CREATE POLICY ann_dlv_all ON announcement_deliveries FOR ALL
   USING (branch_id = current_branch() OR branch_id IS NULL)

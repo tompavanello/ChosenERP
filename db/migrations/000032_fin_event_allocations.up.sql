@@ -1,7 +1,7 @@
 -- 000032_fin_event_allocations.up.sql
--- Rateio de um lançamento entre eventos: quanto de cada lançamento pertence a
--- cada evento. Permite saber o custo REAL de um evento (soma do rateio) além do
--- custo estimado já cadastrado.
+-- Rateio de um lancamento entre eventos: quanto de cada lancamento pertence a
+-- cada evento. Permite saber o custo REAL de um evento (soma do rateio) alem do
+-- custo estimado ja cadastrado.
 
 CREATE TABLE financial_event_allocations (
     id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),

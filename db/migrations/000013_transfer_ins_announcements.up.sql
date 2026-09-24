@@ -1,9 +1,9 @@
 -- 000013_transfer_ins_announcements.up.sql
--- 1) Repasses: política de INSERT (oficializar repasse entre filiais)
+-- 1) Repasses: politica de INSERT (oficializar repasse entre filiais)
 -- 2) Avisos (feed do app do membro), escopados por filial/tenant
 
--- Repasses: a tabela transfers só tinha policy de SELECT; sem INSERT a RLS
--- bloqueia a criação. Autoriza quem é origem ou destino (ou sede).
+-- Repasses: a tabela transfers so tinha policy de SELECT; sem INSERT a RLS
+-- bloqueia a criacao. Autoriza quem e origem ou destino (ou sede).
 CREATE POLICY transfers_ins ON transfers FOR INSERT
   WITH CHECK (
     from_branch_id = current_branch() OR

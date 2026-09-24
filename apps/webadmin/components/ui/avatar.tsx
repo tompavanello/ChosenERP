@@ -34,8 +34,8 @@ export function Avatar({
       )}
     >
       {showPhoto ? (
-        // <img> simples de propósito: next/image exigiria declarar o host da API
-        // em remotePatterns, e a URL da foto é montada em runtime.
+        // <img> simples de proposito: next/image exigiria declarar o host da API
+        // em remotePatterns, e a URL da foto e montada em runtime.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src as string}

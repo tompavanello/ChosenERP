@@ -36,13 +36,13 @@ const PER_PAGE = 12;
 
 const IMPORT_FIELDS: { key: string; label: string; required?: boolean }[] = [
   { key: "data", label: "Data", required: true },
-  { key: "tipo", label: "Tipo (entrada/saída)", required: true },
-  { key: "conta", label: "Conta contábil", required: true },
+  { key: "tipo", label: "Tipo (entrada/saida)", required: true },
+  { key: "conta", label: "Conta contabil", required: true },
   { key: "valor", label: "Valor", required: true },
   { key: "forma_pagamento", label: "Forma de pagamento" },
-  { key: "descricao", label: "Descrição" },
-  { key: "anonimo", label: "Anônimo" },
-  { key: "conta_bancaria", label: "Conta bancária" },
+  { key: "descricao", label: "Descricao" },
+  { key: "anonimo", label: "Anonimo" },
+  { key: "conta_bancaria", label: "Conta bancaria" },
 ];
 
 function colLetter(i: number): string {
@@ -85,12 +85,12 @@ function guessMapping(rows: string[][]): Record<string, number> {
 export default function FinancePage() {
   const { hasPerm } = useAuth();
   const { toast } = useToast();
-  const [tab, setTab] = useState("lançamentos");
+  const [tab, setTab] = useState("lancamentos");
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [balance, setBalance] = useState<Balance | null>(null);
-  const [series, setSeries] = useState<{ name: string; Entradas: number; Saídas: number }[]>([]);
+  const [series, setSeries] = useState<{ name: string; Entradas: number; Saidas: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState("");
   const [filterCat, setFilterCat] = useState("");
@@ -124,9 +124,9 @@ export default function FinancePage() {
   const [recipient, setRecipient] = useState("");
 
   const load = useCallback(async () => {
-    // Cada API é carregada independentemente: uma falha não deve bloquear o
-    // carregamento do restante. Mas a lista de lançamentos AVISA quando falha
-    // (antes o erro era engolido e a tela só ficava "vazia").
+    // Cada API e carregada independentemente: uma falha nao deve bloquear o
+    // carregamento do restante. Mas a lista de lancamentos AVISA quando falha
+    // (antes o erro era engolido e a tela so ficava "vazia").
     const cat = await listCategories().catch(() => ({ categories: [] }));
     const accts = await listAccounts().catch(() => ({ accounts: [] }));
     try {
@@ -134,14 +134,14 @@ export default function FinancePage() {
       setTxns(Array.isArray(tx.transactions) ? tx.transactions : []);
     } catch (e) {
       setTxns([]);
-      toast(e instanceof Error ? e.message : "Falha ao carregar lançamentos", "error");
+      toast(e instanceof Error ? e.message : "Falha ao carregar lancamentos", "error");
     }
     const bal = await getBalance().catch(() => null);
     const mb = await getMonthlyBalance().catch(() => ({ series: [] }));
     setCategories(cat.categories);
     setAccounts(accts.accounts);
     setBalance(bal);
-    setSeries(mb.series.map((p) => ({ name: monthLabel(p.month), Entradas: p.income, Saídas: p.expense })));
+    setSeries(mb.series.map((p) => ({ name: monthLabel(p.month), Entradas: p.income, Saidas: p.expense })));
     setLoading(false);
   }, [toast]);
 
@@ -183,10 +183,10 @@ export default function FinancePage() {
     },
     {
       key: "description",
-      label: "Descrição",
+      label: "Descricao",
       render: (t) => (
         <div className="flex items-center gap-2">
-          <span className={t.voided_at ? "text-zinc-400 line-through" : ""}>{t.description ?? "—"}</span>
+          <span className={t.voided_at ? "text-zinc-400 line-through" : ""}>{t.description ?? "-"}</span>
           {t.voided_at && <Badge tone="red" className="text-[10px]">Estornado</Badge>}
           {!!t.attachment_count && t.attachment_count > 0 && (
             t.attachment_count === 1 ? (
@@ -216,11 +216,11 @@ export default function FinancePage() {
     },
     {
       key: "category_name",
-      label: "Conta contábil",
+      label: "Conta contabil",
       sortable: true,
       render: (t) => (
         <div>
-          <p className="font-medium">{t.category_name ?? "—"}</p>
+          <p className="font-medium">{t.category_name ?? "-"}</p>
           {t.payment_method && <p className="text-xs text-zinc-400">{PAYMENT_METHODS[t.payment_method] ?? t.payment_method}</p>}
         </div>
       ),
@@ -230,7 +230,7 @@ export default function FinancePage() {
       label: "Conta",
       sortable: true,
       width: "w-36",
-      render: (t) => <span className="text-zinc-500">{t.account_name ?? "—"}</span>,
+      render: (t) => <span className="text-zinc-500">{t.account_name ?? "-"}</span>,
     },
     {
       key: "receipt_id",
@@ -238,7 +238,7 @@ export default function FinancePage() {
       width: "w-44",
       align: "center" as const,
       render: (t) => {
-        if (!t.receipt_id) return <span className="text-zinc-400">—</span>;
+        if (!t.receipt_id) return <span className="text-zinc-400">-</span>;
         return (
           <div className="flex items-center justify-center">
             <Button variant="ghost" size="sm" onClick={() => viewReceipt(t)} aria-label="Ver recibo" title="Ver recibo"><Eye className="h-3.5 w-3.5" /> Ver</Button>
@@ -269,7 +269,7 @@ export default function FinancePage() {
           <Button variant="ghost" size="sm" onClick={() => openDetail(t)} aria-label="Ver detalhes" title="Detalhes"><Eye className="h-3.5 w-3.5" /></Button>
           {!t.voided_at && hasPerm("finance.write") && (
             <>
-              <Button variant="ghost" size="sm" onClick={() => openEdit(t)} aria-label="Editar" title="Editar (estorna e relança)"><Pencil className="h-3.5 w-3.5" /></Button>
+              <Button variant="ghost" size="sm" onClick={() => openEdit(t)} aria-label="Editar" title="Editar (estorna e relanca)"><Pencil className="h-3.5 w-3.5" /></Button>
               <Button variant="ghost" size="sm" onClick={() => removeTxn(t)} aria-label="Estornar" title="Estornar"><Trash2 className="h-3.5 w-3.5 text-red-500" /></Button>
             </>
           )}
@@ -279,7 +279,7 @@ export default function FinancePage() {
   ], [hasPerm]);
 
   async function handleTxnSaved() {
-    // Invalidar apenas as listas de transações e saldo, não todas as APIs.
+    // Invalidar apenas as listas de transacoes e saldo, nao todas as APIs.
     const [tx, bal] = await Promise.all([
       listTransactions().catch(() => ({ transactions: [] })),
       getBalance().catch(() => null),
@@ -290,8 +290,8 @@ export default function FinancePage() {
 
   async function viewReceipt(t: Transaction) {
     if (!t.receipt_id) return;
-    // Abre a janela ANTES do fetch: abrir depois do await é bloqueado pelo
-    // bloqueador de pop-up (deixaria de ser um gesto do usuário).
+    // Abre a janela ANTES do fetch: abrir depois do await e bloqueado pelo
+    // bloqueador de pop-up (deixaria de ser um gesto do usuario).
     const w = window.open("", "_blank", "width=540,height=760");
     try {
       const html = await getReceiptHTML(t.receipt_id);
@@ -310,22 +310,22 @@ export default function FinancePage() {
     setShowNew(true);
   }
 
-  // "Alterar" = estornar o original e lançar o novo (o livro é append-only).
+  // "Alterar" = estornar o original e lancar o novo (o livro e append-only).
   async function amendTxn(data: Record<string, unknown>) {
     if (!editing) return;
-    await voidTransaction(editing.id, "Correção (estorno e relançamento)");
+    await voidTransaction(editing.id, "Correcao (estorno e relancamento)");
     await createTransaction(data);
-    toast("Lançamento corrigido (original estornado).");
+    toast("Lancamento corrigido (original estornado).");
     setEditing(null);
     await handleTxnSaved();
   }
 
   async function removeTxn(t: Transaction) {
-    if (!confirm("Estornar este lançamento? Ele sai dos relatórios, mas permanece no histórico.")) return;
+    if (!confirm("Estornar este lancamento? Ele sai dos relatorios, mas permanece no historico.")) return;
     const reason = window.prompt("Motivo do estorno (opcional):") ?? "";
     try {
       await voidTransaction(t.id, reason);
-      toast("Lançamento estornado.");
+      toast("Lancamento estornado.");
       await handleTxnSaved();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao estornar", "error");
@@ -402,10 +402,10 @@ export default function FinancePage() {
     try {
       if (editingCat) {
         await updateCategory(editingCat.id, catForm);
-        toast("Conta contábil atualizada.");
+        toast("Conta contabil atualizada.");
       } else {
         await createCategory(catForm);
-        toast("Conta contábil criada.");
+        toast("Conta contabil criada.");
       }
       closeCatForm();
       setCategories(await listCategories().then((r) => r.categories));
@@ -418,17 +418,17 @@ export default function FinancePage() {
     try {
       await updateCategory(c.id, { is_active: !c.is_active });
       setCategories(await listCategories().then((r) => r.categories));
-      toast(c.is_active ? "Conta contábil desativada." : "Conta contábil reativada.");
+      toast(c.is_active ? "Conta contabil desativada." : "Conta contabil reativada.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro", "error");
     }
   }
 
   async function deleteCat(c: Category) {
-    if (!confirm(`Excluir a conta contábil "${c.name}"?`)) return;
+    if (!confirm(`Excluir a conta contabil "${c.name}"?`)) return;
     try {
       await deleteCategory(c.id);
-      toast("Conta contábil excluída.");
+      toast("Conta contabil excluida.");
       setCategories(await listCategories().then((r) => r.categories));
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro", "error");
@@ -455,7 +455,7 @@ export default function FinancePage() {
     try {
       const res = await importTransactionsFile(importFile.data, importFile.filename, importStartRow - 1, importMap);
       setImportResult(res);
-      toast(`${res.imported} lançamento(s) importado(s).`);
+      toast(`${res.imported} lancamento(s) importado(s).`);
       await handleTxnSaved();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao importar", "error");
@@ -468,7 +468,7 @@ export default function FinancePage() {
     e.preventDefault();
     const balance = acctForm.initial_balance === "" ? 0 : Number(acctForm.initial_balance);
     if (isNaN(balance) || balance < 0) {
-      toast("Saldo inicial inválido.", "error");
+      toast("Saldo inicial invalido.", "error");
       return;
     }
     try {
@@ -516,7 +516,7 @@ export default function FinancePage() {
     if (!confirm(`Excluir a conta "${a.name}"?`)) return;
     try {
       await deleteAccount(a.id);
-      toast("Conta excluída.");
+      toast("Conta excluida.");
       setAccounts(await listAccounts().then((r) => r.accounts));
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro", "error");
@@ -530,43 +530,43 @@ export default function FinancePage() {
     <div className="page">
       <PageHeader
         title="Financeiro"
-        description="Dízimos, ofertas, despesas e plano de contas"
+        description="Dizimos, ofertas, despesas e plano de contas"
         actions={hasPerm("finance.write") ? (
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => { setImportResult(null); setShowImport(true); }}>
               <Upload className="h-4 w-4" /> Importar
             </Button>
-            <Button onClick={() => { setEditing(null); setShowNew(true); }}><Plus className="h-4 w-4" /> Lançamento</Button>
+            <Button onClick={() => { setEditing(null); setShowNew(true); }}><Plus className="h-4 w-4" /> Lancamento</Button>
           </div>
         ) : undefined}
       />
 
       <Tabs
         tabs={[
-          { key: "lançamentos", label: "Lançamentos", icon: <Wallet className="h-4 w-4" /> },
-          { key: "recorrentes", label: "Recorrências", icon: <Repeat className="h-4 w-4" /> },
-          { key: "contas", label: "Contas Bancárias", icon: <Banknote className="h-4 w-4" /> },
+          { key: "lancamentos", label: "Lancamentos", icon: <Wallet className="h-4 w-4" /> },
+          { key: "recorrentes", label: "Recorrencias", icon: <Repeat className="h-4 w-4" /> },
+          { key: "contas", label: "Contas Bancarias", icon: <Banknote className="h-4 w-4" /> },
           { key: "categorias", label: "Plano de Contas", icon: <Tags className="h-4 w-4" /> },
         ]}
         active={tab}
         onChange={setTab}
       />
 
-      {tab === "lançamentos" && (
+      {tab === "lancamentos" && (
         <>
           {loading ? (
             <div className="grid gap-4 md:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-24" />)}</div>
           ) : (
             <div className="mb-6 grid gap-4 md:grid-cols-3">
               <StatCard label="Entradas" value={balance ? currency(balance.income) : "..."} icon={ArrowUpRight} tone="green" />
-              <StatCard label="Saídas" value={balance ? currency(balance.expense) : "..."} icon={ArrowDownRight} tone="red" />
+              <StatCard label="Saidas" value={balance ? currency(balance.expense) : "..."} icon={ArrowDownRight} tone="red" />
               <StatCard label="Saldo" value={balance ? currency(balance.net) : "..."} icon={Wallet} tone="sky" />
             </div>
           )}
 
           {series.length > 0 && (
             <Card className="mb-6">
-              <h3 className="mb-4 text-sm font-semibold text-zinc-700">Entradas × Saídas (mensal)</h3>
+              <h3 className="mb-4 text-sm font-semibold text-zinc-700">Entradas x Saidas (mensal)</h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -576,7 +576,7 @@ export default function FinancePage() {
                     <Tooltip formatter={(v: unknown) => currency(Number(v))} />
                     <Legend />
                     <Bar dataKey="Entradas" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Saídas" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Saidas" fill="#ef4444" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -587,10 +587,10 @@ export default function FinancePage() {
             <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 p-4">
               <div className="relative flex-1 min-w-48">
                 <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-                <Input className="pl-9" placeholder="Buscar por descrição" value={query} onChange={(e) => setQuery(e.target.value)} />
+                <Input className="pl-9" placeholder="Buscar por descricao" value={query} onChange={(e) => setQuery(e.target.value)} />
               </div>
               <Select className="w-36" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-                <option value="">Todos</option><option value="income">Entradas</option><option value="expense">Saídas</option>
+                <option value="">Todos</option><option value="income">Entradas</option><option value="expense">Saidas</option>
               </Select>
                <Select className="w-44" value={filterCat} onChange={(e) => setFilterCat(e.target.value)}>
                  <option value="">Todas as contas</option>
@@ -607,7 +607,7 @@ export default function FinancePage() {
                data={filtered}
                keyExtractor={(t) => t.id}
                loading={loading}
-               emptyMessage="Sem lançamentos"
+               emptyMessage="Sem lancamentos"
                emptyIcon={<Wallet className="h-10 w-10" />}
                pagination={{
                  page,
@@ -634,21 +634,21 @@ export default function FinancePage() {
       {tab === "contas" && (
         <Card className="overflow-hidden p-0">
           <div className="flex items-center justify-between border-b border-zinc-100 p-4">
-            <h3 className="text-sm font-semibold text-zinc-700">Contas bancárias</h3>
+            <h3 className="text-sm font-semibold text-zinc-700">Contas bancarias</h3>
             {hasPerm("finance.write") && <Button size="sm" onClick={() => setShowAcctForm(true)}><Plus className="h-4 w-4" /> Conta</Button>}
           </div>
           <Table>
-            <THead><TRow><TH>Nome</TH><TH>Banco</TH><TH>Agência</TH><TH>Conta</TH><TH>Tipo</TH><TH className="text-right">Saldo Inicial</TH><TH>Ativa</TH><TH></TH></TRow></THead>
+            <THead><TRow><TH>Nome</TH><TH>Banco</TH><TH>Agencia</TH><TH>Conta</TH><TH>Tipo</TH><TH className="text-right">Saldo Inicial</TH><TH>Ativa</TH><TH></TH></TRow></THead>
             <TBody>
               {accounts.map((a) => (
                 <TRow key={a.id}>
                   <TD className="font-medium">{a.name}</TD>
-                  <TD className="text-zinc-500">{a.bank ?? "—"}</TD>
-                  <TD className="text-zinc-500">{a.agency ?? "—"}</TD>
-                  <TD className="text-zinc-500">{a.account_number ?? "—"}</TD>
+                  <TD className="text-zinc-500">{a.bank ?? "-"}</TD>
+                  <TD className="text-zinc-500">{a.agency ?? "-"}</TD>
+                  <TD className="text-zinc-500">{a.account_number ?? "-"}</TD>
                   <TD className="text-zinc-500">{ACCOUNT_TYPES[a.account_type] ?? a.account_type}</TD>
                   <TD className="text-right text-zinc-500">{currency(a.initial_balance)}</TD>
-                  <TD><Badge tone={a.is_active ? "green" : "zinc"}>{a.is_active ? "Sim" : "Não"}</Badge></TD>
+                  <TD><Badge tone={a.is_active ? "green" : "zinc"}>{a.is_active ? "Sim" : "Nao"}</Badge></TD>
                   <TD className="text-center">
                     {hasPerm("finance.write") && (
                       <div className="flex justify-center gap-1">
@@ -679,27 +679,27 @@ export default function FinancePage() {
         <Card className="overflow-hidden p-0">
           <div className="flex items-center justify-between border-b border-zinc-100 p-4">
             <h3 className="text-sm font-semibold text-zinc-700">Plano de contas</h3>
-            {hasPerm("finance.write") && <Button size="sm" onClick={() => setShowCatForm(true)}><Plus className="h-4 w-4" /> Conta contábil</Button>}
+            {hasPerm("finance.write") && <Button size="sm" onClick={() => setShowCatForm(true)}><Plus className="h-4 w-4" /> Conta contabil</Button>}
           </div>
           <Table>
-            <THead><TRow><TH>Nome</TH><TH>Código</TH><TH>Tipo</TH><TH>Ativa</TH><TH></TH></TRow></THead>
+            <THead><TRow><TH>Nome</TH><TH>Codigo</TH><TH>Tipo</TH><TH>Ativa</TH><TH></TH></TRow></THead>
             <TBody>
               {categories.map((c) => (
                 <TRow key={c.id}>
                   <TD className="font-medium">{c.name}</TD>
                   <TD className="text-zinc-500">{c.code}</TD>
-                  <TD><Badge tone={c.type === "income" ? "green" : "red"}>{c.type === "income" ? "Entrada" : "Saída"}</Badge></TD>
-                  <TD><Badge tone={c.is_active ? "green" : "zinc"}>{c.is_active ? "Sim" : "Não"}</Badge></TD>
+                  <TD><Badge tone={c.type === "income" ? "green" : "red"}>{c.type === "income" ? "Entrada" : "Saida"}</Badge></TD>
+                  <TD><Badge tone={c.is_active ? "green" : "zinc"}>{c.is_active ? "Sim" : "Nao"}</Badge></TD>
                   <TD className="text-center">
                     {hasPerm("finance.write") && (
                       <div className="flex justify-center gap-1">
                         <Button variant="ghost" size="sm" onClick={() => toggleCategoryActive(c)}>
                           {c.is_active ? "Desativar" : "Ativar"}
                         </Button>
-                        <Button variant="ghost" className="h-7 w-7 p-0" onClick={() => openCatEdit(c)} aria-label="Editar conta contábil" title="Editar">
+                        <Button variant="ghost" className="h-7 w-7 p-0" onClick={() => openCatEdit(c)} aria-label="Editar conta contabil" title="Editar">
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" className="h-7 w-7 p-0" onClick={() => deleteCat(c)} aria-label="Excluir conta contábil" title="Excluir">
+                        <Button variant="ghost" className="h-7 w-7 p-0" onClick={() => deleteCat(c)} aria-label="Excluir conta contabil" title="Excluir">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -713,22 +713,22 @@ export default function FinancePage() {
         </Card>
       )}
 
-      <Drawer open={!!detail} onClose={() => { setDetail(null); setAttachments([]); setDeliveries([]); setAllocations([]); }} title="Detalhe do lançamento">
+      <Drawer open={!!detail} onClose={() => { setDetail(null); setAttachments([]); setDeliveries([]); setAllocations([]); }} title="Detalhe do lancamento">
         {detail && (
           <div className="space-y-4 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-zinc-500">Valor</span>
               <span className={`text-2xl font-semibold ${detail.type === "income" ? "text-emerald-600" : "text-red-600"}`}>{detail.type === "income" ? "+" : "-"}{currency(detail.amount)}</span>
             </div>
-            <div className="flex items-center justify-between"><span className="text-zinc-500">Conta contábil</span><span>{detail.category_name ?? "—"}</span></div>
+            <div className="flex items-center justify-between"><span className="text-zinc-500">Conta contabil</span><span>{detail.category_name ?? "-"}</span></div>
             {detail.account_name && <div className="flex items-center justify-between"><span className="text-zinc-500"> Conta</span><span>{detail.account_name}</span></div>}
             {detail.supplier_name && <div className="flex items-center justify-between"><span className="text-zinc-500">Fornecedor</span><span>{detail.supplier_name}</span></div>}
-            <div className="flex items-center justify-between"><span className="text-zinc-500">Forma de pagamento</span><span>{detail.payment_method ? PAYMENT_METHODS[detail.payment_method] ?? detail.payment_method : "—"}</span></div>
+            <div className="flex items-center justify-between"><span className="text-zinc-500">Forma de pagamento</span><span>{detail.payment_method ? PAYMENT_METHODS[detail.payment_method] ?? detail.payment_method : "-"}</span></div>
             <div className="flex items-center justify-between"><span className="text-zinc-500">Data</span><span>{dateTimePt(detail.occurred_at)}</span></div>
-            <div className="flex items-center justify-between"><span className="text-zinc-500">Recibo</span><span>{detail.receipt_ref ?? "—"}</span></div>
+            <div className="flex items-center justify-between"><span className="text-zinc-500">Recibo</span><span>{detail.receipt_ref ?? "-"}</span></div>
             <div className="flex items-start justify-between gap-4"><span className="text-zinc-500">Hash de integridade</span><span className="break-all text-xs text-zinc-400">{detail.hash}</span></div>
 
-            {/* Anexos de comprovação */}
+            {/* Anexos de comprovacao */}
             <div>
               <label className="text-sm font-semibold text-zinc-700">Anexos</label>
               <div className="mt-2 space-y-2">
@@ -741,7 +741,7 @@ export default function FinancePage() {
                         <FileText className="h-4 w-4 text-zinc-500" />
                         <div>
                           <span className="text-sm">{att.file_name}</span>
-                          <p className="text-xs text-zinc-400">{att.content_type} · {(att.file_size / 1024).toFixed(1)} KB</p>
+                          <p className="text-xs text-zinc-400">{att.content_type} - {(att.file_size / 1024).toFixed(1)} KB</p>
                         </div>
                       </div>
                       <a href={att.file_url} target="_blank" rel="noopener noreferrer" aria-label={`Ver anexo ${att.file_name}`} title="Ver anexo" className="inline-flex items-center justify-center rounded px-2 py-1 text-xs hover:bg-zinc-100">
@@ -798,7 +798,7 @@ export default function FinancePage() {
                         <span className="text-xs text-zinc-500">{d.channel === "email" ? "E-mail" : "WhatsApp"}</span>
                         <span className="text-xs text-zinc-400">{d.recipient}</span>
                       </div>
-                      <span className="text-xs text-zinc-500">{d.sent_at ? dateTimePt(d.sent_at) : "—"}</span>
+                      <span className="text-xs text-zinc-500">{d.sent_at ? dateTimePt(d.sent_at) : "-"}</span>
                     </div>
                   ))}
                 </div>
@@ -817,7 +817,7 @@ export default function FinancePage() {
         )}
       </Drawer>
 
-      <Drawer open={showNew} onClose={() => { setShowNew(false); setEditing(null); }} size="xl" title={editing ? "Editar lançamento" : "Novo lançamento"}>
+      <Drawer open={showNew} onClose={() => { setShowNew(false); setEditing(null); }} size="xl" title={editing ? "Editar lancamento" : "Novo lancamento"}>
         <TransactionForm
           open={showNew}
           onClose={() => { setShowNew(false); setEditing(null); }}
@@ -836,18 +836,18 @@ export default function FinancePage() {
             supplier_id: editing.supplier_id ?? "",
             is_anonymous: editing.is_anonymous,
           } : undefined}
-          submitLabel={editing ? "Salvar alterações" : "Lançar"}
+          submitLabel={editing ? "Salvar alteracoes" : "Lancar"}
         />
       </Drawer>
 
-      <Drawer open={showCatForm} onClose={closeCatForm} title={editingCat ? "Editar conta contábil" : "Nova conta contábil"}>
+      <Drawer open={showCatForm} onClose={closeCatForm} title={editingCat ? "Editar conta contabil" : "Nova conta contabil"}>
         <form onSubmit={submitCat} className="space-y-3">
           <Field label="Tipo">
             <Select value={catForm.type} onChange={(e) => setCatForm({ ...catForm, type: e.target.value })}>
-              <option value="income">Entrada</option><option value="expense">Saída</option>
+              <option value="income">Entrada</option><option value="expense">Saida</option>
             </Select>
           </Field>
-          <Field label="Código *"><Input required placeholder="ex.: 101" value={catForm.code} onChange={(e) => setCatForm({ ...catForm, code: e.target.value })} /></Field>
+          <Field label="Codigo *"><Input required placeholder="ex.: 101" value={catForm.code} onChange={(e) => setCatForm({ ...catForm, code: e.target.value })} /></Field>
           <Field label="Nome *"><Input required value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} /></Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" type="button" onClick={closeCatForm}>Cancelar</Button>
@@ -856,13 +856,13 @@ export default function FinancePage() {
         </form>
       </Drawer>
 
-      <Drawer open={showAcctForm} onClose={closeAcctForm} title={editingAcct ? "Editar conta bancária" : "Nova conta bancária"}>
+      <Drawer open={showAcctForm} onClose={closeAcctForm} title={editingAcct ? "Editar conta bancaria" : "Nova conta bancaria"}>
         <form onSubmit={submitAcct} className="space-y-3">
           <Field label="Nome *"><Input required value={acctForm.name} onChange={(e) => setAcctForm({ ...acctForm, name: e.target.value })} /></Field>
           <Field label="Banco"><Input value={acctForm.bank} onChange={(e) => setAcctForm({ ...acctForm, bank: e.target.value })} placeholder="ex.: Banco do Brasil" /></Field>
-          <Field label="Código do banco"><Input value={acctForm.bank_code} onChange={(e) => setAcctForm({ ...acctForm, bank_code: e.target.value })} placeholder="ex.: 1" /></Field>
-          <Field label="Agência"><Input value={acctForm.agency} onChange={(e) => setAcctForm({ ...acctForm, agency: e.target.value })} /></Field>
-          <Field label="Número da conta"><Input value={acctForm.account_number} onChange={(e) => setAcctForm({ ...acctForm, account_number: e.target.value })} /></Field>
+          <Field label="Codigo do banco"><Input value={acctForm.bank_code} onChange={(e) => setAcctForm({ ...acctForm, bank_code: e.target.value })} placeholder="ex.: 1" /></Field>
+          <Field label="Agencia"><Input value={acctForm.agency} onChange={(e) => setAcctForm({ ...acctForm, agency: e.target.value })} /></Field>
+          <Field label="Numero da conta"><Input value={acctForm.account_number} onChange={(e) => setAcctForm({ ...acctForm, account_number: e.target.value })} /></Field>
           <Field label="Tipo">
             <Select value={acctForm.account_type} onChange={(e) => setAcctForm({ ...acctForm, account_type: e.target.value })}>
               {Object.entries(ACCOUNT_TYPES).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
@@ -902,7 +902,7 @@ export default function FinancePage() {
       <Modal
         open={showImport}
         onClose={() => setShowImport(false)}
-        title="Importar lançamentos"
+        title="Importar lancamentos"
         size="xl"
       >
         <div className="space-y-3 text-sm">
@@ -934,7 +934,7 @@ export default function FinancePage() {
                         value={importMap[f.key] ?? -1}
                         onChange={(e) => setImportMap({ ...importMap, [f.key]: Number(e.target.value) })}
                       >
-                        <option value={-1}>— não usar —</option>
+                        <option value={-1}>- nao usar -</option>
                         {Array.from({ length: maxCols }, (_, i) => (
                           <option key={i} value={i}>
                             {colLetter(i)}{importRows[0]?.[i] ? ` (${importRows[0][i]})` : ""}

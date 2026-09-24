@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Session é um encontro da turma (ministra uma lição).
+// Session e um encontro da turma (ministra uma licao).
 type Session struct {
 	ID           string     `json:"id"`
 	ClassID      string     `json:"class_id"`
@@ -77,9 +77,9 @@ func (r *Repo) GetSession(ctx context.Context, tx pgx.Tx, id string) (*Session, 
 
 func (r *Repo) CreateSession(ctx context.Context, tx pgx.Tx, in SessionInput) (*Session, error) {
 	if in.ClassID == nil || *in.ClassID == "" || in.StartsAt == nil || *in.StartsAt == "" {
-		return nil, fmt.Errorf("%w: class_id e starts_at são obrigatórios", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: class_id e starts_at sao obrigatorios", ErrInvalidInput)
 	}
-	// A filial do encontro segue a turma (a Sede não tem branch própria).
+	// A filial do encontro segue a turma (a Sede nao tem branch propria).
 	class, err := r.GetClass(ctx, tx, *in.ClassID)
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func (r *Repo) UpdateSession(ctx context.Context, tx pgx.Tx, id string, in Sessi
 	if in.StartsAt != nil && *in.StartsAt != "" {
 		t, perr := time.Parse(time.RFC3339, *in.StartsAt)
 		if perr != nil {
-			return nil, fmt.Errorf("%w: starts_at inválido", ErrInvalidInput)
+			return nil, fmt.Errorf("%w: starts_at invalido", ErrInvalidInput)
 		}
 		s.StartsAt = t
 	}
@@ -119,7 +119,7 @@ func (r *Repo) UpdateSession(ctx context.Context, tx pgx.Tx, id string, in Sessi
 		} else {
 			t, perr := time.Parse(time.RFC3339, *in.EndsAt)
 			if perr != nil {
-				return nil, fmt.Errorf("%w: ends_at inválido", ErrInvalidInput)
+				return nil, fmt.Errorf("%w: ends_at invalido", ErrInvalidInput)
 			}
 			s.EndsAt = &t
 		}
@@ -149,14 +149,14 @@ func (r *Repo) DeleteSession(ctx context.Context, tx pgx.Tx, id string) error {
 // Check-in / check-out
 // ---------------------------------------------------------------------------
 
-// RosterEntry é a criança na chamada de um encontro.
+// RosterEntry e a crianca na chamada de um encontro.
 type RosterEntry struct {
 	CheckinID           string     `json:"checkin_id"`
 	EnrollmentID        string     `json:"enrollment_id"`
 	MemberID            string     `json:"member_id"`
 	MemberName          string     `json:"member_name"`
 	BirthDate           *string    `json:"birth_date,omitempty"`
-	Status              string     `json:"status"` // present | absent | "" (não marcado)
+	Status              string     `json:"status"` // present | absent | "" (nao marcado)
 	SecurityCode        string     `json:"security_code"`
 	CheckinAt           *time.Time `json:"checkin_at,omitempty"`
 	CheckoutAt          *time.Time `json:"checkout_at,omitempty"`
@@ -166,7 +166,7 @@ type RosterEntry struct {
 	Guardians           string     `json:"guardians"`
 }
 
-// Roster lista as crianças ativas da turma do encontro com o estado do check-in.
+// Roster lista as criancas ativas da turma do encontro com o estado do check-in.
 func (r *Repo) Roster(ctx context.Context, tx pgx.Tx, sessionID string) ([]RosterEntry, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT COALESCE(k.id::text,''), e.id::text, e.member_id::text, m.full_name,
@@ -206,7 +206,7 @@ type CheckinInput struct {
 	DropoffGuardianID string `json:"dropoff_guardian_id"`
 }
 
-// CheckIn registra a entrada de uma criança, gerando o código de segurança.
+// CheckIn registra a entrada de uma crianca, gerando o codigo de seguranca.
 func (r *Repo) CheckIn(ctx context.Context, tx pgx.Tx, sessionID string, in CheckinInput) (*RosterEntry, error) {
 	sess, err := r.GetSession(ctx, tx, sessionID)
 	if err != nil {
@@ -217,7 +217,7 @@ func (r *Repo) CheckIn(ctx context.Context, tx pgx.Tx, sessionID string, in Chec
 		return nil, err
 	}
 	if enr.ClassID != sess.ClassID {
-		return nil, fmt.Errorf("%w: matrícula não pertence à turma do encontro", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: matricula nao pertence a turma do encontro", ErrInvalidInput)
 	}
 	code := newSecurityCode()
 	_, err = tx.Exec(ctx, `
@@ -239,20 +239,20 @@ func (r *Repo) CheckIn(ctx context.Context, tx pgx.Tx, sessionID string, in Chec
 	return r.rosterEntry(ctx, tx, sessionID, in.EnrollmentID)
 }
 
-// CheckOut finaliza a saída; quando o código é informado, precisa conferir.
+// CheckOut finaliza a saida; quando o codigo e informado, precisa conferir.
 func (r *Repo) CheckOut(ctx context.Context, tx pgx.Tx, sessionID, enrollmentID, code, pickupGuardianID string) (*RosterEntry, error) {
 	var stored *string
 	err := tx.QueryRow(ctx, `
 		SELECT security_code FROM kids_checkins
 		WHERE session_id=$1::uuid AND enrollment_id=$2::uuid`, sessionID, enrollmentID).Scan(&stored)
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("%w: a criança ainda não fez check-in", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: a crianca ainda nao fez check-in", ErrInvalidInput)
 	}
 	if err != nil {
 		return nil, err
 	}
 	if code != "" && stored != nil && code != *stored {
-		return nil, fmt.Errorf("%w: código de segurança incorreto", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: codigo de seguranca incorreto", ErrInvalidInput)
 	}
 	_, err = tx.Exec(ctx, `
 		UPDATE kids_checkins SET checkout_at=now(), pickup_guardian_id=NULLIF($3,'')::uuid
@@ -264,7 +264,7 @@ func (r *Repo) CheckOut(ctx context.Context, tx pgx.Tx, sessionID, enrollmentID,
 	return r.rosterEntry(ctx, tx, sessionID, enrollmentID)
 }
 
-// MarkAbsent registra ausência (ou limpa o check-in com status ”).
+// MarkAbsent registra ausencia (ou limpa o check-in com status ").
 func (r *Repo) MarkAbsent(ctx context.Context, tx pgx.Tx, sessionID, enrollmentID string, absent bool) error {
 	if !absent {
 		return execExpectRow(ctx, tx, `
@@ -304,7 +304,7 @@ func (r *Repo) rosterEntry(ctx context.Context, tx pgx.Tx, sessionID, enrollment
 	return &e, err
 }
 
-// newSecurityCode gera um código numérico de 4 dígitos.
+// newSecurityCode gera um codigo numerico de 4 digitos.
 func newSecurityCode() string {
 	n, err := rand.Int(rand.Reader, big.NewInt(10000))
 	if err != nil {

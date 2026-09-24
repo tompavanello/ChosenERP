@@ -39,11 +39,11 @@ func (a *App) handleCreateSupplier(w http.ResponseWriter, r *http.Request) {
 	}
 	var in suppliers.CreateInput
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	if in.Name == "" {
-		writeErr(w, http.StatusBadRequest, "nome é obrigatório")
+		writeErr(w, http.StatusBadRequest, "nome e obrigatorio")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -68,7 +68,7 @@ func (a *App) handleUpdateSupplier(w http.ResponseWriter, r *http.Request) {
 	}
 	var in suppliers.UpdateInput
 	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "corpo inválido: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -80,7 +80,7 @@ func (a *App) handleUpdateSupplier(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "fornecedor não encontrado")
+			writeErr(w, http.StatusNotFound, "fornecedor nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -101,7 +101,7 @@ func (a *App) handleDeleteSupplier(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "fornecedor não encontrado")
+			writeErr(w, http.StatusNotFound, "fornecedor nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())

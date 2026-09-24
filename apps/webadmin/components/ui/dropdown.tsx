@@ -18,11 +18,11 @@ export function Dropdown({
 }: {
   trigger: ReactNode;
   /**
-   * Marque quando o `trigger` JÁ é um botão (ex.: <Button>). Sem isso o Dropdown
-   * o envolve no seu próprio <button>, e <button> dentro de <button> é HTML
-   * inválido — o React acusa no console e quebra a hidratação.
+   * Marque quando o `trigger` JA e um botao (ex.: <Button>). Sem isso o Dropdown
+   * o envolve no seu proprio <button>, e <button> dentro de <button> e HTML
+   * invalido - o React acusa no console e quebra a hidratacao.
    * Nesse modo o clique do trigger passa a ser o do Dropdown (o handler do
-   * filho é substituído).
+   * filho e substituido).
    */
   triggerAsChild?: boolean;
   items: DropdownItem[];

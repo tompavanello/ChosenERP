@@ -1,21 +1,21 @@
 -- 000021_seed_north.up.sql
--- Seed da filial Norte + usuário pastor.norte@demo.local (item #40 do backlog).
+-- Seed da filial Norte + usuario pastor.norte@demo.local (item #40 do backlog).
 --
 -- Contexto: AGENTS.md, README.md e start.ps1 documentam a conta
 -- `pastor.norte@demo.local` (escopo Filial) como credencial de desenvolvimento,
--- mas NENHUMA migração a criava — ela existia no banco de dev porque foi criada
--- à mão. Este seed torna o ambiente reproduzível do zero.
+-- mas NENHUMA migracao a criava - ela existia no banco de dev porque foi criada
+-- a mao. Este seed torna o ambiente reproduzivel do zero.
 --
--- É idempotente: se a filial (slug `norte`) ou o usuário (email) já existirem,
--- o insert é ignorado. As FKs são resolvidas por subquery (slug/key), então os
--- IDs determinísticos abaixo valem apenas em instalação nova.
+-- E idempotente: se a filial (slug `norte`) ou o usuario (email) ja existirem,
+-- o insert e ignorado. As FKs sao resolvidas por subquery (slug/key), entao os
+-- IDs deterministicos abaixo valem apenas em instalacao nova.
 --
--- ⚠️ O hash da senha abaixo corresponde a `DEMO_NORTE_PASSWORD` no `.env` do
--- ambiente de desenvolvimento. Numa instalação NOVA ele cria a conta com essa
--- senha de demonstração: troque-a logo após o primeiro boot. A senha canônica
+--  O hash da senha abaixo corresponde a `DEMO_NORTE_PASSWORD` no `.env` do
+-- ambiente de desenvolvimento. Numa instalacao NOVA ele cria a conta com essa
+-- senha de demonstracao: troque-a logo apos o primeiro boot. A senha canonica
 -- fica no `.env`, fora do versionamento.
 
--- Filial Norte (congregação vinculada à Sede Matriz).
+-- Filial Norte (congregacao vinculada a Sede Matriz).
 INSERT INTO branches (id, tenant_id, parent_id, name, slug, kind)
 SELECT
     '22222222-2222-2222-2222-222222222223',
@@ -28,7 +28,7 @@ FROM tenants t
 WHERE t.slug = 'demo'
 ON CONFLICT (tenant_id, slug) DO NOTHING;
 
--- Usuário pastor da filial (papel pastor_filial).
+-- Usuario pastor da filial (papel pastor_filial).
 INSERT INTO users (id, tenant_id, branch_id, role_id, email, password_hash, full_name)
 SELECT
     '33333333-3333-3333-3333-333333333334',
@@ -42,8 +42,8 @@ FROM tenants t
 WHERE t.slug = 'demo'
 ON CONFLICT (email) DO NOTHING;
 
--- Permissões do pastor de filial: operação local do dia a dia, sem exclusão de
--- membros e sem escrita financeira (o tesoureiro é outro perfil).
+-- Permissoes do pastor de filial: operacao local do dia a dia, sem exclusao de
+-- membros e sem escrita financeira (o tesoureiro e outro perfil).
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r
