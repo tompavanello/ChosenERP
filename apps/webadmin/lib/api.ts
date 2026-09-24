@@ -59,10 +59,17 @@ export function tenantSlugFromHost(): string {
   if (typeof window === "undefined") return "";
   const host = window.location.hostname.toLowerCase();
   const base = process.env.NEXT_PUBLIC_BASE_DOMAIN?.toLowerCase();
-  if (base && host !== base && host.endsWith(`.${base}`)) {
+
+  // Com o dominio base configurado, SO tratamos como igreja um subdominio DIRETO
+  // de `base`. O proprio apex (`erpchosen.com.br`), o `www` e qualquer host fora
+  // do dominio sao o dominio central (sem slug).
+  if (base) {
+    if (!host.endsWith(`.${base}`)) return "";
     const sub = host.slice(0, -(base.length + 1));
-    return sub.includes(".") ? "" : sub;
+    return sub.includes(".") || RESERVED_SLUGS.has(sub) ? "" : sub;
   }
+
+  // Sem base configurada: heuristica antiga (assume 3+ rotulos).
   const parts = host.split(".");
   if (parts.length < 3) return "";
   const slug = parts[0];
