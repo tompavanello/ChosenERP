@@ -23,6 +23,9 @@ type Config struct {
 	// Evolution API (WhatsApp): servidor global; a instancia e por filial.
 	EvolutionAPIURL string
 	EvolutionAPIKey string
+	// PublicBaseDomain e o dominio do white-label (ex.: erpchosen.com.br), usado
+	// para montar o subdominio da igreja na resposta do onboarding.
+	PublicBaseDomain string
 }
 
 // boundsFromClaims converte claims em Bounds para RLS.

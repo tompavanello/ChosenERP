@@ -205,6 +205,15 @@ O subdominio de cada igreja e `{tenant.slug}.erpchosen.com.br` (ex.: o tenant
    identidade nao tiver vinculo ativo com aquela igreja, o login responde 403
    (`tenant_forbidden`).
 
+> **Onboarding de igreja (`000059`):** `create_tenant(name, slug, plan)` (SECURITY
+> DEFINER) cria a igreja com a base minima (tenant + Matriz + papeis padrao +
+> permissoes) e `list_tenants()` lista tudo. Na API, `POST /api/v1/admin/tenants`
+> (super_admin) chama isso e anexa o primeiro `super_admin` via
+> `user_attach_to_tenant`. Como o wildcard de DNS/nginx ja cobre qualquer
+> subdominio, **o `{slug}.erpchosen.com.br` passa a funcionar na hora** (tela em
+> Configuracoes -> aba "Igrejas"). O slug e validado (minusculas/numeros/hifen,
+> 2-39 chars, sem reservados) e unico.
+
 > `erpchosen.com.br` esta em uma **conta Cloudflare separada** da do dominio
 > `mgmconsultoria.com`, entao tem um **tunnel exclusivo** (`cloudflared-erpchosen`,
 > profile `erpchosen` do Compose). O config/credenciais ficam em
@@ -370,6 +379,8 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | GET  | `/api/v1/roles` | Bearer (Sede) | Perfis + permissoes |
 | GET  | `/api/v1/permissions` | Bearer (Sede) | Catalogo de permissoes |
 | POST | `/api/v1/admin/reset-data` | Bearer (super_admin) | Limpa dados operacionais (mantem base + super_admin); corpo `{"confirm":"RESET"}` |
+| GET  | `/api/v1/admin/tenants` | Bearer (super_admin) | Lista as igrejas (onboarding) |
+| POST | `/api/v1/admin/tenants` | Bearer (super_admin) | Cria igreja (tenant + Matriz + papeis + super_admin); o subdominio ja vale |
 | GET  | `/api/v1/auth/mfa` | Bearer | Estado do MFA |
 | POST | `/api/v1/auth/mfa/setup` | Bearer | Gera segredo TOTP |
 | POST | `/api/v1/auth/mfa/enable` | Bearer | Ativa MFA (codigo) |

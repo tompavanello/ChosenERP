@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Building2, Church, Pencil, Plus, Trash2 } from "lucide-react";
+import { Building2, Church, Globe, Pencil, Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,7 +18,8 @@ import {
   getTenant, updateTenant, listBranches, createBranch, updateBranch, deleteBranch,
   getBranchChannels, updateBranchChannels, connectBranchWhatsApp,
   getBranchWhatsAppState, disconnectBranchWhatsApp,
-  type Tenant, type Branch,
+  listAllTenants, createTenant,
+  type Tenant, type Branch, type AdminTenant,
 } from "@/lib/api";
 
 // Estrutura de governo da igreja: Matriz (Sede) > Filial (congregacao) > PAE.
@@ -43,12 +44,25 @@ type BranchAddress = {
   city?: string; state?: string; zip_code?: string;
 };
 
+const EMPTY_CHURCH = {
+  name: "", slug: "", plan: "starter", admin_name: "", admin_email: "", admin_password: "",
+};
+
+// Dominio base do white-label (subdominio da igreja).
+const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "erpchosen.com.br";
+
 export default function SettingsPage() {
   const { toast } = useToast();
-  const { hasPerm } = useAuth();
+  const { user, hasPerm } = useAuth();
   const canWrite = hasPerm("settings.write");
+  const isSuperAdmin = user?.role === "super_admin";
 
   const [tab, setTab] = useState("igreja");
+  // Onboarding de igrejas (apenas super_admin).
+  const [churches, setChurches] = useState<AdminTenant[] | null>(null);
+  const [churchDrawer, setChurchDrawer] = useState(false);
+  const [churchForm, setChurchForm] = useState({ ...EMPTY_CHURCH });
+  const [savingChurch, setSavingChurch] = useState(false);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [tenantForm, setTenantForm] = useState({
     name: "", legal_name: "", cnpj: "", plan: "starter", locale: "pt-BR", timezone: "America/Sao_Paulo",
@@ -87,6 +101,43 @@ export default function SettingsPage() {
   }, [toast]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadChurches = useCallback(async () => {
+    try {
+      const r = await listAllTenants();
+      setChurches(r.tenants);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao carregar igrejas", "error");
+      setChurches([]);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (tab === "igrejas" && isSuperAdmin) loadChurches();
+  }, [tab, isSuperAdmin, loadChurches]);
+
+  async function submitChurch(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingChurch(true);
+    try {
+      const r = await createTenant({
+        name: churchForm.name,
+        slug: churchForm.slug,
+        plan: churchForm.plan,
+        admin_name: churchForm.admin_name,
+        admin_email: churchForm.admin_email,
+        admin_password: churchForm.admin_password,
+      });
+      toast(`Igreja criada. Acesse ${r.subdomain}`);
+      setChurchDrawer(false);
+      setChurchForm({ ...EMPTY_CHURCH });
+      await loadChurches();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao criar igreja", "error");
+    } finally {
+      setSavingChurch(false);
+    }
+  }
 
   async function saveTenant(e: React.FormEvent) {
     e.preventDefault();
@@ -268,13 +319,22 @@ export default function SettingsPage() {
       <PageHeader
         title="Configuracoes"
         description="Dados da igreja e filiais associadas ao tenant"
-        actions={canWrite && tab === "filiais" ? <Button onClick={openCreate}><Plus className="h-4 w-4" /> Nova filial</Button> : undefined}
+        actions={
+          tab === "filiais" && canWrite ? (
+            <Button onClick={openCreate}><Plus className="h-4 w-4" /> Nova filial</Button>
+          ) : tab === "igrejas" && isSuperAdmin ? (
+            <Button onClick={() => { setChurchForm({ ...EMPTY_CHURCH }); setChurchDrawer(true); }}><Plus className="h-4 w-4" /> Nova igreja</Button>
+          ) : undefined
+        }
       />
 
       <Tabs
         tabs={[
           { key: "igreja", label: "Dados da igreja", icon: <Church className="h-4 w-4" /> },
           { key: "filiais", label: "Filiais", icon: <Building2 className="h-4 w-4" /> },
+          ...(isSuperAdmin
+            ? [{ key: "igrejas", label: "Igrejas", icon: <Globe className="h-4 w-4" /> }]
+            : []),
         ]}
         active={tab}
         onChange={setTab}
@@ -375,6 +435,68 @@ export default function SettingsPage() {
           )}
         </Card>
       )}
+
+      {tab === "igrejas" && isSuperAdmin && (
+        <Card className="overflow-hidden p-0">
+          {churches === null ? (
+            <div className="p-4"><SkeletonRows rows={4} /></div>
+          ) : churches.length === 0 ? (
+            <EmptyState icon={<Globe className="h-10 w-10" />} title="Nenhuma igreja" description="Crie a primeira igreja; o subdominio passa a funcionar na hora." />
+          ) : (
+            <Table>
+              <THead><TRow><TH>Igreja</TH><TH>Subdominio</TH><TH>Plano</TH><TH className="text-right">Filiais</TH><TH className="text-right">Membros</TH><TH>Situacao</TH></TRow></THead>
+              <TBody>
+                {churches.map((t) => (
+                  <TRow key={t.id}>
+                    <TD className="font-medium">{t.name}</TD>
+                    <TD className="text-sm">
+                      <a className="text-sky-600 hover:underline" href={`https://${t.slug}.${BASE_DOMAIN}`} target="_blank" rel="noreferrer">
+                        {t.slug}.{BASE_DOMAIN}
+                      </a>
+                    </TD>
+                    <TD><Badge tone="zinc">{t.plan}</Badge></TD>
+                    <TD className="text-right tabular-nums">{t.branch_count}</TD>
+                    <TD className="text-right tabular-nums">{t.member_count}</TD>
+                    <TD><Badge tone={t.is_active ? "green" : "zinc"}>{t.is_active ? "Ativa" : "Inativa"}</Badge></TD>
+                  </TRow>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+      )}
+
+      <Drawer open={churchDrawer} onClose={() => setChurchDrawer(false)} title="Nova igreja">
+        <form onSubmit={submitChurch} className="space-y-3">
+          <Field label="Nome da igreja *">
+            <Input required className="h-8 text-sm" value={churchForm.name} onChange={(e) => setChurchForm({ ...churchForm, name: e.target.value })} />
+          </Field>
+          <Field label="Subdominio (slug) *" hint={`Minusculas, numeros e hifen. Ex.: matriz -> matriz.${BASE_DOMAIN}`}>
+            <Input required className="h-8 text-sm" value={churchForm.slug} onChange={(e) => setChurchForm({ ...churchForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, "-") })} />
+          </Field>
+          <Field label="Plano">
+            <Select className="h-8 text-sm" value={churchForm.plan} onChange={(e) => setChurchForm({ ...churchForm, plan: e.target.value })}>
+              <option value="starter">Starter</option>
+              <option value="pro">Pro</option>
+              <option value="enterprise">Enterprise</option>
+            </Select>
+          </Field>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Primeiro super_admin</p>
+          <Field label="Nome do admin *">
+            <Input required className="h-8 text-sm" value={churchForm.admin_name} onChange={(e) => setChurchForm({ ...churchForm, admin_name: e.target.value })} />
+          </Field>
+          <Field label="E-mail do admin *">
+            <Input required type="email" className="h-8 text-sm" value={churchForm.admin_email} onChange={(e) => setChurchForm({ ...churchForm, admin_email: e.target.value })} />
+          </Field>
+          <Field label="Senha do admin *" hint="Minimo 8 caracteres.">
+            <Input required type="password" className="h-8 text-sm" value={churchForm.admin_password} onChange={(e) => setChurchForm({ ...churchForm, admin_password: e.target.value })} />
+          </Field>
+          <div className="flex justify-end gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+            <Button variant="ghost" type="button" className="h-8 text-sm" onClick={() => setChurchDrawer(false)}>Cancelar</Button>
+            <Button type="submit" className="h-8 text-sm" disabled={savingChurch}>{savingChurch ? "Criando..." : "Criar igreja"}</Button>
+          </div>
+        </form>
+      </Drawer>
 
       <Drawer open={drawer.open} onClose={() => setDrawer({ open: false })} title={drawer.editing ? "Editar filial" : "Nova filial"}>
         <form onSubmit={saveBranch} className="space-y-4">

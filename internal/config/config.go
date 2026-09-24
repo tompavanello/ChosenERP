@@ -35,6 +35,8 @@ type Config struct {
 	EvolutionAPIURL     string
 	EvolutionAPIKey     string
 	EvolutionInstance   string
+	// PublicBaseDomain: dominio base do white-label (subdominio por igreja).
+	PublicBaseDomain string
 	DeliveryInterval    time.Duration
 	RecurringInterval   time.Duration
 	// NotificationInterval e o intervalo da varredura das automacoes de
@@ -85,6 +87,7 @@ func Load() Config {
 		EvolutionAPIURL:      getenv("EVOLUTION_API_URL", ""),
 		EvolutionAPIKey:      getenv("EVOLUTION_API_KEY", ""),
 		EvolutionInstance:    getenv("EVOLUTION_INSTANCE", ""),
+		PublicBaseDomain:     getenv("PUBLIC_BASE_DOMAIN", "erpchosen.com.br"),
 		DeliveryInterval:     time.Duration(getenvInt("DELIVERY_POLL_SECONDS", 30)) * time.Second,
 		RecurringInterval:    time.Duration(getenvInt("RECURRING_POLL_SECONDS", 3600)) * time.Second,
 		NotificationInterval: time.Duration(getenvInt("NOTIFICATION_POLL_SECONDS", 3600)) * time.Second,

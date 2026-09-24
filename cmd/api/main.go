@@ -76,6 +76,7 @@ func main() {
 		MemberPhotoMaxBytes: cfg.MemberPhotoMaxBytes,
 		EvolutionAPIURL:     cfg.EvolutionAPIURL,
 		EvolutionAPIKey:     cfg.EvolutionAPIKey,
+		PublicBaseDomain:    cfg.PublicBaseDomain,
 	}, st, authSvc,
 		&members.Repo{}, finRepo, &audit.Repo{}, docRepo,
 		&families.Repo{}, &visitors.Repo{}, &benefactors.Repo{}, &suppliers.Repo{},

@@ -1220,6 +1220,35 @@ export const resetUserPassword = (id: string, password: string) =>
 export const listRoles = () => api<{ roles: RoleInfo[] }>("/api/v1/roles");
 export const listPermissions = () => api<{ permissions: PermissionInfo[] }>("/api/v1/permissions");
 
+// ---- Igrejas / onboarding (super_admin) ----
+export interface AdminTenant {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  is_active: boolean;
+  created_at: string;
+  branch_count: number;
+  member_count: number;
+}
+export interface CreateTenantInput {
+  name: string;
+  slug: string;
+  plan?: string;
+  admin_name: string;
+  admin_email: string;
+  admin_password: string;
+}
+export interface CreateTenantResult {
+  tenant_id: string;
+  slug: string;
+  subdomain: string;
+  admin_email: string;
+}
+export const listAllTenants = () => api<{ tenants: AdminTenant[] }>("/api/v1/admin/tenants");
+export const createTenant = (data: CreateTenantInput) =>
+  api<CreateTenantResult>("/api/v1/admin/tenants", { method: "POST", body: JSON.stringify(data) });
+
 // ---- MFA (TOTP) do proprio usuario ----
 export const mfaStatus = () => api<{ enabled: boolean }>("/api/v1/auth/mfa");
 export const mfaSetup = () =>
