@@ -214,6 +214,13 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/branches", authed(http.HandlerFunc(app.handleCreateBranch)))
 	mux.Handle("PATCH /api/v1/branches/{id}", authed(http.HandlerFunc(app.handleUpdateBranch)))
 	mux.Handle("DELETE /api/v1/branches/{id}", authed(http.HandlerFunc(app.handleDeleteBranch)))
+
+	// Canais de envio por filial (WhatsApp via Evolution + SMTP).
+	mux.Handle("GET /api/v1/branches/{id}/channels", authed(http.HandlerFunc(app.handleGetBranchChannels)))
+	mux.Handle("PATCH /api/v1/branches/{id}/channels", authed(http.HandlerFunc(app.handleUpdateBranchChannels)))
+	mux.Handle("POST /api/v1/branches/{id}/whatsapp/connect", authed(http.HandlerFunc(app.handleConnectBranchWhatsApp)))
+	mux.Handle("GET /api/v1/branches/{id}/whatsapp/state", authed(http.HandlerFunc(app.handleBranchWhatsAppState)))
+	mux.Handle("POST /api/v1/branches/{id}/whatsapp/logout", authed(http.HandlerFunc(app.handleDisconnectBranchWhatsApp)))
 	mux.Handle("GET /api/v1/tenant", authed(http.HandlerFunc(app.handleGetTenant)))
 	mux.Handle("PATCH /api/v1/tenant", authed(http.HandlerFunc(app.handleUpdateTenant)))
 

@@ -64,6 +64,8 @@ func main() {
 		},
 		WhatsAppProvider: cfg.WhatsAppProvider,
 	})
+	// Permite resolver canais (SMTP/WhatsApp) por filial no momento do envio.
+	dispatcher.Store = st
 
 	docRepo := &documents.Repo{}
 	finRepo := &finance.Repo{}
@@ -72,6 +74,8 @@ func main() {
 		AppBaseURL:          cfg.AppBaseURL,
 		UploadDir:           cfg.UploadDir,
 		MemberPhotoMaxBytes: cfg.MemberPhotoMaxBytes,
+		EvolutionAPIURL:     cfg.EvolutionAPIURL,
+		EvolutionAPIKey:     cfg.EvolutionAPIKey,
 	}, st, authSvc,
 		&members.Repo{}, finRepo, &audit.Repo{}, docRepo,
 		&families.Repo{}, &visitors.Repo{}, &benefactors.Repo{}, &suppliers.Repo{},

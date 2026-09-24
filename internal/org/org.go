@@ -22,6 +22,43 @@ var ErrBranchInUse = errors.New("não é possível excluir: há membros vinculad
 // próprio nó ou um descendente — evitando ciclos).
 var ErrBranchParentInvalido = errors.New("filial superior inválida")
 
+// Estrutura de governo das unidades: Matriz (Sede), Filial (congregação) e
+// PAE (Ponto de Atendimento de Evangelização).
+const (
+	BranchKindMatriz = "matriz"
+	BranchKindFilial = "filial"
+	BranchKindPAE    = "pae"
+)
+
+// Erros de validação do tipo de unidade.
+var (
+	ErrBranchKindInvalido = errors.New("tipo de unidade inválido (use matriz, filial ou pae)")
+	ErrPaeSemSuperior     = errors.New("PAE precisa estar vinculado a uma Matriz ou Filial")
+	ErrMatrizComSuperior  = errors.New("Matriz não pode ter unidade superior")
+)
+
+// validateBranchKind aplica as regras estruturais do tipo:
+//   - matriz: não pode ter superior (é a raiz);
+//   - filial: sem restrição de vínculo;
+//   - pae: exige superior (Matriz ou Filial), validado também pelo banco.
+func validateBranchKind(kind, parentID string) error {
+	switch kind {
+	case BranchKindMatriz:
+		if parentID != "" {
+			return ErrMatrizComSuperior
+		}
+	case BranchKindFilial:
+		// ok
+	case BranchKindPAE:
+		if parentID == "" {
+			return ErrPaeSemSuperior
+		}
+	default:
+		return ErrBranchKindInvalido
+	}
+	return nil
+}
+
 // isDescendantOrSelf informa se candidate está na subárvore de root (inclusive
 // root). É a guarda contra ciclo ao trocar o pai de uma filial.
 func isDescendantOrSelf(ctx context.Context, tx pgx.Tx, root, candidate string) (bool, error) {
@@ -124,9 +161,12 @@ func (r *Repo) GetBranch(ctx context.Context, tx pgx.Tx, id string) (*Branch, er
 
 // CreateBranch insere uma filial no tenant do contexto.
 func (r *Repo) CreateBranch(ctx context.Context, tx pgx.Tx, tenantID string, in BranchInput) (*Branch, error) {
-	kind := "branch"
+	kind := BranchKindFilial
 	if in.Kind != nil && *in.Kind != "" {
 		kind = *in.Kind
+	}
+	if err := validateBranchKind(kind, str(in.ParentID)); err != nil {
+		return nil, err
 	}
 	if in.ParentID != nil && *in.ParentID != "" {
 		ok, err := branchVisible(ctx, tx, *in.ParentID)
@@ -153,6 +193,27 @@ func (r *Repo) CreateBranch(ctx context.Context, tx pgx.Tx, tenantID string, in 
 
 // UpdateBranch edita uma filial. Os campos nulos são preservados.
 func (r *Repo) UpdateBranch(ctx context.Context, tx pgx.Tx, id string, in BranchInput) (*Branch, error) {
+	// Tipo efetivo (novo ou atual) + superior efetivo, para validar as regras
+	// da estrutura Matriz / Filial / PAE mesmo em edição parcial.
+	existing, err := r.GetBranch(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	effKind := existing.Kind
+	if in.Kind != nil && *in.Kind != "" {
+		effKind = *in.Kind
+	}
+	effParent := ""
+	if existing.ParentID != nil {
+		effParent = *existing.ParentID
+	}
+	if in.ParentID != nil {
+		effParent = str(in.ParentID)
+	}
+	if err := validateBranchKind(effKind, effParent); err != nil {
+		return nil, err
+	}
+
 	// Valida o novo pai (não pode ser a própria filial nem um descendente,
 	// senão a árvore vira um ciclo e a recursão de escopo estoura).
 	if in.ParentID != nil && *in.ParentID != "" {
@@ -172,7 +233,7 @@ func (r *Repo) UpdateBranch(ctx context.Context, tx pgx.Tx, id string, in Branch
 		}
 	}
 	var updatedID string
-	err := tx.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		UPDATE branches SET
 			parent_id = CASE WHEN $2::boolean THEN NULLIF($3,'')::uuid ELSE parent_id END,
 			name = COALESCE(NULLIF($4,''), name),

@@ -14,6 +14,10 @@ import (
 	"net/smtp"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+
+	"chosenerp/internal/store"
 )
 
 // Channels suportados pela outbox de documentos.
@@ -23,6 +27,8 @@ const (
 )
 
 // Message é o conteúdo a ser entregue por um canal específico.
+// TenantID/BranchID identificam o remetente quando a filial tem canais
+// próprios (WhatsApp/SMTP); sem eles, usa-se a configuração global.
 type Message struct {
 	Channel    string
 	Recipient  string
@@ -31,6 +37,8 @@ type Message struct {
 	Text       string
 	Link       string
 	TenantName string
+	TenantID   string
+	BranchID   string
 }
 
 type Sender interface {
@@ -42,6 +50,12 @@ type Sender interface {
 type Dispatcher struct {
 	senders   map[string]Sender
 	providers map[string]string
+	// Store (opcional) permite resolver canais POR FILIAL em branco. Quando
+	// ausente ou sem configuração, usa-se o sender global.
+	Store *store.Store
+	// Credenciais do servidor Evolution (instâncias são por filial).
+	EvolutionBaseURL string
+	EvolutionAPIKey  string
 }
 
 // Config reúne as credenciais dos provedores de envio.
@@ -84,6 +98,8 @@ func NewDispatcher(cfg Config) *Dispatcher {
 	d.senders[ChannelWhatsApp] = newWhatsAppSender(cfg)
 	d.providers[ChannelEmail] = "smtp"
 	d.providers[ChannelWhatsApp] = cfg.WhatsAppProvider
+	d.EvolutionBaseURL = cfg.Evolution.BaseURL
+	d.EvolutionAPIKey = cfg.Evolution.APIKey
 	return d
 }
 
@@ -139,13 +155,75 @@ func (c Config) DisabledFor(channel string) bool {
 	return true
 }
 
-// Send roteia a mensagem para o sender do canal e devolve o erro, se houver.
+// Send roteia a mensagem para o sender do canal. Se a filial informada tiver
+// canais próprios configurados (SMTP/Evolution), usa-os; senão, cai no global.
 func (d *Dispatcher) Send(ctx context.Context, m Message) error {
+	if d.Store != nil && m.TenantID != "" && m.BranchID != "" {
+		if s := d.branchSender(ctx, m); s != nil {
+			return s.Send(ctx, m)
+		}
+	}
 	s, ok := d.senders[m.Channel]
 	if !ok {
 		return fmt.Errorf("canal de envio desconhecido: %q", m.Channel)
 	}
 	return s.Send(ctx, m)
+}
+
+// branchSender devolve um sender específico da filial, ou nil para usar o global.
+func (d *Dispatcher) branchSender(ctx context.Context, m Message) Sender {
+	var host, user, pass, from, fromName, instance *string
+	var port *int
+	var secure bool
+	err := d.Store.WithSystem(ctx, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			SELECT smtp_host, smtp_port, smtp_user, smtp_password, smtp_from,
+			       smtp_from_name, smtp_secure, whatsapp_instance
+			FROM branches
+			WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+			m.BranchID, m.TenantID).
+			Scan(&host, &port, &user, &pass, &from, &fromName, &secure, &instance)
+	})
+	if err != nil {
+		return nil
+	}
+
+	switch m.Channel {
+	case ChannelEmail:
+		if host == nil || *host == "" || from == nil || *from == "" {
+			return nil
+		}
+		p := 587
+		if port != nil && *port > 0 {
+			p = *port
+		}
+		fn := "Chosen ERP"
+		if fromName != nil && *fromName != "" {
+			fn = *fromName
+		}
+		return &EmailSender{
+			Host: *host, Port: p, User: deref(user), Password: deref(pass),
+			From: *from, FromName: fn,
+		}
+	case ChannelWhatsApp:
+		// Se a filial tem instância Evolution e o servidor está configurado,
+		// ela vence o provedor global (o WhatsApp da filial é o remetente).
+		if instance == nil || *instance == "" || d.EvolutionBaseURL == "" || d.EvolutionAPIKey == "" {
+			return nil
+		}
+		return &EvolutionSender{
+			BaseURL: d.EvolutionBaseURL, APIKey: d.EvolutionAPIKey,
+			Instance: *instance, HTTP: &http.Client{Timeout: 20 * time.Second},
+		}
+	}
+	return nil
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // ProviderFor retorna o nome do provedor configurado para o canal (ex: "evolution", "meta", "smtp").

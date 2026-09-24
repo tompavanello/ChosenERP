@@ -102,6 +102,7 @@ func (w *Worker) buildMessage(ctx context.Context, bounds store.Bounds, p docume
 			Subject: doc.Title, HTML: html,
 			Text: "Código de validação: " + doc.QRToken,
 			Link: link, TenantName: tenant,
+			TenantID: p.TenantID, BranchID: p.BranchID,
 		}
 		return nil
 	})

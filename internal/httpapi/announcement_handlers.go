@@ -243,6 +243,8 @@ func (a *App) handleSendTestMessage(w http.ResponseWriter, r *http.Request) {
 		Recipient: in.Phone,
 		Text:      in.Message,
 		Subject:   "Comunicado de teste",
+		TenantID:  claims.TenantID,
+		BranchID:  claims.BranchID,
 	}
 	if err := a.Dispatch.Send(r.Context(), msg); err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())

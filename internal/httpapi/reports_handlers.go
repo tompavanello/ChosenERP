@@ -486,6 +486,7 @@ func (a *App) handleSendDocument(w http.ResponseWriter, r *http.Request) {
 			Text:       "Código de validação: " + doc.QRToken,
 			Link:       delivery.PublicLink(a.Config.AppBaseURL, doc.Kind, doc.QRToken),
 			TenantName: tenant,
+			TenantID:   claims.TenantID, BranchID: claims.BranchID,
 		}
 		return nil
 	})

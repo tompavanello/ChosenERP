@@ -19,9 +19,9 @@ import { getConsolidated, type ConsolidatedResult } from "@/lib/api";
 import { currency, number } from "@/lib/format";
 
 const KIND_LABEL: Record<string, string> = {
-  branch: "Filial",
-  congregation: "Congregação",
-  sub_congregation: "Sub-congregação",
+  matriz: "Matriz",
+  filial: "Filial",
+  pae: "PAE",
 };
 
 export default function ConsolidatedReportPage() {
@@ -109,7 +109,7 @@ export default function ConsolidatedReportPage() {
                   {data.branches.map((b) => (
                     <TRow key={b.id}>
                       <TD className="font-medium">
-                        {b.kind === "sub_congregation" && <span className="mr-1 text-zinc-400">↳</span>}
+                        {b.kind === "pae" && <span className="mr-1 text-zinc-400">↳</span>}
                         {b.name}
                       </TD>
                       <TD><Badge tone="zinc">{KIND_LABEL[b.kind] ?? b.kind}</Badge></TD>

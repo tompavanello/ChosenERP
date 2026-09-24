@@ -1,0 +1,171 @@
+package httpapi
+
+import (
+	"errors"
+	"net/http"
+
+	"github.com/jackc/pgx/v5"
+
+	"chosenerp/internal/delivery"
+	"chosenerp/internal/org"
+	"chosenerp/internal/store"
+)
+
+// evolution devolve um cliente da Evolution API com as credenciais globais.
+func (a *App) evolution() *delivery.EvolutionClient {
+	return &delivery.EvolutionClient{
+		BaseURL: a.Config.EvolutionAPIURL,
+		APIKey:  a.Config.EvolutionAPIKey,
+	}
+}
+
+// handleGetBranchChannels lê a configuração de canais (WhatsApp/SMTP) da filial.
+func (a *App) handleGetBranchChannels(w http.ResponseWriter, r *http.Request) {
+	claims, ok := a.adminClaims(w, r)
+	if !ok {
+		return
+	}
+	id := r.PathValue("id")
+	b := boundsFromClaims(claims)
+	var out *org.BranchChannels
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var err error
+		out, err = a.Org.GetBranchChannels(r.Context(), tx, id)
+		return err
+	})
+	if err != nil {
+		if store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "filial não encontrada")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// handleUpdateBranchChannels grava a configuração de canais da filial.
+func (a *App) handleUpdateBranchChannels(w http.ResponseWriter, r *http.Request) {
+	claims, ok := a.adminClaims(w, r)
+	if !ok {
+		return
+	}
+	id := r.PathValue("id")
+	var in org.BranchChannelsInput
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	b := boundsFromClaims(claims)
+	var out *org.BranchChannels
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var err error
+		out, err = a.Org.UpdateBranchChannels(r.Context(), tx, id, in)
+		return err
+	})
+	if err != nil {
+		if store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "filial não encontrada")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// handleConnectBranchWhatsApp cria (ou reconecta) a instância Evolution cujo
+// nome é o id da filial e devolve o QR Code para leitura no WhatsApp.
+func (a *App) handleConnectBranchWhatsApp(w http.ResponseWriter, r *http.Request) {
+	claims, ok := a.adminClaims(w, r)
+	if !ok {
+		return
+	}
+	if a.Config.EvolutionAPIURL == "" || a.Config.EvolutionAPIKey == "" {
+		writeErr(w, http.StatusBadRequest, "integração WhatsApp (Evolution) não configurada no servidor")
+		return
+	}
+	id := r.PathValue("id")
+	b := boundsFromClaims(claims)
+
+	// Confirma que a filial existe no escopo e usa o id como nome da instância.
+	if err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		_, err := a.Org.GetBranchChannels(r.Context(), tx, id)
+		return err
+	}); err != nil {
+		if store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "filial não encontrada")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	client := a.evolution()
+	qr, err := client.CreateInstance(r.Context(), id)
+	if err != nil {
+		// Instância provavelmente já existe: tenta apenas reconectar.
+		qr, err = client.Connect(r.Context(), id)
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, "não foi possível conectar ao WhatsApp: "+err.Error())
+			return
+		}
+	}
+
+	_ = a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		return a.Org.SetBranchWhatsApp(r.Context(), tx, id, id, "connecting")
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"instance":      id,
+		"status":        "connecting",
+		"qrcode_base64": qr.Base64,
+		"code":          qr.Code,
+	})
+}
+
+// handleBranchWhatsAppState consulta o estado da conexão e sincroniza o banco.
+func (a *App) handleBranchWhatsAppState(w http.ResponseWriter, r *http.Request) {
+	claims, ok := a.adminClaims(w, r)
+	if !ok {
+		return
+	}
+	id := r.PathValue("id")
+	b := boundsFromClaims(claims)
+	state := "disconnected"
+	if a.Config.EvolutionAPIURL != "" && a.Config.EvolutionAPIKey != "" {
+		if s, err := a.evolution().State(r.Context(), id); err == nil {
+			state = s
+		}
+	}
+	_ = a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		return a.Org.SetBranchWhatsApp(r.Context(), tx, id, id, state)
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"instance":  id,
+		"status":    state,
+		"connected": state == "connected",
+	})
+}
+
+// handleDisconnectBranchWhatsApp desconecta a instância da filial.
+func (a *App) handleDisconnectBranchWhatsApp(w http.ResponseWriter, r *http.Request) {
+	claims, ok := a.adminClaims(w, r)
+	if !ok {
+		return
+	}
+	id := r.PathValue("id")
+	b := boundsFromClaims(claims)
+	if a.Config.EvolutionAPIURL != "" && a.Config.EvolutionAPIKey != "" {
+		if err := a.evolution().Logout(r.Context(), id); err != nil {
+			// Mesmo falhando na Evolution, refletimos o estado local.
+			_ = err
+		}
+	}
+	if err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		return a.Org.SetBranchWhatsApp(r.Context(), tx, id, id, "disconnected")
+	}); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": "disconnected"})
+}

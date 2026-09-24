@@ -280,14 +280,14 @@ func seedFixtures(migrateDSN string) error {
 			('` + fixTenantY + `', 'Tenant Y', 'rls-tenant-y')`,
 
 		`INSERT INTO branches (id, tenant_id, name, slug, kind) VALUES
-			('` + fixBranchA + `', '` + fixTenantX + `', 'Filial A', 'rls-filial-a', 'branch'),
-			('` + fixBranchB + `', '` + fixTenantX + `', 'Filial B', 'rls-filial-b', 'branch'),
-			('` + fixBranchC + `', '` + fixTenantX + `', 'Filial C', 'rls-filial-c', 'branch'),
-			('` + fixBranchY + `', '` + fixTenantY + `', 'Filial Y', 'rls-filial-y', 'branch')`,
+			('` + fixBranchA + `', '` + fixTenantX + `', 'Filial A', 'rls-filial-a', 'filial'),
+			('` + fixBranchB + `', '` + fixTenantX + `', 'Filial B', 'rls-filial-b', 'filial'),
+			('` + fixBranchC + `', '` + fixTenantX + `', 'Filial C', 'rls-filial-c', 'filial'),
+			('` + fixBranchY + `', '` + fixTenantY + `', 'Filial Y', 'rls-filial-y', 'filial')`,
 
-		// Sub-congregação de A (hierarquia).
+		// PAE supervisionado pela Filial A (hierarquia Matriz > Filial > PAE).
 		`INSERT INTO branches (id, tenant_id, parent_id, name, slug, kind) VALUES
-			('` + fixSubBranchA + `', '` + fixTenantX + `', '` + fixBranchA + `', 'Sub A', 'rls-sub-a', 'sub_congregation')`,
+			('` + fixSubBranchA + `', '` + fixTenantX + `', '` + fixBranchA + `', 'PAE A', 'rls-pae-a', 'pae')`,
 
 		`INSERT INTO members (id, tenant_id, branch_id, first_name, last_name, full_name, membership_status) VALUES
 			('` + fixMemberA1 + `', '` + fixTenantX + `', '` + fixBranchA + `', 'Ana', 'A', 'Ana A', 'active'),

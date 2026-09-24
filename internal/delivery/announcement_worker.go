@@ -75,6 +75,8 @@ func (w *AnnouncementWorker) process(ctx context.Context, p announcements.Pendin
 		Text:       p.Body,
 		Link:       "",
 		TenantName: "",
+		TenantID:   p.TenantID,
+		BranchID:   p.BranchID,
 	}
 	if p.Channel == ChannelWhatsApp && msg.Text == "" {
 		msg.Text = p.Title

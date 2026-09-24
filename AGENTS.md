@@ -133,6 +133,19 @@ As senhas **não são versionadas**: ficam no `.env` (gitignorado), em
   descendentes (`rls_read_scope`); a **escrita** continua no branch exato. A
   migração `000037` corrigiu as políticas `*_sel`, que eram `FOR ALL` e davam
   escrita pela leitura — hoje são `FOR SELECT`.
+- **Tipo de unidade (`000055`):** o `branches.kind` segue a estrutura de governo
+  **Matriz** (Sede Administrativa, raiz — sem superior), **Filial**
+  (regional/igreja local) e **PAE** (Ponto de Atendimento de Evangelização,
+  obrigatoriamente vinculado a uma Matriz ou Filial). As regras são garantidas
+  por CHECK + trigger `branches_validate_hierarchy` no banco e validadas em
+  `internal/org` (`validateBranchKind`). O padrão de uma nova unidade é
+  `filial`.
+- **Canais por filial (`000056`):** cada filial pode ter o próprio WhatsApp
+  (instância Evolution nomeada com o **id da filial**, conectada por QR) e o
+  próprio SMTP. A senha do SMTP nunca é devolvida. No envio, o `Dispatcher`
+  resolve a config da filial (`Message.TenantID/BranchID`) e cai no provedor
+  global quando a filial não tem canal próprio. API em
+  `internal/httpapi/branch_channels_handlers.go`; UI em Configurações → Filiais.
 - **Escrita pela Sede (`000045`):** `rls_write` passou a incluir `is_headquarters()`,
   então a Sede (branch NULL + `super_admin`/`admin_sede`) mantém registros de
   qualquer filial do próprio tenant. Antes, UPDATE/DELETE da Sede afetavam 0

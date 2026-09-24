@@ -1112,6 +1112,37 @@ export const updateBranch = (id: string, data: Record<string, unknown>) =>
 export const deleteBranch = (id: string) =>
   api<{ ok: boolean }>(`/api/v1/branches/${id}`, { method: "DELETE" });
 
+// ---- Canais por filial (WhatsApp Evolution + SMTP) ----
+export interface BranchChannels {
+  branch_id: string;
+  whatsapp_phone: string;
+  whatsapp_instance: string;
+  whatsapp_status: "disconnected" | "connecting" | "connected";
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_password_set: boolean;
+  smtp_from: string;
+  smtp_from_name: string;
+  smtp_secure: boolean;
+}
+export const getBranchChannels = (id: string) =>
+  api<BranchChannels>(`/api/v1/branches/${id}/channels`);
+export const updateBranchChannels = (id: string, data: Record<string, unknown>) =>
+  api<BranchChannels>(`/api/v1/branches/${id}/channels`, { method: "PATCH", body: JSON.stringify(data) });
+export interface WhatsAppConnectResult {
+  instance: string;
+  status: string;
+  qrcode_base64: string;
+  code?: string;
+}
+export const connectBranchWhatsApp = (id: string) =>
+  api<WhatsAppConnectResult>(`/api/v1/branches/${id}/whatsapp/connect`, { method: "POST" });
+export const getBranchWhatsAppState = (id: string) =>
+  api<{ instance: string; status: string; connected: boolean }>(`/api/v1/branches/${id}/whatsapp/state`);
+export const disconnectBranchWhatsApp = (id: string) =>
+  api<{ ok: boolean; status: string }>(`/api/v1/branches/${id}/whatsapp/logout`, { method: "POST" });
+
 // ---- Dados da igreja (tenant) ----
 export interface Tenant {
   id: string;

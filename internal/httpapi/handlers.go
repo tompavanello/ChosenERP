@@ -20,6 +20,9 @@ type Config struct {
 	UploadDir  string
 	// MemberPhotoMaxBytes limita o upload da foto do membro (0 = sem limite).
 	MemberPhotoMaxBytes int64
+	// Evolution API (WhatsApp): servidor global; a instância é por filial.
+	EvolutionAPIURL string
+	EvolutionAPIKey string
 }
 
 // boundsFromClaims converte claims em Bounds para RLS.

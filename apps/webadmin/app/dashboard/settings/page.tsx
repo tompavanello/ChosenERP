@@ -16,18 +16,26 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { mutate } from "@/lib/swr-hooks";
 import {
   getTenant, updateTenant, listBranches, createBranch, updateBranch, deleteBranch,
+  getBranchChannels, updateBranchChannels, connectBranchWhatsApp,
+  getBranchWhatsAppState, disconnectBranchWhatsApp,
   type Tenant, type Branch,
 } from "@/lib/api";
 
+// Estrutura de governo da igreja: Matriz (Sede) > Filial (congregação) > PAE.
 const BRANCH_KINDS = [
-  { v: "branch", l: "Filial" },
-  { v: "congregation", l: "Congregação" },
-  { v: "sub_congregation", l: "Sub-congregação" },
+  { v: "matriz", l: "Matriz (Sede)" },
+  { v: "filial", l: "Filial / Regional" },
+  { v: "pae", l: "PAE (Ponto de Atendimento)" },
 ];
 
 const EMPTY_BRANCH = {
-  name: "", slug: "", kind: "branch", cnpj: "", parent_id: "", is_active: "true",
+  name: "", slug: "", kind: "filial", cnpj: "", parent_id: "", is_active: "true",
   street: "", number: "", district: "", city: "", state: "", zip_code: "",
+};
+
+const EMPTY_CHANNELS = {
+  whatsapp_phone: "", smtp_host: "", smtp_port: "587", smtp_user: "",
+  smtp_password: "", smtp_from: "", smtp_from_name: "Chosen ERP", smtp_secure: false,
 };
 
 type BranchAddress = {
@@ -52,6 +60,13 @@ export default function SettingsPage() {
   const [drawer, setDrawer] = useState<{ open: boolean; editing?: Branch }>({ open: false });
   const [form, setForm] = useState({ ...EMPTY_BRANCH });
   const [saving, setSaving] = useState(false);
+
+  // Canais por filial (WhatsApp + SMTP), editados no mesmo drawer.
+  const [chForm, setChForm] = useState({ ...EMPTY_CHANNELS });
+  const [waStatus, setWaStatus] = useState("disconnected");
+  const [qr, setQr] = useState("");
+  const [connecting, setConnecting] = useState(false);
+  const [savingChannels, setSavingChannels] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -98,8 +113,98 @@ export default function SettingsPage() {
       street: a.street ?? "", number: a.number ?? "", district: a.district ?? "",
       city: a.city ?? "", state: a.state ?? "", zip_code: a.zip_code ?? "",
     });
+    setChForm({ ...EMPTY_CHANNELS });
+    setQr("");
+    setConnecting(false);
+    setWaStatus("disconnected");
+    getBranchChannels(b.id)
+      .then((c) => {
+        setWaStatus(c.whatsapp_status);
+        setChForm({
+          whatsapp_phone: c.whatsapp_phone,
+          smtp_host: c.smtp_host,
+          smtp_port: String(c.smtp_port || 587),
+          smtp_user: c.smtp_user,
+          smtp_password: "",
+          smtp_from: c.smtp_from,
+          smtp_from_name: c.smtp_from_name || "Chosen ERP",
+          smtp_secure: c.smtp_secure,
+        });
+      })
+      .catch(() => {/* sem canais configurados */});
     setDrawer({ open: true, editing: b });
   }
+
+  async function saveChannels() {
+    if (!drawer.editing) return;
+    setSavingChannels(true);
+    try {
+      const payload: Record<string, unknown> = {
+        whatsapp_phone: chForm.whatsapp_phone,
+        smtp_host: chForm.smtp_host,
+        smtp_port: Number(chForm.smtp_port) || 587,
+        smtp_user: chForm.smtp_user,
+        smtp_from: chForm.smtp_from,
+        smtp_from_name: chForm.smtp_from_name,
+        smtp_secure: chForm.smtp_secure,
+      };
+      if (chForm.smtp_password) payload.smtp_password = chForm.smtp_password;
+      const c = await updateBranchChannels(drawer.editing.id, payload);
+      setWaStatus(c.whatsapp_status);
+      setChForm({ ...chForm, smtp_password: "" });
+      toast("Canais da filial salvos.");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao salvar canais", "error");
+    } finally {
+      setSavingChannels(false);
+    }
+  }
+
+  async function connectWhatsApp() {
+    if (!drawer.editing) return;
+    setConnecting(true);
+    try {
+      const res = await connectBranchWhatsApp(drawer.editing.id);
+      setQr(res.qrcode_base64 || "");
+      setWaStatus("connecting");
+      toast("Leia o QR Code no WhatsApp da filial.");
+    } catch (err) {
+      setConnecting(false);
+      toast(err instanceof Error ? err.message : "Erro ao conectar WhatsApp", "error");
+    }
+  }
+
+  async function disconnectWhatsApp() {
+    if (!drawer.editing) return;
+    try {
+      await disconnectBranchWhatsApp(drawer.editing.id);
+      setWaStatus("disconnected");
+      setQr("");
+      setConnecting(false);
+      toast("WhatsApp desconectado.");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao desconectar", "error");
+    }
+  }
+
+  // Enquanto há QR na tela, consulta o estado até conectar.
+  useEffect(() => {
+    if (!connecting || !drawer.editing) return;
+    const id = drawer.editing.id;
+    const timer = setInterval(async () => {
+      try {
+        const s = await getBranchWhatsAppState(id);
+        setWaStatus(s.status);
+        if (s.connected) {
+          setQr("");
+          setConnecting(false);
+        }
+      } catch {
+        /* mantém a tentativa */
+      }
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [connecting, drawer]);
   async function saveBranch(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -212,7 +317,7 @@ export default function SettingsPage() {
           {branches === null ? (
             <div className="p-4"><SkeletonRows rows={5} /></div>
           ) : branches.length === 0 ? (
-            <EmptyState icon={<Building2 className="h-10 w-10" />} title="Nenhuma filial" description="Cadastre as congregações e filiais da igreja." />
+            <EmptyState icon={<Building2 className="h-10 w-10" />} title="Nenhuma filial" description="Cadastre a Matriz, as filiais (regionais) e os PAEs." />
           ) : (
             <Table>
               <THead><TRow><TH>Nome</TH><TH>Tipo</TH><TH>Identificador</TH><TH>CNPJ</TH><TH className="text-right">Membros</TH><TH>Situação</TH><TH className="text-right">Ações</TH></TRow></THead>
@@ -256,10 +361,28 @@ export default function SettingsPage() {
                 {BRANCH_KINDS.map((k) => <option key={k.v} value={k.v}>{k.l}</option>)}
               </Select>
             </Field>
-            <Field label="Filial superior" hint="Para hierarquia Sede > Congregação.">
-              <Select className="h-8 text-sm" value={form.parent_id} onChange={(e) => setForm({ ...form, parent_id: e.target.value })}>
+            <Field
+              label="Unidade superior"
+              hint={
+                form.kind === "matriz"
+                  ? "A Matriz é a raiz: não tem unidade superior."
+                  : form.kind === "pae"
+                    ? "Obrigatório para o PAE: vincule a uma Matriz ou Filial."
+                    : "Opcional (a Filial pode reportar à Matriz)."
+              }
+            >
+              <Select
+                className="h-8 text-sm"
+                disabled={form.kind === "matriz"}
+                required={form.kind === "pae"}
+                value={form.kind === "matriz" ? "" : form.parent_id}
+                onChange={(e) => setForm({ ...form, parent_id: e.target.value })}
+              >
                 <option value="">—</option>
-                {(branches ?? []).filter((b) => b.id !== drawer.editing?.id).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                {(branches ?? [])
+                  .filter((b) => b.id !== drawer.editing?.id)
+                  .filter((b) => form.kind !== "pae" || b.kind === "matriz" || b.kind === "filial")
+                  .map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
               </Select>
             </Field>
             <Field label="Situação">
@@ -292,6 +415,81 @@ export default function SettingsPage() {
             <Button type="submit" className="h-8 text-sm" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>
         </form>
+
+        {drawer.editing && (
+          <div className="mt-6 space-y-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+            <h3 className="text-sm font-semibold">Canais de envio</h3>
+
+            {/* WhatsApp próprio da filial (instância Evolution = id da filial) */}
+            <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[13px] font-medium">WhatsApp da filial</span>
+                <Badge tone={waStatus === "connected" ? "green" : waStatus === "connecting" ? "sky" : "zinc"}>
+                  {waStatus === "connected" ? "Conectado" : waStatus === "connecting" ? "Aguardando QR" : "Desconectado"}
+                </Badge>
+              </div>
+              <Field label="Telefone (WhatsApp)" hint="Número exibido/associado à filial.">
+                <Input className="h-8 text-sm" placeholder="(11) 90000-0000" value={chForm.whatsapp_phone} onChange={(e) => setChForm({ ...chForm, whatsapp_phone: e.target.value })} />
+              </Field>
+              <div className="mt-2 flex gap-2">
+                <Button type="button" className="h-8 text-sm" disabled={connecting} onClick={connectWhatsApp}>
+                  {waStatus === "connected" ? "Reconectar" : "Conectar WhatsApp"}
+                </Button>
+                {waStatus !== "disconnected" && (
+                  <Button type="button" variant="ghost" className="h-8 text-sm" onClick={disconnectWhatsApp}>Desconectar</Button>
+                )}
+              </div>
+              {qr && (
+                <div className="mt-3 flex flex-col items-center gap-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    alt="QR Code para conectar o WhatsApp"
+                    className="h-48 w-48 rounded-md border border-zinc-200 bg-white p-1 dark:border-zinc-700"
+                    src={qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`}
+                  />
+                  <p className="text-center text-xs text-zinc-500">
+                    Abra o WhatsApp da filial → Aparelhos conectados → Conectar um aparelho.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* SMTP próprio da filial */}
+            <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+              <span className="mb-2 block text-[13px] font-medium">E-mail (SMTP) da filial</span>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="Servidor SMTP">
+                  <Input className="h-8 text-sm" placeholder="smtp.exemplo.com" value={chForm.smtp_host} onChange={(e) => setChForm({ ...chForm, smtp_host: e.target.value })} />
+                </Field>
+                <Field label="Porta">
+                  <Input className="h-8 text-sm" value={chForm.smtp_port} onChange={(e) => setChForm({ ...chForm, smtp_port: e.target.value.replace(/\D/g, "") })} />
+                </Field>
+                <Field label="Usuário">
+                  <Input className="h-8 text-sm" value={chForm.smtp_user} onChange={(e) => setChForm({ ...chForm, smtp_user: e.target.value })} />
+                </Field>
+                <Field label="Senha" hint="Deixe vazio para manter a atual.">
+                  <Input type="password" className="h-8 text-sm" value={chForm.smtp_password} onChange={(e) => setChForm({ ...chForm, smtp_password: e.target.value })} />
+                </Field>
+                <Field label="Remetente (e-mail)">
+                  <Input className="h-8 text-sm" placeholder="contato@igreja.com" value={chForm.smtp_from} onChange={(e) => setChForm({ ...chForm, smtp_from: e.target.value })} />
+                </Field>
+                <Field label="Nome do remetente">
+                  <Input className="h-8 text-sm" value={chForm.smtp_from_name} onChange={(e) => setChForm({ ...chForm, smtp_from_name: e.target.value })} />
+                </Field>
+              </div>
+              <label className="mt-3 flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={chForm.smtp_secure} onChange={(e) => setChForm({ ...chForm, smtp_secure: e.target.checked })} />
+                Conexão segura (TLS implícito, porta 465)
+              </label>
+            </div>
+
+            <div className="flex justify-end">
+              <Button type="button" className="h-8 text-sm" disabled={savingChannels} onClick={saveChannels}>
+                {savingChannels ? "Salvando..." : "Salvar canais"}
+              </Button>
+            </div>
+          </div>
+        )}
       </Drawer>
     </div>
   );
