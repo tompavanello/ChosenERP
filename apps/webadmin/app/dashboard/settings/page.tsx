@@ -65,7 +65,7 @@ export default function SettingsPage() {
   const [savingChurch, setSavingChurch] = useState(false);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [tenantForm, setTenantForm] = useState({
-    name: "", legal_name: "", cnpj: "", plan: "starter", locale: "pt-BR", timezone: "America/Sao_Paulo",
+    name: "", slug: "", legal_name: "", cnpj: "", plan: "starter", locale: "pt-BR", timezone: "America/Sao_Paulo",
     logo_url: "", brand_color: "", favicon_url: "", custom_domain: "",
   });
   const [savingTenant, setSavingTenant] = useState(false);
@@ -88,7 +88,7 @@ export default function SettingsPage() {
       const [t, b] = await Promise.all([getTenant(), listBranches()]);
       setTenant(t);
       setTenantForm({
-        name: t.name, legal_name: t.legal_name ?? "", cnpj: t.cnpj ?? "",
+        name: t.name, slug: t.slug, legal_name: t.legal_name ?? "", cnpj: t.cnpj ?? "",
         plan: t.plan, locale: t.locale, timezone: t.timezone,
         logo_url: t.logo_url ?? "", brand_color: t.brand_color ?? "",
         favicon_url: t.favicon_url ?? "", custom_domain: t.custom_domain ?? "",
@@ -366,7 +366,21 @@ export default function SettingsPage() {
               <Field label="Idioma (locale)">
                 <Input disabled={!canWrite} className="h-8 text-sm" value={tenantForm.locale} onChange={(e) => setTenantForm({ ...tenantForm, locale: e.target.value })} />
               </Field>
-              <p className="text-xs text-zinc-400 sm:col-span-2">Identificador do tenant: <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">{tenant.slug}</code></p>
+              <Field
+                label="Subdominio (slug)"
+                className="sm:col-span-2"
+                hint={`A igreja responde em ${tenantForm.slug || "..."}.${BASE_DOMAIN}. Alterar muda o endereco: o antigo deixa de funcionar.`}
+              >
+                <Input
+                  disabled={!canWrite}
+                  className="h-8 text-sm"
+                  value={tenantForm.slug}
+                  onChange={(e) => setTenantForm({ ...tenantForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, "-") })}
+                />
+              </Field>
+              <p className="text-xs text-zinc-400 sm:col-span-2">
+                Endereco da igreja: <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">{tenantForm.slug || "..."}.{BASE_DOMAIN}</code>
+              </p>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 sm:col-span-2">White-label (subdominio)</p>
               <Field label="URL do logo" hint="Exibido na tela de login da igreja.">
                 <Input disabled={!canWrite} className="h-8 text-sm" placeholder="https://..." value={tenantForm.logo_url} onChange={(e) => setTenantForm({ ...tenantForm, logo_url: e.target.value })} />

@@ -157,6 +157,15 @@ func (a *App) handleUpdateTenant(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
+		if errors.Is(err, org.ErrTenantSlugInvalido) || errors.Is(err, org.ErrTenantSlugReservado) {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			writeErr(w, http.StatusConflict, "slug ja esta em uso")
+			return
+		}
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -303,6 +304,7 @@ type Tenant struct {
 // TenantInput e o corpo de edicao do tenant.
 type TenantInput struct {
 	Name         string  `json:"name"`
+	Slug         *string `json:"slug"`
 	LegalName    *string `json:"legal_name"`
 	CNPJ         *string `json:"cnpj"`
 	Plan         *string `json:"plan"`
@@ -312,6 +314,40 @@ type TenantInput struct {
 	BrandColor   *string `json:"brand_color"`
 	FaviconURL   *string `json:"favicon_url"`
 	CustomDomain *string `json:"custom_domain"`
+}
+
+// Erros de validacao do slug (subdominio da igreja).
+var (
+	ErrTenantSlugInvalido  = errors.New("slug invalido (minusculas, numeros e hifen; 2 a 39 caracteres)")
+	ErrTenantSlugReservado = errors.New("slug reservado")
+)
+
+var reservedTenantSlugs = map[string]bool{
+	"app": true, "www": true, "api": true, "admin": true, "localhost": true,
+}
+
+// validTenantSlug normaliza e valida o slug usado no subdominio da igreja.
+func validTenantSlug(s string) (string, error) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if len(s) < 2 || len(s) > 39 {
+		return "", ErrTenantSlugInvalido
+	}
+	for i, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= '0' && r <= '9':
+		case r == '-' && i > 0:
+		default:
+			return "", ErrTenantSlugInvalido
+		}
+	}
+	if strings.HasSuffix(s, "-") {
+		return "", ErrTenantSlugInvalido
+	}
+	if reservedTenantSlugs[s] {
+		return "", ErrTenantSlugReservado
+	}
+	return s, nil
 }
 
 // GetTenant devolve o tenant do contexto.
@@ -327,22 +363,33 @@ func (r *Repo) GetTenant(ctx context.Context, tx pgx.Tx) (*Tenant, error) {
 }
 
 // UpdateTenant edita os dados cadastrais e o branding do tenant do contexto.
+// O slug (subdominio) so muda quando informado e valido; a violacao de
+// unicidade (23505) e traduzida pelo handler.
 func (r *Repo) UpdateTenant(ctx context.Context, tx pgx.Tx, in TenantInput) (*Tenant, error) {
+	var slugArg *string
+	if in.Slug != nil && strings.TrimSpace(*in.Slug) != "" {
+		s, err := validTenantSlug(*in.Slug)
+		if err != nil {
+			return nil, err
+		}
+		slugArg = &s
+	}
 	_, err := tx.Exec(ctx, `
 		UPDATE tenants SET
 			name = COALESCE(NULLIF($1,''), name),
-			legal_name = COALESCE($2, legal_name),
-			cnpj = COALESCE($3, cnpj),
-			plan = COALESCE($4, plan),
-			locale = COALESCE($5, locale),
-			timezone = COALESCE($6, timezone),
-			logo_url = COALESCE($7, logo_url),
-			brand_color = COALESCE($8, brand_color),
-			favicon_url = COALESCE($9, favicon_url),
-			custom_domain = COALESCE($10, custom_domain),
+			slug = COALESCE($2, slug),
+			legal_name = COALESCE($3, legal_name),
+			cnpj = COALESCE($4, cnpj),
+			plan = COALESCE($5, plan),
+			locale = COALESCE($6, locale),
+			timezone = COALESCE($7, timezone),
+			logo_url = COALESCE($8, logo_url),
+			brand_color = COALESCE($9, brand_color),
+			favicon_url = COALESCE($10, favicon_url),
+			custom_domain = COALESCE($11, custom_domain),
 			updated_at = now()
 		WHERE id = current_tenant()`,
-		in.Name, in.LegalName, in.CNPJ, in.Plan, in.Locale, in.Timezone,
+		in.Name, slugArg, in.LegalName, in.CNPJ, in.Plan, in.Locale, in.Timezone,
 		in.LogoURL, in.BrandColor, in.FaviconURL, in.CustomDomain)
 	if err != nil {
 		return nil, err
