@@ -1,0 +1,2 @@
+Arquivo só para o diretório existir no build: o Dockerfile copia esta pasta
+para /uploads com --chown=65532:65532. Não apague — ver infra/api/Dockerfile.

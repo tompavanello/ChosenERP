@@ -8,6 +8,14 @@
       "environment": {
         "DATABASE_URL": "postgres://chosenerp_app:chosenapp@127.0.0.1:35432/chosenerp"
       }
+    },
+    "postgres-mcp-import-ipi": {
+      "type": "local",
+      "command": ["node", "C:/Projetos/mcp/postgres/build/index.js"],
+      "enabled": true,
+      "environment": {
+        "DATABASE_URL": "postgres://postgres:sinc@127.0.0.1:5432/ipi"
+      }
     }
   }
 }

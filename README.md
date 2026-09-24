@@ -11,14 +11,14 @@ Stack: **Go** (monolito modular) · **PostgreSQL 17** (RLS) · **Next.js 15** (T
 ## Início rápido
 
 ```powershell
-.\start.ps1            # sobe tudo (.env, build Go, Docker postgres+api, webadmin)
+.\start.ps1            # sobe tudo (.env, build Go, Docker postgres+api+webadmin+nginx)
 .\start.ps1 -Full      # + redis, rabbitmq, prometheus e grafana
-.\start.ps1 -NoWeb     # apenas infraestrutura e API
 ```
 
 O script único `start.ps1` cuida de toda a sequência: cria o `.env`, compila o binário
-Linux da API (imagem `FROM scratch`), sobe os containers, aguarda o healthcheck e inicia
-o webadmin.
+Linux da API (imagem `FROM scratch`), sobe os containers — incluindo o webadmin
+(Next.js standalone) — e aguarda o healthcheck. Os containers usam
+`restart: unless-stopped`, então sobem sozinhos quando o Docker inicia.
 
 ### Portas
 
@@ -31,10 +31,21 @@ o webadmin.
 
 ### Credenciais de desenvolvimento
 
-| Perfil | Login | Senha |
-|---|---|---|
-| Admin da Sede | `admin@demo.local` | `admin123` |
-| Pastor da Filial Norte | `pastor.norte@demo.local` | `norte123` |
+Os logins existem no seed, mas as senhas **não são versionadas**: ficam no `.env`
+(gitignorado), em `DEMO_ADMIN_PASSWORD` e `DEMO_NORTE_PASSWORD`. Para lê-las:
+
+```bash
+grep '^DEMO_' .env
+```
+
+| Perfil | Login |
+|---|---|
+| Admin da Sede | `admin@demo.local` |
+| Pastor da Filial Norte | `pastor.norte@demo.local` |
+
+> A aplicação é publicada em `chosenerp.mgmconsultoria.com` atrás do Cloudflare
+> Access. Trocar essas senhas de novo é `UPDATE users SET password_hash=...` com
+> bcrypt (custo 10) — o formato está em `internal/auth/password.go`.
 
 ---
 

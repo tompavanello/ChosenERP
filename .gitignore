@@ -23,6 +23,8 @@ venv/
 .env
 .env.local
 .env.*.local
+# Backups do .env feitos antes de editá-lo (contêm os mesmos segredos)
+.env.bak-*
 *.pem
 *.key
 *.p12
@@ -33,6 +35,11 @@ apps/webadmin/.env*
 *.sqlite
 *.db
 
+# Cargas de dados reais (LGPD): o Rol de Membros do cliente tem CPF, RG, data
+# de nascimento, endereço, telefone e e-mail de pessoas físicas. Os scripts
+# ficam no disco para uso no ambiente local, mas NUNCA entram no índice.
+db/seed/
+
 # IDE / SO
 .idea/
 .vscode/
@@ -42,3 +49,9 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Dist dirs alternativos do Next (NEXT_DIST_DIR): `.next-*/` cobre .next-verify,
+# .next-dev etc., e `.next.bak-*/` cobre os builds guardados para rollback.
+# Nenhum dos dois é build de verdade — ver CLAUDE.md.
+.next-*/
+.next.bak-*/

@@ -39,8 +39,14 @@ INSERT INTO roles (tenant_id, key, name, is_system) VALUES
     ('11111111-1111-1111-1111-111111111111', 'membro',      'Membro', true)
 ON CONFLICT (tenant_id, key) DO NOTHING;
 
--- Usuário admin de demonstração
--- Senha: "admin123" (bcrypt) — trocar em produção
+-- Usuário admin de demonstração.
+--
+-- ⚠️ O hash abaixo é de uma senha demo já comprometida (publicada na
+-- documentação até 2026-09-22) e não corresponde mais à conta do ambiente de
+-- desenvolvimento, cuja senha foi rotacionada. Numa instalação NOVA, este seed
+-- cria o admin com a senha antiga: troque-a logo após o primeiro boot, ou o
+-- ambiente nasce com credencial conhecida. A senha atual fica no .env
+-- (DEMO_ADMIN_PASSWORD), fora do versionamento.
 INSERT INTO users (id, tenant_id, branch_id, role_id, email, password_hash, full_name)
 SELECT
     '33333333-3333-3333-3333-333333333333',

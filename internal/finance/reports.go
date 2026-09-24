@@ -1,7 +1,12 @@
 package finance
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -68,6 +73,7 @@ func (r *Repo) MonthlySeries(ctx context.Context, tx pgx.Tx, from, to string) ([
 		FROM financial_transactions
 		WHERE occurred_at >= NULLIF($1,'')::date
 		  AND occurred_at < (NULLIF($2,'')::date + 1)
+		  AND voided_at IS NULL
 		GROUP BY 1 ORDER BY 1`, from, to)
 	if err != nil {
 		return nil, err
@@ -97,7 +103,8 @@ func (r *Repo) BuildDRE(ctx context.Context, tx pgx.Tx, from, to string) (DRE, e
 		       COALESCE(SUM(amount) FILTER (WHERE type='expense'),0)
 		FROM financial_transactions
 		WHERE occurred_at >= NULLIF($1,'')::date
-		  AND occurred_at < (NULLIF($2,'')::date + 1)`, from, to).
+		  AND occurred_at < (NULLIF($2,'')::date + 1)
+		  AND voided_at IS NULL`, from, to).
 		Scan(&dre.Income, &dre.Expense)
 	if err != nil {
 		return dre, err
@@ -110,6 +117,7 @@ func (r *Repo) BuildDRE(ctx context.Context, tx pgx.Tx, from, to string) (DRE, e
 		LEFT JOIN financial_categories c ON c.id = t.category_id
 		WHERE t.occurred_at >= NULLIF($1,'')::date
 		  AND t.occurred_at < (NULLIF($2,'')::date + 1)
+		  AND t.voided_at IS NULL
 		GROUP BY 1,2,3 ORDER BY 3, 4 DESC`, from, to)
 	if err != nil {
 		return dre, err
@@ -134,7 +142,8 @@ func (r *Repo) BuildDRE(ctx context.Context, tx pgx.Tx, from, to string) (DRE, e
 		       COALESCE(SUM(amount) FILTER (WHERE type='expense'),0)
 		FROM financial_transactions
 		WHERE occurred_at >= (NULLIF($1,'')::date - (NULLIF($2,'')::date - NULLIF($1,'')::date + 1))
-		  AND occurred_at < NULLIF($1,'')::date`, from, to).
+		  AND occurred_at < NULLIF($1,'')::date
+		  AND voided_at IS NULL`, from, to).
 		Scan(&prevIncome, &prevExpense)
 	if err != nil {
 		return dre, err
@@ -152,4 +161,83 @@ func abs(v float64) float64 {
 		return -v
 	}
 	return v
+}
+
+// BalanceteCSV monta o CSV (separador ';') do balancete mensal.
+func BalanceteCSV(points []MonthlyPoint) (string, error) {
+	var buf bytes.Buffer
+	buf.WriteString("\xEF\xBB\xBF")
+	w := csv.NewWriter(&buf)
+	w.Comma = ';'
+	_ = w.Write([]string{"Mês", "Entradas", "Saídas", "Saldo"})
+	for _, p := range points {
+		_ = w.Write([]string{p.Month, fmtFloat(p.Income), fmtFloat(p.Expense), fmtFloat(p.Net)})
+	}
+	w.Flush()
+	return buf.String(), w.Error()
+}
+
+// DRECSV monta o CSV do DRE por categoria.
+func DRECSV(d DRE) (string, error) {
+	var buf bytes.Buffer
+	buf.WriteString("\xEF\xBB\xBF")
+	w := csv.NewWriter(&buf)
+	w.Comma = ';'
+	_ = w.Write([]string{"Indicador/Regra", "Tipo", "Categoria", "Total"})
+	_ = w.Write([]string{"Período", "", d.From, d.To})
+	for _, l := range d.Lines {
+		_ = w.Write([]string{"Categoria", l.Type, l.Category, fmtFloat(l.Total)})
+	}
+	_ = w.Write([]string{"Entradas", "", "", fmtFloat(d.Income)})
+	_ = w.Write([]string{"Saídas", "", "", fmtFloat(d.Expense)})
+	_ = w.Write([]string{"Resultado", "", "", fmtFloat(d.Net)})
+	if d.Comparison != nil {
+		_ = w.Write([]string{"Comparativo (período anterior)", "", "", fmtFloat(d.Comparison.DeltaPct) + "%"})
+	}
+	w.Flush()
+	return buf.String(), w.Error()
+}
+
+// DREPrintHTML devolve uma versão de impressão (HTML) do DRE, renderizável em PDF.
+func DREPrintHTML(d DRE) string {
+	brl := func(v float64) string { return fmt.Sprintf("R$ %.2f", v) }
+	var body string
+	for _, l := range d.Lines {
+		body += "<tr><td>" + htmlEsc(l.Type) + "</td><td>" + htmlEsc(l.Category) + "</td><td class=r>" + brl(l.Total) + "</td></tr>"
+	}
+	if body == "" {
+		body = "<tr><td colspan=3 class=muted>Sem lançamentos no período.</td></tr>"
+	}
+	return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>DRE</title>
+<style>body{font-family:ui-sans-serif,system-ui,sans-serif;padding:32px;color:#0b1020}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #e4e7ee}.r{text-align:right}.muted{color:#9ca3af}.tot{font-weight:600}.head{margin-bottom:16px}.head h1{font-size:18px;margin:0}.head p{margin:2px 0;color:#6b7280}@media print{body{padding:0}}</style></head><body>
+<div class="head"><h1>DRE — Demonstração do Resultado</h1><p>Período: ` + htmlEsc(d.From) + ` a ` + htmlEsc(d.To) + `</p></div>
+<table><thead><tr><th>Tipo</th><th>Categoria</th><th class=r>Total</th></tr></thead><tbody>` + body + `</tbody></table>
+<p>Entradas: ` + brl(d.Income) + ` · Saídas: ` + brl(d.Expense) + ` · Resultado: ` + brl(d.Net) + `</p>
+</body></html>`
+}
+
+func htmlEsc(s string) string {
+	if s == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range s {
+		switch r {
+		case '<':
+			b.WriteString("&lt;")
+		case '>':
+			b.WriteString("&gt;")
+		case '&':
+			b.WriteString("&amp;")
+		case '"':
+			b.WriteString("&quot;")
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func fmtFloat(v float64) string {
+	return strconv.FormatFloat(v, 'f', 2, 64)
 }

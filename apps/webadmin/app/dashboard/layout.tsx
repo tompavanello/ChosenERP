@@ -5,37 +5,111 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Church, LayoutDashboard, Users, Wallet, LogOut, HeartHandshake, DoorOpen,
-  BarChart3, Users2, Menu, Search, ChevronRight, Building2,
+  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, Baby, Truck, ShieldCheck, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/auth-provider";
+import { useBranches } from "@/lib/swr-hooks";
+import { getBranchContext, setBranchContext } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar } from "@/components/ui/avatar";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
-const NAV = [
-  { key: "overview", href: "/dashboard", label: "Visão Geral", icon: LayoutDashboard, perms: [] },
-  { key: "members", href: "/dashboard/members", label: "Membros", icon: Users, perms: ["members.read"] },
-  { key: "families", href: "/dashboard/families", label: "Famílias", icon: Users2, perms: ["families.read"] },
-  { key: "visitors", href: "/dashboard/visitors", label: "Visitantes", icon: DoorOpen, perms: ["members.read"] },
-  { key: "benefactors", href: "/dashboard/benefactors", label: "Benfeitores", icon: HeartHandshake, perms: ["members.read"] },
-  { key: "finance", href: "/dashboard/finance", label: "Financeiro", icon: Wallet, perms: ["finance.read"] },
-  { key: "reports", href: "/dashboard/reports", label: "Relatórios", icon: BarChart3, perms: ["reports.read", "finance.read"] },
-];
-
-const RESOURCE_LABELS: Record<string, string> = {
-  members: "Membros",
-  families: "Famílias",
-  visitors: "Visitantes",
-  benefactors: "Benfeitores",
-  finance: "Financeiro",
-  reports: "Relatórios",
+type NavItem = {
+  key: string;
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  perms: string[];
 };
+
+// Seções do menu. "Famílias" saiu daqui: a gestão de família passou a viver
+// dentro do cadastro do membro (aba Família).
+const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
+  {
+    title: null,
+    items: [
+      { key: "overview", href: "/dashboard", label: "Visão Geral", icon: LayoutDashboard, perms: [] },
+    ],
+  },
+  {
+    title: "Pessoas",
+    items: [
+      { key: "members", href: "/dashboard/members", label: "Membros", icon: Users, perms: ["members.read"] },
+      { key: "visitors", href: "/dashboard/visitors", label: "Visitantes", icon: DoorOpen, perms: ["members.read"] },
+      { key: "benefactors", href: "/dashboard/benefactors", label: "Benfeitores", icon: HeartHandshake, perms: ["members.read"] },
+      { key: "suppliers", href: "/dashboard/suppliers", label: "Fornecedores", icon: Truck, perms: ["finance.read"] },
+    ],
+  },
+  {
+    title: "Financeiro",
+    items: [
+      { key: "finance", href: "/dashboard/finance", label: "Financeiro", icon: Wallet, perms: ["finance.read"] },
+      { key: "transfers", href: "/dashboard/transfers", label: "Repasses", icon: ArrowLeftRight, perms: ["finance.write"] },
+    ],
+  },
+  {
+    title: "Organização",
+    items: [
+      { key: "ministries", href: "/dashboard/ministries", label: "Ministérios", icon: Church, perms: ["ministries.read"] },
+      { key: "rosters", href: "/dashboard/rosters", label: "Escalas", icon: CalendarClock, perms: ["ministries.read"] },
+      { key: "kids", href: "/dashboard/kids", label: "Kids", icon: Baby, perms: ["members.read"] },
+      { key: "events", href: "/dashboard/events", label: "Eventos", icon: CalendarDays, perms: ["members.read"] },
+      { key: "governance", href: "/dashboard/governance", label: "Governança", icon: Gavel, perms: ["governance.read"] },
+      { key: "users", href: "/dashboard/users", label: "Usuários", icon: UserCog, perms: ["users.read"] },
+      { key: "settings", href: "/dashboard/settings", label: "Configurações", icon: Settings, perms: ["settings.read"] },
+      { key: "announcements", href: "/dashboard/announcements", label: "Comunicados", icon: Bell, perms: [] },
+    ],
+  },
+  {
+    title: "Relatórios",
+    items: [
+      { key: "rep-balance", href: "/dashboard/reports/balance", label: "Balancete mensal", icon: BarChart3, perms: ["finance.read"] },
+      { key: "rep-dre", href: "/dashboard/reports/dre", label: "DRE", icon: TrendingUp, perms: ["finance.read"] },
+      { key: "rep-statement", href: "/dashboard/reports/monthly-statement", label: "Demonstrativo Mensal", icon: FileSpreadsheet, perms: ["finance.read"] },
+      { key: "rep-assembly", href: "/dashboard/reports/assembly", label: "Demonstrativo (Assembleia)", icon: FileSpreadsheet, perms: ["finance.read"] },
+      { key: "rep-audit", href: "/dashboard/reports/audit", label: "Auditoria financeira", icon: ShieldCheck, perms: ["finance.read"] },
+      { key: "rep-inc-exp", href: "/dashboard/reports/income-expense", label: "Entradas × Saídas", icon: ArrowLeftRight, perms: ["finance.read"] },
+      { key: "rep-consolidated", href: "/dashboard/reports/consolidated", label: "Consolidado Sede > Filiais", icon: Building2, perms: ["finance.read"] },
+      { key: "rep-birthdays", href: "/dashboard/reports/birthdays", label: "Aniversariantes", icon: Cake, perms: ["members.read"] },
+      { key: "rep-demographics", href: "/dashboard/reports/demographics", label: "Demográficos", icon: PieChart, perms: ["members.read"] },
+    ],
+  },
+];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, ready, logout, hasPerm } = useAuth();
+  const { user, ready, logout, hasPerm, switchTenant } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: branchData } = useBranches();
+  const [branchCtx, setBranchCtx] = useState("");
+  useEffect(() => setBranchCtx(getBranchContext()), []);
+  const isHQ = user?.role === "super_admin" || user?.role === "admin_sede";
+  // Igrejas da identidade: o switcher só aparece quando há mais de uma.
+  const memberships = (user?.memberships ?? []).filter((m) => m.is_active);
+
+  // Seções do menu recolhíveis (persistidas por navegador).
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("chosen_nav_collapsed");
+      if (raw) setCollapsed(JSON.parse(raw));
+    } catch {
+      /* ignora storage inválido */
+    }
+  }, []);
+  function toggleSection(title: string) {
+    setCollapsed((c) => {
+      const next = { ...c, [title]: !c[title] };
+      try {
+        localStorage.setItem("chosen_nav_collapsed", JSON.stringify(next));
+      } catch {
+        /* ignora */
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (ready && !user) router.replace("/");
@@ -52,48 +126,85 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
   if (!user) return null;
 
-  const visibleNav = NAV.filter((n) => n.perms.length === 0 || n.perms.some((p) => hasPerm(p)));
-  const seg = pathname.split("/").filter(Boolean);
-  const crumb = seg.length > 1 ? RESOURCE_LABELS[seg[1]] : "Visão Geral";
+  // Nome da filial em vez do UUID cru que aparecia na topbar.
+  const branchName =
+    branchData?.branches.find((b) => b.id === user.branch_id)?.name ??
+    (user.branch_id ? null : "Sede");
+
+  // Item ativo também nas sub-rotas (/dashboard/members/123 destaca "Membros").
+  const isActive = (href: string) =>
+    href === "/dashboard" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 
   const Sidebar = (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="mb-6 flex items-center gap-2 px-2 font-semibold">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white">
-          <Church className="h-5 w-5" />
+    <aside className="flex h-full w-56 shrink-0 flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="flex items-center gap-2 px-4 py-3.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sky-600 to-sky-500 text-white">
+          <Church className="h-4 w-4" />
         </span>
-        <span className="text-lg">Chosen ERP</span>
+        <span className="truncate text-[15px] font-semibold tracking-tight">Chosen ERP</span>
       </div>
-      <nav className="space-y-1">
-        {visibleNav.map((item) => {
-          const active = pathname === item.href;
-          const Icon = item.icon;
+
+      <nav className="flex-1 overflow-y-auto px-2 pb-2">
+        {NAV_SECTIONS.map((section, i) => {
+          const items = section.items.filter(
+            (n) => n.perms.length === 0 || n.perms.some((p) => hasPerm(p)),
+          );
+          if (items.length === 0) return null;
+          const open = !section.title || !collapsed[section.title];
           return (
-            <Link
-              key={item.key}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition",
-                active
-                  ? "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300"
-                  : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900",
+            <div key={section.title ?? `section-${i}`}>
+              {section.title && (
+                <button
+                  type="button"
+                  onClick={() => toggleSection(section.title as string)}
+                  aria-expanded={open}
+                  className="flex w-full items-center justify-between gap-2 rounded-md px-2.5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300"
+                >
+                  <span className="truncate">{section.title}</span>
+                  {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+                </button>
               )}
-            >
-              <Icon className="h-4 w-4" /> {item.label}
-            </Link>
+              {open && (
+                <div className="space-y-0.5">
+                  {items.map((item) => {
+                    const active = isActive(item.href);
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.key}
+                        href={item.href}
+                        className={cn(
+                          "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                          active
+                            ? "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300"
+                            : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200",
+                        )}
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         })}
       </nav>
-      <div className="mt-auto space-y-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-        <div className="flex items-center gap-2 px-2">
+
+      <div className="border-t border-zinc-200 p-2 dark:border-zinc-800">
+        <Link href="/dashboard/profile" className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-900">
           <Avatar name={user.full_name} size="sm" />
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{user.full_name}</p>
-            <p className="truncate text-xs text-zinc-400">{user.role}</p>
+            <p className="truncate text-[13px] font-medium">{user.full_name}</p>
+            <p className="truncate text-[11px] text-zinc-400">{user.role}</p>
           </div>
-        </div>
-        <button onClick={logout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900">
-          <LogOut className="h-4 w-4" /> Sair
+        </Link>
+        <button
+          onClick={logout}
+          className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900"
+        >
+          <LogOut className="h-4 w-4 shrink-0" /> Sair
         </button>
       </div>
     </aside>
@@ -101,10 +212,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen">
-      {/* Desktop sidebar */}
-      <div className="hidden lg:block">{Sidebar}</div>
+      {/* Sidebar fixa: antes ela rolava junto com o conteúdo da página. */}
+      <div className="sticky top-0 hidden h-screen lg:block">{Sidebar}</div>
 
-      {/* Mobile sidebar */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
@@ -113,31 +223,60 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-zinc-200 bg-white/80 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
-          <button className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 lg:hidden dark:hover:bg-zinc-800" onClick={() => setMobileOpen(true)}>
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-zinc-200 bg-white/80 px-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
+          <button
+            className="rounded-md p-2 text-zinc-500 hover:bg-zinc-100 lg:hidden dark:hover:bg-zinc-800"
+            onClick={() => setMobileOpen(true)}
+          >
             <Menu className="h-5 w-5" />
           </button>
-          <div className="flex items-center gap-1 text-sm text-zinc-500">
-            <span>Dashboard</span>
-            <ChevronRight className="h-3.5 w-3.5" />
-            <span className="font-medium text-zinc-700 dark:text-zinc-200">{crumb}</span>
-          </div>
 
-          <div className="ml-auto flex items-center gap-2">
-            <div className="relative hidden md:block">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-              <input className="input w-56 pl-9" placeholder="Buscar..." />
-            </div>
-            <div className="hidden items-center gap-1 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-500 md:flex dark:border-zinc-800">
-              <Building2 className="h-3.5 w-3.5" />
-              {user.branch_id || "Sede"}
-            </div>
+          <Breadcrumbs className="min-w-0 flex-1" />
+
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {memberships.length > 1 && (
+              <select
+                value={user.tenant_id}
+                onChange={(e) => switchTenant(e.target.value)}
+                title="Igreja ativa"
+                className="hidden rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-600 sm:block dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
+              >
+                {memberships.map((m) => (
+                  <option key={m.tenant_id} value={m.tenant_id}>{m.tenant_name}</option>
+                ))}
+              </select>
+            )}
+            {isHQ ? (
+              <select
+                value={branchCtx || "all"}
+                onChange={(e) => {
+                  setBranchContext(e.target.value);
+                  window.location.reload();
+                }}
+                title="Filial de trabalho (lançamentos e consultas)"
+                className="hidden rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-600 sm:block dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
+              >
+                <option value="all">Sede (todas as filiais)</option>
+                {(branchData?.branches ?? [])
+                  .filter((b) => b.is_active !== false)
+                  .map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+              </select>
+            ) : branchName ? (
+              <div className="hidden items-center gap-1.5 rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-500 sm:flex dark:border-zinc-800">
+                <Building2 className="h-3.5 w-3.5" />
+                <span className="max-w-32 truncate">{branchName}</span>
+              </div>
+            ) : null}
             <ThemeToggle />
-            <Avatar name={user.full_name} size="sm" />
+            <Link href="/dashboard/profile" title="Meu perfil" className="rounded-full transition-opacity hover:opacity-80">
+              <Avatar name={user.full_name} size="sm" />
+            </Link>
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="flex-1 p-4 sm:p-5 lg:p-6">{children}</main>
       </div>
     </div>
   );

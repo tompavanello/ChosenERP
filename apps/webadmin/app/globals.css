@@ -1,25 +1,38 @@
 @import "tailwindcss";
 
+/* O tema é controlado por classe (.dark no <html>), não por preferência do sistema.
+   Sem este variant, `dark:` compila para @media (prefers-color-scheme: dark) e o
+   ThemeToggle não tem efeito nenhum. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --ink: #0b1020;
-  --paper: #f7f8fb;
+  color-scheme: light;
+
+  --ink: #0f172a;
+  --paper: #f8fafc;
   --card: #ffffff;
-  --line: #e7e9f0;
-  --muted: #6b7280;
-  --brand: #6d28d9;
-  --brand-strong: #5b21b6;
-  --brand-soft: #ede9fe;
+  --line: #e2e8f0;
+  --muted: #64748b;
+  --brand: #0284c7;
+  --brand-strong: #0369a1;
+  --brand-soft: #e0f2fe;
+  --scrollbar: #cbd5e1;
+  --scrollbar-hover: #94a3b8;
 }
 
 .dark {
-  --ink: #f4f4f5;
-  --paper: #0b1020;
-  --card: #111627;
-  --line: #262c40;
+  color-scheme: dark;
+
+  --ink: #e2e8f0;
+  --paper: #09090b;
+  --card: #18181b;
+  --line: #27272a;
   --muted: #a1a1aa;
-  --brand: #8b5cf6;
-  --brand-strong: #7c3aed;
-  --brand-soft: rgba(139, 92, 246, 0.16);
+  --brand: #0ea5e9;
+  --brand-strong: #38bdf8;
+  --brand-soft: #082f49;
+  --scrollbar: #3f3f46;
+  --scrollbar-hover: #52525b;
 }
 
 html,
@@ -30,83 +43,159 @@ body {
 body {
   color: var(--ink);
   background: var(--paper);
+  /* Stack corporativa: Inter quando instalada, senão a fonte de UI nativa de cada
+     sistema (Segoe UI Variable no Windows 11). Sem webfont para não criar dependência
+     de rede no build. */
+  font-family: Inter, "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system,
+    "Helvetica Neue", Arial, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
 }
 
-/* ---- Botões ---- */
-.btn-base {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  border-radius: 0.5rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 0.15s ease;
-  cursor: pointer;
-}
-.btn-primary {
-  background: var(--brand);
-  color: #fff;
-}
-.btn-primary:hover {
-  background: var(--brand-strong);
-}
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.btn-ghost {
-  color: var(--muted);
-}
-.btn-ghost:hover {
-  background: color-mix(in srgb, var(--muted) 12%, transparent);
-}
-.btn-outline {
-  border: 1px solid var(--line);
-  color: var(--ink);
-}
-.btn-outline:hover {
-  background: color-mix(in srgb, var(--muted) 8%, transparent);
+/* Números, datas e valores alinham na vertical em tabelas. */
+.tnum {
+  font-variant-numeric: tabular-nums;
 }
 
-/* ---- Inputs ---- */
-.input,
-.select,
-.textarea {
-  width: 100%;
-  border-radius: 0.5rem;
-  border: 1px solid var(--line);
-  background: var(--card);
-  color: var(--ink);
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.input:focus,
-.select:focus,
-.textarea:focus {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 18%, transparent);
-}
-.select {
-  appearance: auto;
+h1,
+h2,
+h3 {
+  letter-spacing: -0.011em;
 }
 
-/* ---- Card ---- */
-.card {
-  border-radius: 0.75rem;
-  border: 1px solid var(--line);
-  background: var(--card);
-  padding: 1.5rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+::selection {
+  background: #dbeafe;
+  color: #0c4a6e;
 }
 
-.label {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-size: 0.84rem;
-  font-weight: 500;
-  color: var(--muted);
+:focus-visible {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
+}
+
+/* ---- Scrollbars finas (estilo macOS) ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+
+/* Tudo abaixo vive em @layer components: regra sem camada vence QUALQUER utilitária
+   do Tailwind, então `Card className="p-0"`, `className="pl-9"` nos inputs de busca
+   e `Button size="sm"` eram todos silenciosamente ignorados. */
+@layer components {
+  /* ---- Botões ---- */
+  .btn-base {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    border-radius: 0.5rem;
+    padding: 0.375rem 0.875rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    cursor: pointer;
+  }
+  .btn-primary {
+    background: var(--brand);
+    color: #fff;
+  }
+  .btn-primary:hover {
+    background: var(--brand-strong);
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn-ghost {
+    color: var(--muted);
+  }
+  .btn-ghost:hover {
+    background: color-mix(in srgb, var(--muted) 12%, transparent);
+  }
+  .btn-outline {
+    border: 1px solid var(--line);
+    color: var(--ink);
+  }
+  .btn-outline:hover {
+    background: color-mix(in srgb, var(--muted) 8%, transparent);
+  }
+
+  /* ---- Inputs ---- */
+  .input,
+  .select,
+  .textarea {
+    width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    padding: 0.4rem 0.625rem;
+    font-size: 0.8125rem;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .input:focus,
+  .select:focus,
+  .textarea:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 18%, transparent);
+  }
+  .select {
+    appearance: auto;
+  }
+  .input::placeholder,
+  .textarea::placeholder {
+    color: var(--muted);
+    opacity: 0.7;
+  }
+
+  /* ---- Card ---- */
+  .card {
+    border-radius: 0.75rem;
+    border: 1px solid var(--line);
+    background: var(--card);
+    padding: 1rem;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  }
+
+  .label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--muted);
+  }
+
+  /* Container de página: ocupa a largura disponível em vez de travar em max-w-6xl,
+     que deixava uma faixa vazia grande em monitores largos. */
+  .page {
+    width: 100%;
+    max-width: 1600px;
+    margin-inline: auto;
+  }
+
+  /* Cabeçalho de seção do sidebar (micro-rótulo corporativo). */
+  .nav-section {
+    padding: 0.75rem 0.625rem 0.25rem;
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
 }

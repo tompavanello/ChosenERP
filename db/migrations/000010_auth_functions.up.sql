@@ -19,7 +19,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
     SELECT u.id::text, u.full_name, u.email, u.tenant_id::text,
-           COALESCE(u.branch_id::text, ''), r.key, u.password_hash
+           u.branch_id::text, r.key, u.password_hash
     FROM users u
     JOIN roles r ON r.id = u.role_id
     WHERE u.email = p_email

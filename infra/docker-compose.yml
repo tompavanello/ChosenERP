@@ -23,6 +23,23 @@ services:
       timeout: 5s
       retries: 10
 
+  ### Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: chosen-nginx
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+      webadmin:
+        condition: service_started
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - uploads:/uploads
+
   ### Chosen ERP API (Go) — monolito modular
   api:
     build:
@@ -39,8 +56,52 @@ services:
       MIGRATE_DATABASE_URL: postgres://postgres:sinc@postgres:5432/chosenerp?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:-dev-insecure-secret-change-me}
       API_HTTP_PORT: "8080"
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:38080}
+      UPLOAD_DIR: /uploads
+      MEMBER_PHOTO_MAX_KB: ${MEMBER_PHOTO_MAX_KB:-5120}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Chosen ERP}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID:-}
+      WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION:-v19.0}
+      WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER:-meta}
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL:-}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
+      EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-}
+      DELIVERY_POLL_SECONDS: ${DELIVERY_POLL_SECONDS:-30}
+      RECURRING_POLL_SECONDS: ${RECURRING_POLL_SECONDS:-3600}
     ports:
       - "${API_HTTP_PORT:-38080}:8080"
+    volumes:
+      # Volume NOMEADO (e não tmpfs): anexos e fotos de membro precisam
+      # sobreviver ao restart do container. Como tmpfs, todo `docker compose
+      # down/up` apagava as imagens e o banco continuava apontando para URLs
+      # mortas, sem nenhum erro visível na tela.
+      - uploads:/uploads
+
+  ### Webadmin (Next.js 15) — UI do ERP. Build standalone; sobe junto com o stack.
+  webadmin:
+    build:
+      context: ../apps/webadmin
+      dockerfile: Dockerfile
+      args:
+        # Lido pelo rewrites() do next.config.ts em tempo de build. Na rede do
+        # Compose a API é "api:8080" (não localhost:38080).
+        API_ORIGIN: http://api:8080
+    image: chosenerp/webadmin:local
+    container_name: chosen-webadmin
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      API_ORIGIN: http://api:8080
+    ports:
+      - "${WEBADMIN_PORT:-33000}:33000"
 
   redis:
     image: redis:7-alpine
@@ -102,6 +163,8 @@ services:
       - grafanadata:/var/lib/grafana
 
 volumes:
+  # Anexos do financeiro e fotos de membro (UPLOAD_DIR=/uploads na API).
+  uploads:
   pgdata:
   redisdata:
   rabbitdata:

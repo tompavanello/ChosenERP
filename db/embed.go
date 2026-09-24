@@ -6,3 +6,10 @@ import "embed"
 
 //go:embed migrations/*.sql
 var Migrations embed.FS
+
+// Setup embute o script de provisionamento dos papéis e privilégios padrão.
+// Ele precisa rodar em CADA database criado, porque GRANT e
+// ALTER DEFAULT PRIVILEGES têm escopo de database (não de cluster).
+//
+//go:embed init/setup.sql
+var Setup string

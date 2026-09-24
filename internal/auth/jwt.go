@@ -10,6 +10,9 @@ import (
 const (
 	AccessTokenType  = "access"
 	RefreshTokenType = "refresh"
+	// SelectionTokenType é um token curto (sem tenant ativo) emitido quando a
+	// identidade tem mais de uma igreja e precisa escolher qual acessar.
+	SelectionTokenType = "select"
 )
 
 // Claims representa o payload do token JWT do Chosen ERP.

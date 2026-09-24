@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-md bg-zinc-200 dark:bg-zinc-800", className)} />;
+  return <div className={cn("animate-pulse rounded-md bg-zinc-200", className)} />;
 }
 
 export function SkeletonRows({ rows = 5 }: { rows?: number }) {
@@ -29,8 +29,8 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-      {icon && <div className="text-zinc-300 dark:text-zinc-600">{icon}</div>}
-      <p className="font-medium text-zinc-600 dark:text-zinc-300">{title}</p>
+      {icon && <div className="text-zinc-300">{icon}</div>}
+      <p className="font-medium text-zinc-600">{title}</p>
       {description && <p className="max-w-sm text-sm text-zinc-400">{description}</p>}
       {action && <div className="mt-2">{action}</div>}
     </div>

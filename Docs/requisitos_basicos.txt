@@ -1,0 +1,231 @@
+Assunto:
+Detalhes do Sistema da Igreja
+De:
+<tiago.moretto@supportweb.com.br>
+Data:
+22/09/2026, 12:18
+Para:
+<everton.luiz@supportweb.com.br>
+
+## Cadastro e Gestão de Membros
+
+Objetivo: permitir o cadastro completo dos membros, o controle do Rol de Membros e o histórico da situação eclesiástica de cada pessoa.
+
+O QUE IMPLEMENTAR
+
+Criar/adequar o cadastro de membros contemplando:
+
+1.1 – Dados cadastrais
+
+    Nome completo;
+    CPF/RG;
+    Data de nascimento;
+    Sexo: Masculino/Feminino;
+    Estado civil: Solteiro/Casado/Viúvo/Divorciado;
+    Endereço;
+    Telefone;
+    E-mail;
+    Outros dados cadastrais necessários. 
+
+1.2 – Classificação no Rol
+Criar campo para identificar:
+
+    Membro Professo;
+    Membro Não Professo. 
+
+1.3 – Função/Ministério
+Criar possibilidade de indicar se o membro exerce alguma função ou ministério na igreja, permitindo selecionar, por exemplo:
+
+    Pastor;
+    Presbítero;
+    Diácono;
+    Líder de Jovens;
+    Líder de Louvor;
+    Líder de Pequeno Grupo;
+    Professor;
+    Outro. 
+
+O sistema deverá permitir que um mesmo membro possua mais de uma função/ministério, quando aplicável.
+
+1.4 – Controle de mandato
+Quando a função possuir período determinado, permitir informar:
+
+    Data de início do mandato;
+    Data de vencimento do mandato;
+    Situação: Ativo/Encerrado. 
+
+1.5 – Frequência
+Criar campo para classificação da frequência do membro:
+
+    Frequente;
+    Pouco frequente;
+    Não frequente. 
+
+Idealmente, essa informação poderá ser alterada ao longo do tempo sem apagar o histórico anterior.
+
+1.6 – Situação do membro
+Permitir identificar a situação atual do membro:
+
+    Ativo (membro professo);
+    Inativo (membro não professo);
+    Baixado do Rol;
+    Transferido;
+    Falecido;
+    Outros. 
+
+1.7 – Motivo da baixa
+Quando houver baixa do Rol, permitir informar o motivo:
+
+    Falecimento;
+    Desligamento a pedido do membro;
+    Transferência para outra igreja;
+    Abandono das atividades eclesiásticas;
+    Baixa por ausência superior a 1 ano;
+    Outro. 
+
+1.8 – Histórico eclesiástico
+Criar uma área para registrar os eventos relacionados à entrada, alteração ou saída do Rol, contendo:
+
+    Data;
+    Hora;
+    Tipo de evento;
+    Observação. 
+
+Exemplos de eventos:
+
+    Batismo infantil;
+    Profissão de fé;
+    Recebido por jurisdição;
+    Recebido por transferência;
+    Transferência para outra igreja;
+    Desligamento;
+    Abandono das atividades eclesiásticas;
+    Baixa do Rol;
+    Falecimento;
+    Outros. 
+
+IMPORTANTE: essas informações deverão formar um histórico cronológico do membro, permitindo consultar posteriormente tudo o que ocorreu com ele durante sua trajetória na igreja.
+
+##2.  Registro de Eventos e Frequência
+
+Objetivo: permitir o registro dos eventos realizados pela igreja e a quantidade de participantes, criando posteriormente um histórico e indicadores de participação.
+
+O QUE IMPLEMENTAR
+
+Criar cadastro de eventos contendo:
+
+    Data do evento;
+    Hora de início;
+    Hora de término, se necessário;
+    Tipo de evento;
+    Quantidade de participantes;
+    Observações. 
+
+Tipos de eventos, por exemplo:
+
+    Escola Bíblica Dominical;
+    Culto;
+    Culto Especial;
+    Reunião;
+    Pequeno Grupo;
+    Evento de Jovens;
+    Escola Bíblica;
+    Santa Ceia;
+    Vigília;
+    Outros. 
+
+Exemplo de lançamento
+
+Data
+	
+
+Horário
+	
+
+Evento
+	
+
+Quantidade
+	
+
+Observação
+
+20/09/2026
+	
+
+09:00
+	
+
+Escola Bíblica Dominical
+	
+
+85
+	
+
+Domingo
+
+20/09/2026
+	
+
+19:00
+	
+
+Culto
+	
+
+251
+	
+
+Culto Especial do Amigo
+
+27/09/2026
+	
+
+09:00
+	
+
+Escola Bíblica Dominical
+	
+
+92
+	
+
+—
+
+3. Evolução que eu recomendo deixar prevista
+
+Como vocês estão desenvolvendo o sistema pensando no uso da igreja a longo prazo, eu colocaria uma observação importante na OP:
+
+O cadastro deverá ser estruturado de forma que os dados registrados possam futuramente ser utilizados em relatórios e indicadores, permitindo acompanhar a evolução do Rol de Membros, entradas e baixas, frequência, participação nos cultos e demais eventos, composição por faixa etária, sexo, estado civil, situação no Rol, funções exercidas e demais informações cadastradas no sistema.
+
+Isso é importante porque evita criar simplesmente dois cadastros isolados. O ideal é que o CAD100 seja a base das pessoas e o CAD107 seja a base dos eventos, permitindo futuramente cruzar as informações.
+
+Por exemplo, posteriormente vocês poderiam ter um painel mostrando:
+
+ROL DE MEMBROS
+
+    Total de Professos;
+    Total de Não Professos;
+    Total Ativos;
+    Total Inativos;
+    Entradas no período;
+    Baixas no período;
+    Transferências;
+    Falecimentos. 
+
+FREQUÊNCIA
+
+    Frequentes;
+    Pouco frequentes;
+    Não frequentes. 
+
+EVENTOS
+
+    Média de participantes nos cultos;
+    Média da EBD;
+    Maior público do período;
+    Menor público do período;
+    Comparativo mês a mês;
+    Comparativo anual. 
+
+ 

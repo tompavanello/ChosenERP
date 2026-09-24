@@ -60,17 +60,55 @@ func (r *Repo) ListDeliveries(ctx context.Context, tx pgx.Tx, documentID string)
 	return out, rows.Err()
 }
 
-// Dispatch simula o envio: em produção isto chama SMTP ou a API do WhatsApp.
-// Aqui registramos apenas o resultado no próprio registro da outbox.
-func (r *Repo) Dispatch(ctx context.Context, tx pgx.Tx, id string) (*Delivery, error) {
-	now := time.Now().UTC()
-	var d Delivery
-	err := tx.QueryRow(ctx, `
+// PendingDelivery é um item da outbox aguardando envio (usado pelo worker).
+type PendingDelivery struct {
+	ID         string
+	TenantID   string
+	BranchID   string
+	DocumentID string
+	Channel    string
+	Recipient  string
+}
+
+// ListPending devolve os itens da outbox pendentes ou com falha elegível a
+// retry (attempts < maxAttempts). Deve ser chamado em escopo "Sede" (system)
+// para enxergar todas as filiais.
+func (r *Repo) ListPending(ctx context.Context, tx pgx.Tx, limit, maxAttempts int) ([]PendingDelivery, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT id::text, tenant_id::text, branch_id::text, document_id::text, channel, recipient
+		FROM document_deliveries
+		WHERE status IN ('pending','failed') AND attempts < $1
+		ORDER BY created_at
+		LIMIT $2`, maxAttempts, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []PendingDelivery{}
+	for rows.Next() {
+		var p PendingDelivery
+		if err := rows.Scan(&p.ID, &p.TenantID, &p.BranchID, &p.DocumentID, &p.Channel, &p.Recipient); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// MarkSent registra a entrega bem-sucedida de um item da outbox.
+func (r *Repo) MarkSent(ctx context.Context, tx pgx.Tx, id string) error {
+	_, err := tx.Exec(ctx, `
 		UPDATE document_deliveries
 		SET status='sent', attempts = attempts + 1, sent_at=$2, error=NULL
-		WHERE id = $1::uuid
-		RETURNING id::text, document_id::text, channel, recipient, status, error, attempts,
-		          sent_at::text, created_at::text`, id, now).
-		Scan(&d.ID, &d.DocumentID, &d.Channel, &d.Recipient, &d.Status, &d.Error, &d.Attempts, &d.SentAt, &d.CreatedAt)
-	return &d, err
+		WHERE id = $1::uuid`, id, time.Now().UTC())
+	return err
+}
+
+// MarkFailed registra a falha de entrega, tornando o item elegível a retry.
+func (r *Repo) MarkFailed(ctx context.Context, tx pgx.Tx, id, errMessage string) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE document_deliveries
+		SET status='failed', attempts = attempts + 1, error=$2
+		WHERE id = $1::uuid`, id, errMessage)
+	return err
 }

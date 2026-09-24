@@ -90,7 +90,11 @@ BEGIN
             NEW.type || '|' || NEW.amount::text || '|' || NEW.currency || '|' ||
             COALESCE(NEW.donor_member_id::text,'') || '|' || COALESCE(NEW.benefactor_id::text,'') || '|' ||
             NEW.payment_method || '|' || NEW.occurred_at::text || '|' || COALESCE(NEW.description,'');
-    NEW.prev_hash := (SELECT hash FROM financial_transactions WHERE id < NEW.id ORDER BY id DESC LIMIT 1);
+    -- Chain cronológico dentro do TENANT (created_at, id) — evita vazamento cross-tenant
+    NEW.prev_hash := (SELECT hash FROM financial_transactions
+                      WHERE tenant_id = NEW.tenant_id
+                        AND (created_at, id) < (NEW.created_at, NEW.id)
+                      ORDER BY created_at DESC, id DESC LIMIT 1);
     NEW.hash := encode(digest(body || '|' || COALESCE(NEW.prev_hash,''), 'sha256'), 'hex');
     RETURN NEW;
 END;

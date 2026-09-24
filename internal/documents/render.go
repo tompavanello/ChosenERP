@@ -47,7 +47,7 @@ func RenderReceiptHTML(doc *Document, tenantName string) (string, error) {
 	if label == "" {
 		label = html.EscapeString(c.Type)
 	}
-	if c.Kind == "membership_card" {
+	if c.Kind == KindMembershipCard {
 		return fmt.Sprintf(receiptTemplate,
 			html.EscapeString(tenantName),
 			html.EscapeString(doc.Title),

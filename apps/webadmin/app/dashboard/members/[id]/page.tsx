@@ -1,75 +1,95 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
-  ArrowLeft, QrCode, Pencil, Link as LinkIcon, User, Phone, Sparkles, GitBranch, FileText, HeartHandshake,
+  ArrowLeft, Award, FileText, GitBranch, HeartHandshake, History, Link as LinkIcon, Pencil,
+  Phone, Sparkles, User, Users, Activity, ShieldCheck,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs } from "@/components/ui/tabs";
 import { Avatar } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Input, Field, Select } from "@/components/ui/input";
+import { Badge, type Tone } from "@/components/ui/badge";
+import { Field, Select } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
 import { SkeletonRows, EmptyState } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
-import { getMember, getMemberTree, updateMember, addRelationship, issueCard, listMembers, type Member, type Relationship } from "@/lib/api";
-import { MEMBERSHIP_STATUS, GENDER, MARITAL_STATUS, OFFICES, RELATION_LABELS } from "@/lib/constants";
-import { currency, datePt } from "@/lib/format";
+import { useAuth } from "@/components/providers/auth-provider";
+import { MemberForm } from "@/components/members/member-form";
+import { CardCell } from "@/components/members/card-cell";
+import { CargosSection } from "@/components/members/cargos-section";
+import { FamilySection } from "@/components/members/family-section";
+import { HistorySection } from "@/components/members/history-section";
+import { FrequencySection } from "@/components/members/frequency-section";
+import { LgpdSection } from "@/components/members/lgpd-section";
+import {
+  getMember, getMemberTree, updateMember, syncMemberCargos, addRelationship, listMembers, assetURL,
+  type Member, type MemberAddress, type Relationship,
+} from "@/lib/api";
+import { useBranches } from "@/lib/swr-hooks";
+import { MEMBERSHIP_STATUS, GENDER, MARITAL_STATUS, CARGO_KINDS, RELATION_LABELS, EXIT_REASONS } from "@/lib/constants";
+import { datePt, age } from "@/lib/format";
 
 const REL_KINDS = ["spouse", "parent", "child", "discipler", "disciple", "relative"];
 
 export default function MemberDetailPage() {
   const { id } = useParams() as { id: string };
-  const router = useRouter();
   const { toast } = useToast();
+  const { hasPerm, user } = useAuth();
+  const { data: branchData } = useBranches();
   const [member, setMember] = useState<Member | null>(null);
   const [rels, setRels] = useState<Relationship[]>([]);
   const [others, setOthers] = useState<Member[]>([]);
   const [tab, setTab] = useState("dados");
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<Record<string, string>>({});
+  const [editando, setEditando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
   const [rel, setRel] = useState({ relate_member_id: "", kind: "spouse" });
   const [loading, setLoading] = useState(true);
 
-  async function load(target?: Member) {
-    const [m, t, all] = await Promise.all([
-      target ? Promise.resolve(target) : getMember(id),
-      getMemberTree(id),
-      listMembers(),
-    ]);
+  const canWrite = hasPerm("members.write");
+  const isAdmin = user?.role === "super_admin" || user?.role === "admin_sede";
+
+  const load = useCallback(async () => {
+    const [m, t] = await Promise.all([getMember(id), getMemberTree(id)]);
     setMember(m);
     setRels(t.relationships.filter((r) => r.kind !== "self"));
-    setOthers(all.members.filter((x) => x.id !== m.id));
+    // A árvore já traz os nomes de quem está vinculado; a lista completa só
+    // serve ao seletor de "adicionar vínculo".
+    const todos = await listMembers();
+    setOthers(todos.members.filter((x) => x.id !== m.id));
     setLoading(false);
-  }
-
-  useEffect(() => {
-    load().catch((e) => toast(e.message, "error"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  function startEdit() {
-    setForm({
-      phone: member?.phone ?? "", whatsapp: member?.whatsapp ?? "", email: member?.email ?? "",
-      birth_date: member?.birth_date ?? "", gender: member?.gender ?? "", marital_status: member?.marital_status ?? "",
-      profession: member?.profession ?? "", office: member?.office ?? "", nickname: member?.nickname ?? "",
-      membership_status: member?.membership_status ?? "member",
+  useEffect(() => {
+    load().catch((e) => {
+      toast(e instanceof Error ? e.message : "Erro ao carregar membro", "error");
+      setLoading(false);
     });
-    setEditing(true);
-  }
+  }, [load, toast]);
 
-  async function saveEdit(e: React.FormEvent) {
-    e.preventDefault();
+  // Deep link vindo do grid ("Família e vínculos" => ?tab=familia). Lido do
+  // window em vez de useSearchParams() para não exigir Suspense no prerender.
+  useEffect(() => {
+    const alvo = new URLSearchParams(window.location.search).get("tab");
+    if (alvo) setTab(alvo);
+  }, []);
+
+  async function salvar(data: Record<string, unknown>, ctx: { cargoIds: string[] }) {
+    setSalvando(true);
     try {
-      const updated = await updateMember(id, form);
-      setMember(updated);
-      setEditing(false);
+      const atualizado = await updateMember(id, data);
+      await syncMemberCargos(id, ctx.cargoIds);
+      setMember(atualizado);
+      setEditando(false);
       toast("Perfil atualizado.");
+      await load();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro", "error");
+      toast(err instanceof Error ? err.message : "Erro ao salvar", "error");
+    } finally {
+      setSalvando(false);
     }
   }
 
@@ -82,145 +102,251 @@ export default function MemberDetailPage() {
       await load();
       toast("Vínculo adicionado.");
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro", "error");
+      toast(err instanceof Error ? err.message : "Erro ao vincular", "error");
     }
   }
 
-  async function onCard() {
-    try {
-      const res = await issueCard(id);
-      toast(`Carteirinha emitida: ${res.card_ref}.`);
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro", "error");
-    }
+  const branchName = useCallback(
+    (bid?: string) => {
+      if (!bid) return "Sede";
+      return branchData?.branches.find((b) => b.id === bid)?.name ?? "Sede";
+    },
+    [branchData],
+  );
+
+  if (loading) return <div className="page"><SkeletonRows rows={6} /></div>;
+  if (!member) {
+    return (
+      <div className="page">
+        <EmptyState
+          icon={<Users className="h-10 w-10" />}
+          title="Membro não encontrado"
+          description="O cadastro pode ter sido removido ou movido para outra filial."
+        />
+      </div>
+    );
   }
 
-  if (loading) return <div className="mx-auto max-w-4xl"><SkeletonRows rows={6} /></div>;
-  if (!member) return <EmptyState title="Membro não encontrado" />;
-
-  const st = MEMBERSHIP_STATUS[member.membership_status] ?? { label: member.membership_status, tone: "zinc" as const };
+  const st = MEMBERSHIP_STATUS[member.membership_status] ?? {
+    label: member.membership_status,
+    tone: "zinc",
+  };
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <Link href="/dashboard/members" className="mb-4 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200">
-        <ArrowLeft className="h-4 w-4" /> Voltar para membros
+    <div className="page">
+      <Link
+        href="/dashboard/members"
+        className="mb-3 inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" /> Voltar para membros
       </Link>
 
-      <div className="card mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Avatar name={member.full_name} size="lg" />
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-semibold">{member.full_name}</h2>
-              <Badge tone={st.tone as "zinc"}>{st.label}</Badge>
+      <PageHeader
+        title={member.full_name}
+        description={[
+          member.nickname ? `"${member.nickname}"` : null,
+          member.profession,
+          branchName(member.branch_id),
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+        actions={
+          <>
+            <CardCell
+              memberId={member.id}
+              cardRef={member.card_ref}
+              onIssued={(ref) => setMember((m) => (m ? { ...m, card_ref: ref } : m))}
+            />
+            {canWrite && (
+              <Button variant="outline" onClick={() => setEditando(true)}>
+                <Pencil className="h-4 w-4" /> Editar
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      <Card className="mb-4 p-3">
+        <div className="flex flex-wrap items-center gap-4">
+          <Avatar name={member.full_name} src={assetURL(member.photo_url)} size="lg" />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-semibold tracking-tight">{member.full_name}</h2>
+              <Badge tone={st.tone as Tone}>{st.label}</Badge>
+              {(member.cargos ?? []).map((c) => (
+                <Badge key={c.id} tone={(CARGO_KINDS[c.kind]?.tone as Tone) ?? "zinc"} className="text-[10px]">
+                  {c.name}
+                </Badge>
+              ))}
             </div>
-            <p className="text-sm text-zinc-500">{member.office ? OFFICES[member.office] ?? member.office : "Membro"} {member.profession ? `· ${member.profession}` : ""}</p>
+            <p className="mt-1 text-xs text-zinc-400">
+              {[
+                member.birth_date && age(member.birth_date) !== null ? `${age(member.birth_date)} anos` : null,
+                member.email,
+                member.whatsapp ?? member.phone,
+                member.joined_at ? `membro desde ${datePt(member.joined_at)}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ") || "Sem dados de contato"}
+            </p>
           </div>
         </div>
-        <div className="flex gap-2">
-          {!editing && <Button variant="outline" onClick={startEdit}><Pencil className="h-4 w-4" /> Editar</Button>}
-          <Button variant="ghost" onClick={onCard}><QrCode className="h-4 w-4" /> Carteirinha</Button>
-        </div>
-      </div>
+      </Card>
+
+      <Modal
+        open={editando}
+        onClose={() => setEditando(false)}
+        size="lg"
+        title={`Editar — ${member.full_name}`}
+      >
+        {editando && (
+          <MemberForm
+            memberId={member.id}
+            initial={member}
+            saving={salvando}
+            submitLabel="Salvar alterações"
+            onSubmit={salvar}
+            onCancel={() => setEditando(false)}
+            onPhotoChange={(url) => setMember((m) => (m ? { ...m, photo_url: url } : m))}
+          />
+        )}
+      </Modal>
 
       <Tabs
         tabs={[
           { key: "dados", label: "Dados Pessoais", icon: <User className="h-4 w-4" /> },
           { key: "contato", label: "Contato", icon: <Phone className="h-4 w-4" /> },
-          { key: "vinc", label: "Vínculos & Família", icon: <GitBranch className="h-4 w-4" /> },
+          { key: "cargos", label: "Cargos", icon: <Award className="h-4 w-4" /> },
+          { key: "familia", label: "Família", icon: <Users className="h-4 w-4" /> },
+          { key: "vinc", label: "Vínculos", icon: <GitBranch className="h-4 w-4" /> },
           { key: "espiritual", label: "Espiritual", icon: <Sparkles className="h-4 w-4" /> },
+          { key: "freq", label: "Frequência", icon: <Activity className="h-4 w-4" /> },
+          { key: "hist", label: "Histórico", icon: <History className="h-4 w-4" /> },
           { key: "docs", label: "Documentos", icon: <FileText className="h-4 w-4" /> },
+          { key: "lgpd", label: "LGPD", icon: <ShieldCheck className="h-4 w-4" /> },
         ]}
         active={tab}
         onChange={setTab}
       />
 
       {tab === "dados" && (
-        editing ? (
-          <form onSubmit={saveEdit} className="card grid grid-cols-2 gap-3">
-            <Field label="Apelido"><Input value={form.nickname} onChange={(e) => setForm({ ...form, nickname: e.target.value })} /></Field>
-            <Field label="Nascimento"><Input type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} /></Field>
-            <Field label="Sexo"><Select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}><option value="">—</option>{Object.entries(GENDER).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}</Select></Field>
-            <Field label="Estado civil"><Select value={form.marital_status} onChange={(e) => setForm({ ...form, marital_status: e.target.value })}><option value="">—</option>{Object.entries(MARITAL_STATUS).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}</Select></Field>
-            <Field label="Profissão"><Input value={form.profession} onChange={(e) => setForm({ ...form, profession: e.target.value })} /></Field>
-            <Field label="Cargo"><Select value={form.office} onChange={(e) => setForm({ ...form, office: e.target.value })}><option value="">—</option>{Object.keys(OFFICES).map((k) => (<option key={k} value={k}>{OFFICES[k]}</option>))}</Select></Field>
-            <Field label="Status"><Select value={form.membership_status} onChange={(e) => setForm({ ...form, membership_status: e.target.value })}>{Object.entries(MEMBERSHIP_STATUS).map(([k, v]) => (<option key={k} value={k}>{v.label}</option>))}</Select></Field>
-            <div className="col-span-2 flex justify-end gap-2 pt-2">
-              <Button variant="ghost" type="button" onClick={() => setEditing(false)}>Cancelar</Button>
-              <Button type="submit">Salvar</Button>
-            </div>
-          </form>
-        ) : (
-          <div className="card">
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
-              <Info label="Nome completo" value={member.full_name} />
-              <Info label="Apelido" value={member.nickname} />
-              <Info label="Nascimento" value={datePt(member.birth_date)} />
-              <Info label="Sexo" value={member.gender ? GENDER[member.gender] : "—"} />
-              <Info label="Estado civil" value={member.marital_status ? MARITAL_STATUS[member.marital_status] : "—"} />
-              <Info label="Profissão" value={member.profession} />
-              <Info label="Cargo" value={member.office ? OFFICES[member.office] ?? member.office : "—"} />
-              <Info label="Status" value={st.label} />
-            </dl>
-          </div>
-        )
+        <Card>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+            <Info label="Nome completo" value={member.full_name} />
+            <Info label="Apelido" value={member.nickname} />
+            <Info label="Nascimento" value={datePt(member.birth_date)} />
+            <Info label="Sexo" value={member.gender ? GENDER[member.gender] : "—"} />
+            <Info label="Estado civil" value={member.marital_status ? MARITAL_STATUS[member.marital_status] : "—"} />
+            <Info label="Profissão" value={member.profession} />
+            <Info
+              label="Cargos"
+              value={member.cargos?.length ? member.cargos.map((c) => c.name).join(", ") : "—"}
+            />
+            <Info label="CPF" value={member.cpf} />
+            <Info label="RG" value={member.rg} />
+            <Info label="Status" value={st.label} />
+            <Info label="Classificação no Rol" value={member.roll_class === "professo" ? "Professo" : "Não professo"} />
+            <Info label="Filial" value={branchName(member.branch_id)} />
+            {member.exit_reason && (
+              <Info label="Motivo da baixa" value={EXIT_REASONS[member.exit_reason] ?? member.exit_reason} />
+            )}
+            {member.exited_at && <Info label="Data de saída" value={datePt(member.exited_at)} />}
+          </dl>
+          <p className="mt-4 border-t border-zinc-100 pt-2 text-xs text-zinc-400 dark:border-zinc-800">
+            Para alterar estes dados use <span className="font-medium">Editar</span> — o mesmo
+            formulário da inclusão, com foto, documentos e cargos.
+          </p>
+        </Card>
       )}
 
       {tab === "contato" && (
-        editing ? (
-          <form onSubmit={saveEdit} className="card grid grid-cols-2 gap-3">
-            <Field label="E-mail"><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-            <Field label="Telefone"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
-            <Field label="WhatsApp"><Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} /></Field>
-            <div className="col-span-2 flex justify-end gap-2 pt-2">
-              <Button variant="ghost" type="button" onClick={() => setEditing(false)}>Cancelar</Button>
-              <Button type="submit">Salvar</Button>
-            </div>
-          </form>
-        ) : (
-          <div className="card">
-            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Info label="E-mail" value={member.email} />
-              <Info label="Telefone" value={member.phone} />
-              <Info label="WhatsApp" value={member.whatsapp} />
-            </dl>
-          </div>
-        )
+        <Card>
+          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Info label="E-mail" value={member.email} />
+            <Info label="Telefone" value={member.phone} />
+            <Info label="WhatsApp" value={member.whatsapp} />
+            <Info label="Endereço" value={addressLine(member.address)} />
+          </dl>
+        </Card>
+      )}
+
+      {tab === "cargos" && (
+        <CargosSection memberId={member.id} canWrite={canWrite} onChanged={load} />
+      )}
+
+      {tab === "familia" && (
+        <FamilySection
+          memberId={member.id}
+          memberName={member.full_name}
+          canWrite={canWrite}
+          onChanged={load}
+        />
       )}
 
       {tab === "vinc" && (
         <div className="space-y-4">
-          <Card>
-            <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Adicionar vínculo</h3>
-            <form onSubmit={doLink} className="flex flex-wrap items-end gap-3">
-              <div className="flex-1 min-w-48">
-                <label className="label">Pessoa</label>
-                <Select value={rel.relate_member_id} onChange={(e) => setRel({ ...rel, relate_member_id: e.target.value })}>
-                  <option value="">Selecione...</option>
-                  {others.map((m) => (<option key={m.id} value={m.id}>{m.full_name}</option>))}
-                </Select>
-              </div>
-              <div className="w-44">
-                <label className="label">Relacionamento</label>
-                <Select value={rel.kind} onChange={(e) => setRel({ ...rel, kind: e.target.value })}>
-                  {REL_KINDS.map((k) => (<option key={k} value={k}>{RELATION_LABELS[k] ?? k}</option>))}
-                </Select>
-              </div>
-              <Button type="submit"><LinkIcon className="h-4 w-4" /> Vincular</Button>
-            </form>
-          </Card>
-          <Card>
-            <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Árvore de relacionamentos</h3>
+          {canWrite && (
+            <Card className="p-3">
+              <h3 className="mb-3 text-sm font-semibold">Adicionar vínculo</h3>
+              <form onSubmit={doLink} className="flex flex-wrap items-end gap-3">
+                <Field label="Pessoa" className="min-w-48 flex-1">
+                  <Select
+                    className="h-8 text-sm"
+                    value={rel.relate_member_id}
+                    onChange={(e) => setRel({ ...rel, relate_member_id: e.target.value })}
+                  >
+                    <option value="">Selecione...</option>
+                    {others.map((m) => (
+                      <option key={m.id} value={m.id}>{m.full_name}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Relacionamento" className="w-44">
+                  <Select
+                    className="h-8 text-sm"
+                    value={rel.kind}
+                    onChange={(e) => setRel({ ...rel, kind: e.target.value })}
+                  >
+                    {REL_KINDS.map((k) => (
+                      <option key={k} value={k}>{RELATION_LABELS[k] ?? k}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Button className="h-8 text-sm" type="submit">
+                  <LinkIcon className="h-4 w-4" /> Vincular
+                </Button>
+              </form>
+              <p className="mt-2 text-xs text-zinc-400">
+                Para agrupar por residência (com endereço e chefe da família), use a aba{" "}
+                <span className="font-medium">Família</span>.
+              </p>
+            </Card>
+          )}
+
+          <Card className="p-3">
+            <h3 className="mb-3 text-sm font-semibold">Árvore de relacionamentos</h3>
             {rels.length === 0 ? (
-              <EmptyState icon={<GitBranch className="h-8 w-8" />} title="Sem vínculos" description="Adicione família e discipulado." />
+              <EmptyState
+                icon={<GitBranch className="h-8 w-8" />}
+                title="Sem vínculos"
+                description="Adicione cônjuge, filhos, discipulado e outros relacionamentos."
+              />
             ) : (
-              <ul className="space-y-2">
+              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {rels.map((r) => (
-                  <li key={r.id} className="flex items-center justify-between rounded-md bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-900">
-                    <span className="flex items-center gap-2 font-medium">
-                      <Avatar name={r.related_name} size="sm" /> {r.related_name}
+                  <li key={r.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                    <span className="flex min-w-0 items-center gap-2 font-medium">
+                      <Avatar name={r.related_name} size="sm" />
+                      <Link
+                        href={`/dashboard/members/${r.related_id}`}
+                        className="truncate hover:text-sky-700 dark:hover:text-sky-400"
+                      >
+                        {r.related_name}
+                      </Link>
                     </span>
-                    <Badge tone="violet">{RELATION_LABELS[r.kind] ?? r.relation}</Badge>
+                    <Badge tone="sky" className="text-[10px]">
+                      {RELATION_LABELS[r.kind] ?? r.relation}
+                    </Badge>
                   </li>
                 ))}
               </ul>
@@ -231,29 +357,53 @@ export default function MemberDetailPage() {
 
       {tab === "espiritual" && (
         <Card>
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <Info label="Filiação" value={member.branch_id ? "Vinculado" : "—"} />
-            <Info label="Batismo" value={datePt(member.birth_date)} />
-            <Info label="Membro desde" value={datePt(member.created_at)} />
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Info label="Filial" value={branchName(member.branch_id)} />
+            <Info label="Batismo" value={datePt(member.baptism_date)} />
+            <Info label="Local do batismo" value={member.baptism_location} />
+            <Info label="Casamento" value={datePt(member.marriage_date)} />
+            <Info label="Membro desde" value={datePt(member.joined_at)} />
+            <Info
+              label="Idade"
+              value={
+                member.birth_date && age(member.birth_date) !== null
+                  ? `${age(member.birth_date)} anos`
+                  : "—"
+              }
+            />
+            <Info label="Cadastrado em" value={datePt(member.created_at)} />
           </dl>
         </Card>
       )}
 
+      {tab === "freq" && <FrequencySection memberId={member.id} canWrite={canWrite} />}
+
+      {tab === "hist" && <HistorySection memberId={member.id} canWrite={canWrite} />}
+
       {tab === "docs" && (
-        <Card>
-          <div className="mb-4 flex items-center gap-2">
-            <HeartHandshake className="h-4 w-4 text-violet-600" />
-            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Documentos</h3>
+        <Card className="p-3">
+          <div className="mb-3 flex items-center gap-2">
+            <HeartHandshake className="h-4 w-4 text-sky-600" />
+            <h3 className="text-sm font-semibold">Documentos</h3>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-zinc-300 p-4 dark:border-zinc-700">
             <div>
               <p className="font-medium">Carteirinha de membro</p>
-              <p className="text-xs text-zinc-400">QR Code com vínculo digital à igreja</p>
+              <p className="text-xs text-zinc-400">
+                QR Code com vínculo digital à igreja. O número é único e estável: emitir de novo
+                devolve a mesma carteirinha.
+              </p>
             </div>
-            <Button onClick={onCard}><QrCode className="h-4 w-4" /> Emitir</Button>
+            <CardCell
+              memberId={member.id}
+              cardRef={member.card_ref}
+              onIssued={(ref) => setMember((m) => (m ? { ...m, card_ref: ref } : m))}
+            />
           </div>
         </Card>
       )}
+
+      {tab === "lgpd" && <LgpdSection memberId={member.id} canWrite={canWrite} isAdmin={isAdmin} />}
     </div>
   );
 }
@@ -265,4 +415,13 @@ function Info({ label, value }: { label: string; value: string | undefined | nul
       <dd className="mt-0.5 text-sm font-medium">{value || "—"}</dd>
     </div>
   );
+}
+
+/** Monta uma linha de endereço para exibição. */
+function addressLine(a?: MemberAddress): string {
+  if (!a) return "—";
+  const line1 = [a.street, a.number, a.complement].filter(Boolean).join(", ");
+  const line2 = [a.district, a.city, a.state].filter(Boolean).join(" · ");
+  const cep = a.zip_code ? `CEP ${a.zip_code}` : "";
+  return [line1, line2, cep].filter(Boolean).join(" — ") || "—";
 }

@@ -9,6 +9,18 @@ export function number(n: number) {
   return n.toLocaleString("pt-BR");
 }
 
+/** Idade em anos a partir de uma data ISO (YYYY-MM-DD). */
+export function age(s?: string | null): number | null {
+  if (!s) return null;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  let years = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) years--;
+  return years < 0 ? null : years;
+}
+
 export function datePt(s?: string | null) {
   if (!s) return "—";
   try {
