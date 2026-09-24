@@ -23,6 +23,43 @@ services:
       timeout: 5s
       retries: 10
 
+  ### Evolution API (WhatsApp) - backend dos canais por filial (QR Code).
+  ### Banco próprio (`evolution`) no mesmo Postgres; instancias em volume nomeado.
+  evolution:
+    image: evoapicloud/evolution-api:latest
+    container_name: chosen-evolution
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-chosen-evolution-key}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://postgres:${POSTGRES_PASSWORD:-sinc}@postgres:5432/evolution?schema=public
+      DATABASE_CONNECTION_CLIENT_NAME: chosen_evolution
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
+      DATABASE_SAVE_MESSAGE_UPDATE: "true"
+      DATABASE_SAVE_DATA_CONTACTS: "true"
+      DATABASE_SAVE_DATA_CHATS: "true"
+      CACHE_REDIS_ENABLED: "false"
+      CACHE_LOCAL_ENABLED: "true"
+      LANGUAGE: pt-BR
+      LOG_LEVEL: ${EVOLUTION_LOG_LEVEL:-ERROR}
+      LOG_BAILEYS: ${EVOLUTION_LOG_BAILEYS:-error}
+      QRCODE_LIMIT: "30"
+      CONFIG_SESSION_PHONE_CLIENT: Chosen ERP
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      # Vazio => o Baileys busca a versao mais recente do WhatsApp Web.
+      CONFIG_SESSION_PHONE_VERSION: ${EVOLUTION_PHONE_VERSION:-}
+      SERVER_URL: http://evolution:8080
+      DEL_INSTANCE: "false"
+    ports:
+      - "${EVOLUTION_PORT:-38081}:8080"
+    volumes:
+      - evolution_instances:/evolution/instances
+
   ### Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
@@ -51,6 +88,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      evolution:
+        condition: service_started
     environment:
       DATABASE_URL: postgres://chosenerp_app:chosenapp@postgres:5432/chosenerp?sslmode=disable
       MIGRATE_DATABASE_URL: postgres://postgres:sinc@postgres:5432/chosenerp?sslmode=disable
@@ -69,8 +108,9 @@ services:
       WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID:-}
       WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION:-v19.0}
       WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER:-meta}
-      EVOLUTION_API_URL: ${EVOLUTION_API_URL:-}
-      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
+      # Dentro da rede do Compose a Evolution atende em http://evolution:8080.
+      EVOLUTION_API_URL: http://evolution:8080
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-chosen-evolution-key}
       EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-}
       DELIVERY_POLL_SECONDS: ${DELIVERY_POLL_SECONDS:-30}
       RECURRING_POLL_SECONDS: ${RECURRING_POLL_SECONDS:-3600}
@@ -166,6 +206,8 @@ volumes:
   # Anexos do financeiro e fotos de membro (UPLOAD_DIR=/uploads na API).
   uploads:
   pgdata:
+  # Sessoes/credenciais das instancias WhatsApp da Evolution API.
+  evolution_instances:
   redisdata:
   rabbitdata:
   promdata:

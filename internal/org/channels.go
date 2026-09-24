@@ -14,6 +14,7 @@ type BranchChannels struct {
 	WhatsAppPhone    string `json:"whatsapp_phone"`
 	WhatsAppInstance string `json:"whatsapp_instance"`
 	WhatsAppStatus   string `json:"whatsapp_status"` // disconnected|connecting|connected
+	WhatsAppNumber   string `json:"whatsapp_number"` // numero conectado (Evolution)
 	SMTPHost         string `json:"smtp_host"`
 	SMTPPort         int    `json:"smtp_port"`
 	SMTPUser         string `json:"smtp_user"`
@@ -40,6 +41,7 @@ const channelsCols = `b.id::text,
 	COALESCE(b.whatsapp_phone, ''),
 	COALESCE(b.whatsapp_instance, ''),
 	b.whatsapp_status,
+	COALESCE(b.whatsapp_number, ''),
 	COALESCE(b.smtp_host, ''),
 	COALESCE(b.smtp_port, 0),
 	COALESCE(b.smtp_user, ''),
@@ -50,7 +52,7 @@ const channelsCols = `b.id::text,
 
 func scanChannels(row pgx.Row) (*BranchChannels, error) {
 	var c BranchChannels
-	err := row.Scan(&c.BranchID, &c.WhatsAppPhone, &c.WhatsAppInstance, &c.WhatsAppStatus,
+	err := row.Scan(&c.BranchID, &c.WhatsAppPhone, &c.WhatsAppInstance, &c.WhatsAppStatus, &c.WhatsAppNumber,
 		&c.SMTPHost, &c.SMTPPort, &c.SMTPUser, &c.SMTPPasswordSet,
 		&c.SMTPFrom, &c.SMTPFromName, &c.SMTPSecure)
 	return &c, err
@@ -90,13 +92,16 @@ func (r *Repo) UpdateBranchChannels(ctx context.Context, tx pgx.Tx, id string, i
 }
 
 // SetBranchWhatsApp grava a instancia/estado da conexao WhatsApp da filial.
-func (r *Repo) SetBranchWhatsApp(ctx context.Context, tx pgx.Tx, id, instance, status string) error {
+// `number` e o numero conectado (ownerJid da Evolution); vazio quando nao ha
+// conexao (limpa o valor).
+func (r *Repo) SetBranchWhatsApp(ctx context.Context, tx pgx.Tx, id, instance, status, number string) error {
 	tag, err := tx.Exec(ctx, `
 		UPDATE branches SET
 			whatsapp_instance = $2,
 			whatsapp_status = $3,
+			whatsapp_number = NULLIF($4, ''),
 			updated_at = now()
-		WHERE id = $1::uuid`, id, instance, status)
+		WHERE id = $1::uuid`, id, instance, status, number)
 	if err != nil {
 		return err
 	}

@@ -14,3 +14,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO chosenerp_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
   GRANT USAGE ON SEQUENCES TO chosenerp_app;
+
+-- Banco proprio da Evolution API (WhatsApp). A Evolution roda as migracoes
+-- Prisma ao iniciar; aqui so garantimos que o database exista.
+SELECT 'CREATE DATABASE evolution'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'evolution')\gexec

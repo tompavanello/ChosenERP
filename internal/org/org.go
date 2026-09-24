@@ -95,6 +95,11 @@ type Branch struct {
 	IsActive    bool            `json:"is_active"`
 	MemberCount int             `json:"member_count"`
 	CreatedAt   time.Time       `json:"created_at"`
+	// Canais: permite indicar no grid se a filial tem WhatsApp conectado.
+	WhatsAppStatus string `json:"whatsapp_status"`
+	WhatsAppPhone  string `json:"whatsapp_phone"`
+	// WhatsAppNumber e o numero efetivamente conectado na instancia Evolution.
+	WhatsAppNumber string `json:"whatsapp_number"`
 }
 
 // BranchInput e o corpo de criacao/edicao de uma filial.
@@ -112,12 +117,12 @@ type BranchInput struct {
 const branchCols = `b.id::text, COALESCE(b.parent_id::text,''), b.name, b.slug, b.kind, b.cnpj,
 	COALESCE(b.address::text,''), COALESCE(b.geo::text,''), b.is_active,
 	(SELECT count(*) FROM members m WHERE m.branch_id = b.id)::int,
-	b.created_at`
+	b.created_at, b.whatsapp_status, COALESCE(b.whatsapp_phone,''), COALESCE(b.whatsapp_number,'')`
 
 func scanBranch(row pgx.Row) (*Branch, error) {
 	var b Branch
 	var parent, address, geo string
-	err := row.Scan(&b.ID, &parent, &b.Name, &b.Slug, &b.Kind, &b.CNPJ, &address, &geo, &b.IsActive, &b.MemberCount, &b.CreatedAt)
+	err := row.Scan(&b.ID, &parent, &b.Name, &b.Slug, &b.Kind, &b.CNPJ, &address, &geo, &b.IsActive, &b.MemberCount, &b.CreatedAt, &b.WhatsAppStatus, &b.WhatsAppPhone, &b.WhatsAppNumber)
 	if err != nil {
 		return nil, err
 	}

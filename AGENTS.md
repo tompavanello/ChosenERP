@@ -336,6 +336,7 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | POST | `/api/v1/users/{id}/password` | Bearer (Sede) | Redefine a senha |
 | GET  | `/api/v1/roles` | Bearer (Sede) | Perfis + permissoes |
 | GET  | `/api/v1/permissions` | Bearer (Sede) | Catalogo de permissoes |
+| POST | `/api/v1/admin/reset-data` | Bearer (super_admin) | Limpa dados operacionais (mantem base + super_admin); corpo `{"confirm":"RESET"}` |
 | GET  | `/api/v1/auth/mfa` | Bearer | Estado do MFA |
 | POST | `/api/v1/auth/mfa/setup` | Bearer | Gera segredo TOTP |
 | POST | `/api/v1/auth/mfa/enable` | Bearer | Ativa MFA (codigo) |
@@ -376,6 +377,45 @@ de membro e anexos do financeiro - nao remova nem o diretorio nem o `--chown`.
 
 Com o profile completo (`--profile full`), Prometheus (porta 39090) e Grafana (porta 33001)
 coletam metricas do servico `api`. O Prometheus aponta para `api:8080/metrics`.
+
+## WhatsApp local (Evolution API)
+
+O Compose sobe a **Evolution API** (`chosen-evolution`,
+`evoapicloud/evolution-api:latest`) junto do stack, na mesma rede e no mesmo
+Postgres (banco proprio `evolution`, criado por
+`infra/postgres/initdb/01-setup.sql`). Ela e o backend dos **canais por filial**:
+cada filial cria uma instancia nomeada com o **id da filial** e conecta por QR
+Code.
+
+- Manager/UI: `http://localhost:38081/manager` (chave `EVOLUTION_API_KEY`).
+- Dentro da rede o `api` fala `http://evolution:8080` (definido no Compose). No
+  `.env`, `EVOLUTION_API_URL` aponta para `http://localhost:38081` (uso no host).
+- `EVOLUTION_API_KEY` precisa ser **igual** ao `AUTHENTICATION_API_KEY` da
+  Evolution (o Compose usa o mesmo valor para os dois).
+- Instancias ficam no volume `evolution_instances`. Para zerar tudo:
+  `docker compose ... down -v` (apaga tambem os dados do Postgres).
+- Fluxo na plataforma: Configuracoes -> Filiais -> editar filial -> Canais ->
+  **Conectar WhatsApp** (gera o QR), ler no WhatsApp -> Aparelhos conectados.
+
+> Se o QR nao aparecer, veja `docker logs chosen-evolution`. A Evolution precisa
+> alcancar `web.whatsapp.com`; versoes antigas da imagem deixam de conectar
+> quando o WhatsApp muda (por isso usamos `evoapicloud/evolution-api:latest`).
+
+## Reset operacional (reiniciar testes)
+
+Para zerar os dados de teste mantendo a base (tenant, filiais, papeis,
+permissoes) e apenas o usuario **super_admin**, use a funcao
+`reset_operational_data()` (migracao `000058`). Ela trunca tudo que e operacional
+(membros, financeiro, eventos, kids, governanca, comunicados, auditoria...) e
+remove vinculos/identidades que nao sejam de super_admin.
+
+- Via API (super_admin): `POST /api/v1/admin/reset-data` com corpo
+  `{"confirm":"RESET"}`.
+- Via SQL:
+  `docker exec chosen-postgres psql -U postgres -d chosenerp -c "SELECT reset_operational_data();"`.
+
+> E destrutivo e nao tem volta. Instancias da Evolution (`evolution_instances`)
+> e a config de canais das filiais NAO sao apagadas (ficam em `branches`).
 
 ## Fases (roadmap)
 

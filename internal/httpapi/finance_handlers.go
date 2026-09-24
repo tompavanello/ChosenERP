@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"chosenerp/internal/delivery"
 	"chosenerp/internal/documents"
 	"chosenerp/internal/finance"
 	"chosenerp/internal/org"
@@ -442,6 +443,31 @@ func (a *App) handleListBranches(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	// Enriquece o numero conectado das filiais com WhatsApp aberto que ainda
+	// nao tem o numero salvo. Best-effort: se a Evolution estiver fora, o grid
+	// apenas nao mostra o numero (nao quebra a listagem).
+	if a.Config.EvolutionAPIURL != "" && a.Config.EvolutionAPIKey != "" {
+		client := a.evolution()
+		for i := range out {
+			br := &out[i]
+			// A instancia Evolution e nomeada com o id da filial.
+			if br.WhatsAppStatus != "connected" || br.WhatsAppNumber != "" {
+				continue
+			}
+			info, err := client.FetchInstance(r.Context(), br.ID)
+			if err != nil || info.ConnectionStatus != "open" {
+				continue
+			}
+			num := delivery.ConnectedNumber(info)
+			if num == "" {
+				continue
+			}
+			br.WhatsAppNumber = num
+			_ = a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+				return a.Org.SetBranchWhatsApp(r.Context(), tx, br.ID, br.ID, "connected", num)
+			})
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"branches": out})
 }

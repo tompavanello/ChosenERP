@@ -64,6 +64,7 @@ export default function SettingsPage() {
   // Canais por filial (WhatsApp + SMTP), editados no mesmo drawer.
   const [chForm, setChForm] = useState({ ...EMPTY_CHANNELS });
   const [waStatus, setWaStatus] = useState("disconnected");
+  const [waNumber, setWaNumber] = useState("");
   const [qr, setQr] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [savingChannels, setSavingChannels] = useState(false);
@@ -117,9 +118,11 @@ export default function SettingsPage() {
     setQr("");
     setConnecting(false);
     setWaStatus("disconnected");
+    setWaNumber("");
     getBranchChannels(b.id)
       .then((c) => {
         setWaStatus(c.whatsapp_status);
+        setWaNumber(c.whatsapp_number || "");
         setChForm({
           whatsapp_phone: c.whatsapp_phone,
           smtp_host: c.smtp_host,
@@ -166,8 +169,17 @@ export default function SettingsPage() {
     try {
       const res = await connectBranchWhatsApp(drawer.editing.id);
       setQr(res.qrcode_base64 || "");
-      setWaStatus("connecting");
-      toast("Leia o QR Code no WhatsApp da filial.");
+      setWaNumber(res.number || "");
+      if (res.status === "connected") {
+        setWaStatus("connected");
+        setConnecting(false);
+        toast("WhatsApp ja conectado.");
+      } else {
+        setWaStatus("connecting");
+        toast("Leia o QR Code no WhatsApp da filial.");
+      }
+      await load();
+      mutate("branches");
     } catch (err) {
       setConnecting(false);
       toast(err instanceof Error ? err.message : "Erro ao conectar WhatsApp", "error");
@@ -179,9 +191,12 @@ export default function SettingsPage() {
     try {
       await disconnectBranchWhatsApp(drawer.editing.id);
       setWaStatus("disconnected");
+      setWaNumber("");
       setQr("");
       setConnecting(false);
       toast("WhatsApp desconectado.");
+      await load();
+      mutate("branches");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao desconectar", "error");
     }
@@ -195,16 +210,19 @@ export default function SettingsPage() {
       try {
         const s = await getBranchWhatsAppState(id);
         setWaStatus(s.status);
+        if (s.number) setWaNumber(s.number);
         if (s.connected) {
           setQr("");
           setConnecting(false);
+          await load();
+          mutate("branches");
         }
       } catch {
         /* mantem a tentativa */
       }
     }, 3000);
     return () => clearInterval(timer);
-  }, [connecting, drawer]);
+  }, [connecting, drawer, load]);
   async function saveBranch(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -320,7 +338,7 @@ export default function SettingsPage() {
             <EmptyState icon={<Building2 className="h-10 w-10" />} title="Nenhuma filial" description="Cadastre a Matriz, as filiais (regionais) e os PAEs." />
           ) : (
             <Table>
-              <THead><TRow><TH>Nome</TH><TH>Tipo</TH><TH>Identificador</TH><TH>CNPJ</TH><TH className="text-right">Membros</TH><TH>Situacao</TH><TH className="text-right">Acoes</TH></TRow></THead>
+              <THead><TRow><TH>Nome</TH><TH>Tipo</TH><TH>Identificador</TH><TH>CNPJ</TH><TH>WhatsApp</TH><TH className="text-right">Membros</TH><TH>Situacao</TH><TH className="text-right">Acoes</TH></TRow></THead>
               <TBody>
                 {branches.map((b) => (
                   <TRow key={b.id}>
@@ -328,6 +346,20 @@ export default function SettingsPage() {
                     <TD><Badge tone="zinc">{BRANCH_KINDS.find((k) => k.v === b.kind)?.l ?? b.kind}</Badge></TD>
                     <TD className="text-sm text-zinc-500">{b.slug}</TD>
                     <TD className="text-sm text-zinc-500">{b.cnpj ?? "-"}</TD>
+                    <TD>
+                      {b.whatsapp_status === "connected" ? (
+                        <div className="flex flex-col items-start gap-0.5">
+                          <Badge tone="green">Conectado</Badge>
+                          {(b.whatsapp_number || b.whatsapp_phone) && (
+                            <span className="text-xs text-zinc-500">{b.whatsapp_number || b.whatsapp_phone}</span>
+                          )}
+                        </div>
+                      ) : b.whatsapp_status === "connecting" ? (
+                        <Badge tone="sky">Aguardando leitura</Badge>
+                      ) : (
+                        <span className="text-xs text-zinc-400">-</span>
+                      )}
+                    </TD>
                     <TD className="text-right tabular-nums">{b.member_count ?? 0}</TD>
                     <TD><Badge tone={(b.is_active ?? true) ? "green" : "zinc"}>{(b.is_active ?? true) ? "Ativa" : "Inativa"}</Badge></TD>
                     <TD>
@@ -428,6 +460,9 @@ export default function SettingsPage() {
                   {waStatus === "connected" ? "Conectado" : waStatus === "connecting" ? "Aguardando QR" : "Desconectado"}
                 </Badge>
               </div>
+              {waStatus === "connected" && waNumber && (
+                <p className="mb-2 text-xs text-zinc-500">Numero conectado: <b>{waNumber}</b></p>
+              )}
               <Field label="Telefone (WhatsApp)" hint="Numero exibido/associado a filial.">
                 <Input className="h-8 text-sm" placeholder="(11) 90000-0000" value={chForm.whatsapp_phone} onChange={(e) => setChForm({ ...chForm, whatsapp_phone: e.target.value })} />
               </Field>

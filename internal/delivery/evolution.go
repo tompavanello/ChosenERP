@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -152,6 +153,51 @@ func normalizeEvolutionState(s string) string {
 func (c *EvolutionClient) Logout(ctx context.Context, instance string) error {
 	_, _, err := c.do(ctx, http.MethodDelete, "/instance/logout/"+instance, nil)
 	return err
+}
+
+// EvolutionInstance e um item de /instance/fetchInstances.
+type EvolutionInstance struct {
+	Name             string `json:"name"`
+	ConnectionStatus string `json:"connectionStatus"`
+	OwnerJid         string `json:"ownerJid"`
+	Number           string `json:"number"`
+	ProfileName      string `json:"profileName"`
+	ProfilePicUrl    string `json:"profilePicUrl"`
+}
+
+// FetchInstance devolve os dados da instancia (inclui ownerJid do numero
+// conectado). A rota varia entre versoes: v2 aceita ?instanceName=.
+func (c *EvolutionClient) FetchInstance(ctx context.Context, instance string) (EvolutionInstance, error) {
+	raw, _, err := c.do(ctx, http.MethodGet,
+		"/instance/fetchInstances?instanceName="+url.QueryEscape(instance), nil)
+	if err != nil {
+		return EvolutionInstance{}, err
+	}
+	var arr []EvolutionInstance
+	if err := json.Unmarshal(raw, &arr); err != nil || len(arr) == 0 {
+		return EvolutionInstance{}, nil
+	}
+	return arr[0], nil
+}
+
+// ConnectedNumber extrai o numero (E.164 com "+") do ownerJid da instancia.
+func ConnectedNumber(inst EvolutionInstance) string {
+	jid := inst.OwnerJid
+	if jid == "" {
+		jid = inst.Number
+	}
+	if jid == "" {
+		return ""
+	}
+	num := strings.SplitN(jid, "@", 2)[0]
+	num = strings.TrimSpace(num)
+	if num == "" {
+		return ""
+	}
+	if strings.HasPrefix(num, "+") {
+		return num
+	}
+	return "+" + num
 }
 
 func truncate(s string, n int) string {

@@ -112,12 +112,22 @@ func (a *App) handleConnectBranchWhatsApp(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	// Se a instancia ja estava conectada (ex.: "Reconectar"), captura o numero.
+	number := ""
+	status := "connecting"
+	if st, err := client.State(r.Context(), id); err == nil && st == "connected" {
+		status = "connected"
+		if info, err := client.FetchInstance(r.Context(), id); err == nil {
+			number = delivery.ConnectedNumber(info)
+		}
+	}
 	_ = a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
-		return a.Org.SetBranchWhatsApp(r.Context(), tx, id, id, "connecting")
+		return a.Org.SetBranchWhatsApp(r.Context(), tx, id, id, status, number)
 	})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"instance":      id,
-		"status":        "connecting",
+		"status":        status,
+		"number":        number,
 		"qrcode_base64": qr.Base64,
 		"code":          qr.Code,
 	})
@@ -132,18 +142,25 @@ func (a *App) handleBranchWhatsAppState(w http.ResponseWriter, r *http.Request) 
 	id := r.PathValue("id")
 	b := boundsFromClaims(claims)
 	state := "disconnected"
+	number := ""
 	if a.Config.EvolutionAPIURL != "" && a.Config.EvolutionAPIKey != "" {
 		if s, err := a.evolution().State(r.Context(), id); err == nil {
 			state = s
 		}
+		if state == "connected" {
+			if info, err := a.evolution().FetchInstance(r.Context(), id); err == nil {
+				number = delivery.ConnectedNumber(info)
+			}
+		}
 	}
 	_ = a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
-		return a.Org.SetBranchWhatsApp(r.Context(), tx, id, id, state)
+		return a.Org.SetBranchWhatsApp(r.Context(), tx, id, id, state, number)
 	})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"instance":  id,
 		"status":    state,
 		"connected": state == "connected",
+		"number":    number,
 	})
 }
 
@@ -162,7 +179,7 @@ func (a *App) handleDisconnectBranchWhatsApp(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	if err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
-		return a.Org.SetBranchWhatsApp(r.Context(), tx, id, id, "disconnected")
+		return a.Org.SetBranchWhatsApp(r.Context(), tx, id, id, "disconnected", "")
 	}); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return

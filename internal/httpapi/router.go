@@ -288,6 +288,9 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/roles", authed(http.HandlerFunc(app.handleListRoles)))
 	mux.Handle("GET /api/v1/permissions", authed(http.HandlerFunc(app.handleListPermissions)))
 
+	// Reset operacional (super_admin): limpa os dados de teste mantendo a base.
+	mux.Handle("POST /api/v1/admin/reset-data", authed(http.HandlerFunc(app.handleResetData)))
+
 	// MFA (TOTP) do proprio usuario
 	mux.Handle("GET /api/v1/auth/mfa", authed(http.HandlerFunc(app.handleMFAStatus)))
 	mux.Handle("POST /api/v1/auth/mfa/setup", authed(http.HandlerFunc(app.handleMFASetup)))

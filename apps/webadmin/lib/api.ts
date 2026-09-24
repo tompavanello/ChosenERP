@@ -1103,6 +1103,11 @@ export interface Branch {
   is_active?: boolean;
   member_count?: number;
   created_at?: string;
+  /** Canais: indica no grid se a filial tem WhatsApp conectado. */
+  whatsapp_status?: "disconnected" | "connecting" | "connected";
+  whatsapp_phone?: string;
+  /** Numero efetivamente conectado (preenchido quando a conexao abre). */
+  whatsapp_number?: string;
 }
 export const listBranches = () => api<{ branches: Branch[] }>("/api/v1/branches");
 export const createBranch = (data: Record<string, unknown>) =>
@@ -1118,6 +1123,7 @@ export interface BranchChannels {
   whatsapp_phone: string;
   whatsapp_instance: string;
   whatsapp_status: "disconnected" | "connecting" | "connected";
+  whatsapp_number: string;
   smtp_host: string;
   smtp_port: number;
   smtp_user: string;
@@ -1133,13 +1139,14 @@ export const updateBranchChannels = (id: string, data: Record<string, unknown>) 
 export interface WhatsAppConnectResult {
   instance: string;
   status: string;
+  number?: string;
   qrcode_base64: string;
   code?: string;
 }
 export const connectBranchWhatsApp = (id: string) =>
   api<WhatsAppConnectResult>(`/api/v1/branches/${id}/whatsapp/connect`, { method: "POST" });
 export const getBranchWhatsAppState = (id: string) =>
-  api<{ instance: string; status: string; connected: boolean }>(`/api/v1/branches/${id}/whatsapp/state`);
+  api<{ instance: string; status: string; connected: boolean; number?: string }>(`/api/v1/branches/${id}/whatsapp/state`);
 export const disconnectBranchWhatsApp = (id: string) =>
   api<{ ok: boolean; status: string }>(`/api/v1/branches/${id}/whatsapp/logout`, { method: "POST" });
 
