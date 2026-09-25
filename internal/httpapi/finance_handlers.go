@@ -11,8 +11,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"chosenerp/internal/delivery"
 	"chosenerp/internal/documents"
@@ -120,6 +122,122 @@ func (a *App) handleDeleteCategory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// ---- Grupos de contas do plano de contas ----
+
+func (a *App) handleListCategoryGroups(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	b := boundsFromClaims(claims)
+	var out []finance.CategoryGroup
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var err error
+		out, err = a.Finance.ListCategoryGroups(r.Context(), tx)
+		return err
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"groups": out})
+}
+
+func (a *App) handleCreateCategoryGroup(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var in finance.CreateCategoryGroupInput
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	in.Name = strings.TrimSpace(in.Name)
+	if in.Name == "" {
+		writeErr(w, http.StatusBadRequest, "name required")
+		return
+	}
+	b := boundsFromClaims(claims)
+	var g *finance.CategoryGroup
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var err error
+		g, err = a.Finance.CreateCategoryGroup(r.Context(), tx, claims.TenantID, claims.BranchID, in)
+		return err
+	})
+	if err != nil {
+		if isUniqueViolation(err) {
+			writeErr(w, http.StatusConflict, "ja existe um grupo com este nome")
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, g)
+}
+
+func (a *App) handleUpdateCategoryGroup(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var in finance.UpdateCategoryGroupInput
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	b := boundsFromClaims(claims)
+	var g *finance.CategoryGroup
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var err error
+		g, err = a.Finance.UpdateCategoryGroup(r.Context(), tx, r.PathValue("id"), in)
+		return err
+	})
+	if err != nil {
+		if store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "grupo nao encontrado")
+			return
+		}
+		if isUniqueViolation(err) {
+			writeErr(w, http.StatusConflict, "ja existe um grupo com este nome")
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, g)
+}
+
+func (a *App) handleDeleteCategoryGroup(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	b := boundsFromClaims(claims)
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		return a.Finance.DeleteCategoryGroup(r.Context(), tx, r.PathValue("id"))
+	})
+	if err != nil {
+		if store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "grupo nao encontrado")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// isUniqueViolation reconhece o erro 23505 do Postgres (nome duplicado).
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
 func (a *App) handleCreateTxn(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -160,6 +278,54 @@ func (a *App) handleCreateTxn(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"transaction": t, "receipt_ref": ref, "receipt_token": token,
 	})
+}
+
+// handleCreateTxnBatch cria varios lancamentos em uma unica chamada (grid de
+// entrada rapida). Linhas invalidas sao devolvidas individualmente, sem
+// derrubar as demais.
+func (a *App) handleCreateTxnBatch(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var in struct {
+		Transactions []finance.CreateTxnInput `json:"transactions"`
+	}
+	if err := readJSONMax(r, &in, 8<<20); err != nil {
+		writeErr(w, http.StatusBadRequest, "corpo invalido")
+		return
+	}
+	if len(in.Transactions) == 0 {
+		writeErr(w, http.StatusBadRequest, "nenhum lancamento enviado")
+		return
+	}
+	if len(in.Transactions) > 500 {
+		writeErr(w, http.StatusBadRequest, "limite de 500 lancamentos por lote")
+		return
+	}
+	b := boundsFromClaims(claims)
+	var res finance.ImportResult
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		branchID, err := a.writeBranchID(r.Context(), tx, claims)
+		if err != nil {
+			return err
+		}
+		res, err = a.Finance.CreateBatch(r.Context(), tx, claims.TenantID, branchID, in.Transactions)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(r.Context(), `
+			INSERT INTO audit_log (tenant_id, actor_id, action, entity, entity_id, payload)
+			SELECT $1, $2::uuid, 'finance.tx.batch_inserted', 'financial_transactions', NULL, $3
+			FROM users WHERE id = $2`, claims.TenantID, claims.UserID, []byte(`{}`))
+		return err
+	})
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 // handleImportTransactions importa lancamentos em lote via CSV ou planilha
@@ -273,6 +439,37 @@ func (a *App) handleVoidTxn(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if store.IsNotFound(err) {
 			writeErr(w, http.StatusNotFound, "lancamento nao encontrado ou ja estornado")
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handleDeleteTxn exclui DEFINITIVAMENTE um lancamento (sem deixar estorno) e
+// recalcula a hash-chain do tenant. Bloqueado quando preso a auditoria fechada.
+func (a *App) handleDeleteTxn(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	id := r.PathValue("id")
+	b := boundsFromClaims(claims)
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		if err := a.Finance.Delete(r.Context(), tx, id); err != nil {
+			return err
+		}
+		_, err := tx.Exec(r.Context(), `
+			INSERT INTO audit_log (tenant_id, actor_id, action, entity, entity_id, payload)
+			SELECT $1, $2::uuid, 'finance.tx.deleted', 'financial_transactions', $3::uuid, $4
+			FROM users WHERE id = $2`, claims.TenantID, claims.UserID, id, []byte(`{}`))
+		return err
+	})
+	if err != nil {
+		if store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "lancamento nao encontrado")
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())

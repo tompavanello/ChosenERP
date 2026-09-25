@@ -73,7 +73,7 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, q string) ([]Supplier, error
 		   OR COALESCE(trade_name,'') ILIKE '%' || $1 || '%'
 		   OR COALESCE(cpf,'') ILIKE '%' || $1 || '%'
 		   OR COALESCE(cnpj,'') ILIKE '%' || $1 || '%'
-		ORDER BY name LIMIT 300`, q)
+		ORDER BY name`, q)
 	if err != nil {
 		return nil, err
 	}

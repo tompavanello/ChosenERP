@@ -130,7 +130,7 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 		order = *in.SortOrder
 	}
 	return scanCargo(tx.QueryRow(ctx, `
-		INSERT INTO cargos (tenant_id, branch_id, name, slug, kind, requires_term, sort_order)
+		INSERT INTO cargos AS c (tenant_id, branch_id, name, slug, kind, requires_term, sort_order)
 		VALUES ($1, NULLIF($2,'')::uuid, $3, $4, $5, $6, $7)
 		RETURNING `+cargoCols,
 		tenantID, branchID, strings.TrimSpace(in.Name), slugify(in.Name), kind, term, order))

@@ -21,6 +21,15 @@ export function age(s?: string | null): number | null {
   return years < 0 ? null : years;
 }
 
+/** Data de hoje no fuso LOCAL, como YYYY-MM-DD. Evita o deslocamento de um dia
+ *  causado por `toISOString()` (que usa UTC). */
+export function todayISO(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function datePt(s?: string | null) {
   if (!s) return "-";
   try {

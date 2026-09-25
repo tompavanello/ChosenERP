@@ -11,6 +11,7 @@ Este arquivo e a fonte das instrucoes de build/execucao para agentes e devs.
 
 ```
 apps/webadmin/        Painel administrativo (Next.js 15, App Router, Tailwind v4) + Dockerfile
+apps/marketing/       Site institucional / landing (Next.js 15, Tailwind v4) + Dockerfile
 cmd/api/              Entrypoint do servico Go (monolito modular)
 internal/             Dominios: auth, store (pool+migracoes+RLS), httpapi, members
 db/migrations/        Migracoes SQL versionadas (embutidas no binario via Go embed)
@@ -64,6 +65,29 @@ npm run dev        # http://localhost:33000
 - Tema dark (toggle em `components/theme-toggle.tsx`). Helpers em `lib/format.ts`
   (`currency`, `datePt`, `relativePt`) e `lib/constants.ts` (rotulos de status).
 - **Dependencias:** `tailwind-merge`+`clsx` para classes e `recharts` para graficos.
+
+### Site institucional (marketing)
+
+O site publico fica em `apps/marketing` (Next.js 15, estatico) e e servido no
+**dominio central** (`erpchosen.com.br` / `www`). O painel continua nos
+subdominios de igreja e em `app.erpchosen.com.br` - o split e feito por
+`server_name` no `infra/nginx/conf.d/default.conf` (blocos exatos caem no
+marketing; o regex wildcard cai no webadmin). `app`/`www`/`api`/`admin` sao
+`RESERVED_SLUGS` no webadmin, entao nao colidem com igrejas.
+
+```bash
+cd apps/marketing
+npm install
+npm run dev        # http://localhost:33000 (proxied API em API_ORIGIN)
+
+# no Compose: sobe junto com o stack na porta ${MARKETING_PORT:-33010}
+docker compose -f infra/docker-compose.yml up -d marketing
+```
+
+O formulario de contato chama `POST /api/v1/public/leads`, que grava em
+`marketing_leads` (migracao `000060`; sem tenant/RLS e com **apenas INSERT**
+para o papel da app). CTAs usam `NEXT_PUBLIC_APP_URL` e `NEXT_PUBLIC_WHATSAPP`
+(build args do Compose: `MARKETING_APP_URL` / `MARKETING_WHATSAPP`).
 
 ### 3. Servico Go localmente (para depurar)
 
@@ -250,6 +274,7 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | GET  | `/api/v1/me` | Bearer | Perfil + contexto + memberships |
 | GET  | `/api/v1/me/tenants` | Bearer | Igrejas da identidade (seletor) |
 | GET  | `/api/v1/public/tenant/{slug}` | - | Branding publico da igreja (login do subdominio) |
+| POST | `/api/v1/public/leads` | - | Lead do site institucional (grava `marketing_leads`) |
 | PATCH | `/api/v1/me` | Bearer | Edita o proprio perfil (nome/e-mail) |
 | POST | `/api/v1/me/password` | Bearer | Troca a propria senha (senha atual + nova) |
 | GET  | `/api/v1/members` | Bearer | Lista membros (escopo RLS) |
@@ -257,6 +282,7 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | GET  | `/api/v1/members/{id}` | Bearer | Detalhe de membro |
 | GET  | `/api/v1/members/{id}/tree` | Bearer | Arvore genealogica + discipulado |
 | PATCH | `/api/v1/members/{id}` | Bearer | Edita perfil do membro |
+| DELETE | `/api/v1/members/{id}` | Bearer (Sede) | Exclui membro definitivamente (so `super_admin`/`admin_sede`; cascata nos vinculos) |
 | POST | `/api/v1/members/{id}/relationships` | Bearer | Cria vinculo (conjuge/filho/discipulo...) |
 | POST | `/api/v1/members/{id}/photo` | Bearer | Envia foto (multipart, `UPLOAD_DIR`, disco local) |
 | DELETE | `/api/v1/members/{id}/photo` | Bearer | Remove a foto do membro |
@@ -324,15 +350,19 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | POST | `/api/v1/finance/categories` | Bearer | Cria categoria |
 | PATCH | `/api/v1/finance/categories/{id}` | Bearer | Edita/ativa/desativa categoria |
 | DELETE | `/api/v1/finance/categories/{id}` | Bearer | Exclui categoria (409 se em uso - desative) |
+| GET/POST | `/api/v1/finance/category-groups` | Bearer | Grupos de contas (agrupam o plano de contas) |
+| PATCH/DELETE | `/api/v1/finance/category-groups/{id}` | Bearer | Edita/exclui grupo (contas ficam sem grupo) |
 | GET  | `/api/v1/finance/accounts` | Bearer | Contas bancarias |
 | POST | `/api/v1/finance/accounts` | Bearer | Cria conta bancaria |
 | PATCH | `/api/v1/finance/accounts/{id}` | Bearer | Edita/ativa/desativa conta |
 | DELETE | `/api/v1/finance/accounts/{id}` | Bearer | Exclui conta (409 se em uso - desative) |
 | GET  | `/api/v1/finance/transactions?type=` | Bearer | Lista lancamentos (com account_id) |
 | POST | `/api/v1/finance/transactions` | Bearer | Lanca dizimo/oferta/despesa (+ recibo auto) |
+| POST | `/api/v1/finance/transactions/batch` | Bearer | Lanca varios de uma vez (grid em lote; erros por linha) |
 | POST | `/api/v1/finance/transactions/import` | Bearer | Importa lancamentos (CSV ou XLSX, com mapeamento de colunas) |
 | POST | `/api/v1/finance/transactions/import/preview` | Bearer | Pre-visualiza as linhas da planilha para mapear colunas |
-| POST | `/api/v1/finance/transactions/{id}/void` | Bearer | Estorna o lancamento (append-only; sai dos relatorios) |
+| DELETE | `/api/v1/finance/transactions/{id}` | Bearer | Exclui o lancamento definitivamente (recalcula hash-chain) |
+| POST | `/api/v1/finance/transactions/{id}/void` | Bearer | Estorna o lancamento (legado; sai dos relatorios) |
 | GET  | `/api/v1/finance/transactions/{id}/events` | Bearer | Rateio do lancamento por evento |
 | PATCH | `/api/v1/ministries/{id}` | Bearer | Edita ministerio (responsavel/situacao) |
 | DELETE | `/api/v1/ministries/{id}` | Bearer | Exclui ministerio |

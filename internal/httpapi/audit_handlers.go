@@ -57,8 +57,14 @@ func (a *App) handleCreateAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b := boundsFromClaims(claims)
+	allowed := false
 	var au *audit.Audit
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var err error
+		allowed, err = a.hasFinancePerm(r.Context(), tx, claims, "finance.audit")
+		if err != nil || !allowed {
+			return err
+		}
 		branchID, err := a.writeBranchID(r.Context(), tx, claims)
 		if err != nil {
 			return err
@@ -67,7 +73,15 @@ func (a *App) handleCreateAudit(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
+		if isUniqueViolation(err) {
+			writeErr(w, http.StatusConflict, "ja existe auditoria para um periodo sobreposto nesta filial")
+			return
+		}
 		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !allowed {
+		writeErr(w, http.StatusForbidden, "sem permissao para auditar (finance.audit)")
 		return
 	}
 	writeJSON(w, http.StatusCreated, au)
@@ -114,7 +128,13 @@ func (a *App) handleMarkAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b := boundsFromClaims(claims)
+	allowed := false
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var err error
+		allowed, err = a.hasFinancePerm(r.Context(), tx, claims, "finance.audit")
+		if err != nil || !allowed {
+			return err
+		}
 		return a.Audits.Mark(r.Context(), tx, r.PathValue("id"), in, claims.UserID)
 	})
 	if err != nil {
@@ -127,6 +147,10 @@ func (a *App) handleMarkAudit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !allowed {
+		writeErr(w, http.StatusForbidden, "sem permissao para auditar (finance.audit)")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -144,9 +168,14 @@ func (a *App) handleCloseAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b := boundsFromClaims(claims)
+	allowed := false
 	var au *audit.Audit
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
 		var err error
+		allowed, err = a.hasFinancePerm(r.Context(), tx, claims, "finance.audit")
+		if err != nil || !allowed {
+			return err
+		}
 		au, err = a.Audits.Close(r.Context(), tx, r.PathValue("id"), in, claims.UserID)
 		return err
 	})
@@ -160,6 +189,10 @@ func (a *App) handleCloseAudit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !allowed {
+		writeErr(w, http.StatusForbidden, "sem permissao para auditar (finance.audit)")
 		return
 	}
 	writeJSON(w, http.StatusOK, au)
@@ -251,6 +284,10 @@ func (a *App) handleDeleteAudit(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
 		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	if !isAdmin(claims.Role) {
+		writeErr(w, http.StatusForbidden, "apenas a Sede pode excluir uma auditoria")
 		return
 	}
 	b := boundsFromClaims(claims)

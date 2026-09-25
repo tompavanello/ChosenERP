@@ -194,7 +194,7 @@ func (r *Repo) ListEvents(ctx context.Context, tx pgx.Tx, from, to, kindID strin
 		WHERE ($1 = '' OR e.starts_at::date >= $1::date)
 		  AND ($2 = '' OR e.starts_at::date <= $2::date)
 		  AND ($3 = '' OR e.kind_id = $3::uuid)
-		ORDER BY e.starts_at DESC LIMIT 300`, from, to, kindID)
+		ORDER BY e.starts_at DESC`, from, to, kindID)
 	if err != nil {
 		return nil, err
 	}

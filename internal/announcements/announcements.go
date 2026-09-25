@@ -85,7 +85,7 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx) ([]Announcement, error) {
 		SELECT `+announcementSelect+`
 		FROM announcements
 		WHERE is_active AND published_at <= now()
-		ORDER BY published_at DESC LIMIT 100`)
+		ORDER BY published_at DESC`)
 	if err != nil {
 		return nil, err
 	}

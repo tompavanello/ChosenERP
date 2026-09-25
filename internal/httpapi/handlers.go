@@ -290,3 +290,39 @@ func (a *App) handleGetMember(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, m)
 }
+
+// handleDeleteMember exclui definitivamente um membro. Operacao destrutiva e
+// irreversivel, restrita a Sede (super_admin/admin_sede). Os registros
+// dependentes sao limpos/desvinculados pelas FKs (CASCADE/SET NULL).
+func (a *App) handleDeleteMember(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	if !isAdmin(claims.Role) {
+		writeErr(w, http.StatusForbidden, "somente admin_sede ou super_admin podem excluir membros")
+		return
+	}
+	id := r.PathValue("id")
+	b := boundsFromClaims(claims)
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		if err := a.Members.Delete(r.Context(), tx, id); err != nil {
+			return err
+		}
+		_, err := tx.Exec(r.Context(), `
+			INSERT INTO audit_log (tenant_id, actor_id, action, entity, entity_id, payload)
+			SELECT $1, $2::uuid, 'member.deleted', 'members', $3, NULL
+			FROM users WHERE id = $2`, claims.TenantID, claims.UserID, id)
+		return err
+	})
+	if err != nil {
+		if store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "member not found")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}

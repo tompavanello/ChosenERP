@@ -40,7 +40,7 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx) ([]Visitor, error) {
 		SELECT id::text, branch_id::text, first_name, last_name,
 		       (first_name || ' ' || last_name) AS full_name, email, phone, whatsapp,
 		       source, journey_stage, created_at
-		FROM visitors ORDER BY created_at DESC LIMIT 100`)
+		FROM visitors ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}

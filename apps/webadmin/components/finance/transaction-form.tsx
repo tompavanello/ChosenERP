@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Calendar, User, Users, Tag, CreditCard, FileText, Eye, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Field, Select, Textarea } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Combobox } from "@/components/ui/combobox";
 import { Section } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +15,7 @@ import {
   type Category, type BankAccount, type Member, type Benefactor, type Supplier, type ChurchEvent,
 } from "@/lib/api";
 import { PAYMENT_METHODS, ACCOUNT_TYPES } from "@/lib/constants";
-import { currency, datePt } from "@/lib/format";
+import { currency, datePt, todayISO } from "@/lib/format";
 
 export interface TransactionFormState {
   type: "income" | "expense";
@@ -37,7 +38,7 @@ const EMPTY: TransactionFormState = {
   account_id: "",
   payment_method: "pix",
   description: "",
-  occurred_at: new Date().toISOString().slice(0, 10),
+  occurred_at: todayISO(),
   donor_member_id: "",
   benefactor_id: "",
   supplier_id: "",
@@ -236,23 +237,19 @@ export function TransactionForm({
             value={form.type}
             onChange={(e) => set("type", e.target.value as "income" | "expense")}
           >
-            <option value="income">Dizimo / Oferta / Doacao</option>
-            <option value="expense">Despesa</option>
+            <option value="income">Entrada</option>
+            <option value="expense">Saida</option>
           </Select>
         </Field>
         <Field label="Valor (R$)*">
-          <Input
-            type="number"
-            min="0.01"
-            step="0.01"
+          <CurrencyInput
             required
-            placeholder="0,00"
             value={form.amount}
-            onChange={(e) => set("amount", e.target.value)}
+            onChange={(v) => set("amount", v)}
             disabled={saving}
           />
         </Field>
-        <Field label="Data">
+        <Field label="Data efetiva">
           <Input
             type="date"
             value={form.occurred_at}
@@ -455,12 +452,12 @@ export function TransactionForm({
                   />
                   <span className="flex-1 truncate">{datePt(ev.starts_at)} - {ev.kind_name ?? "Evento"}</span>
                   {sel && (
-                    <Input
-                      type="number" min="0" step="0.01" placeholder="auto"
+                    <CurrencyInput
+                      placeholder="auto"
                       className="h-7 w-24 text-xs"
                       value={sel.amount}
                       disabled={saving}
-                      onChange={(e) => setAlloc(alloc.map((a) => (a.event_id === ev.id ? { ...a, amount: e.target.value } : a)))}
+                      onChange={(v) => setAlloc(alloc.map((a) => (a.event_id === ev.id ? { ...a, amount: v } : a)))}
                     />
                   )}
                 </div>

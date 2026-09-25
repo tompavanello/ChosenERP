@@ -24,6 +24,9 @@ type ImportResult struct {
 	Imported int           `json:"imported"`
 	Skipped  int           `json:"skipped"`
 	Errors   []ImportError `json:"errors"`
+	// CreatedIDs acompanha a ordem da entrada no lote (vazio nas linhas
+	// rejeitadas). Usado pelo front para vincular anexos por linha.
+	CreatedIDs []string `json:"created_ids,omitempty"`
 }
 
 type catInfo struct {
@@ -277,6 +280,16 @@ func parseData(s string) (time.Time, error) {
 		}
 	}
 	return time.Time{}, fmt.Errorf("data invalida: %q (use AAAA-MM-DD ou DD/MM/AAAA)", s)
+}
+
+// parseOccurredAt normaliza a data efetiva recebida no request (ponteiro
+// opcional). Vazio/nulo usa agora; formato invalido devolve erro em vez de cair
+// silenciosamente na data de hoje.
+func parseOccurredAt(s *string) (time.Time, error) {
+	if s == nil {
+		return parseData("")
+	}
+	return parseData(*s)
 }
 
 func normalizePayment(s string) string {

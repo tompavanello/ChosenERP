@@ -191,7 +191,7 @@ func (r *Repo) ListAttendance(ctx context.Context, tx pgx.Tx, groupID string) ([
 		JOIN small_groups s ON s.id = ga.small_group_id
 		LEFT JOIN members m ON m.id = ga.member_id
 		WHERE ga.small_group_id = $1::uuid
-		ORDER BY ga.attended_at DESC LIMIT 200`, groupID)
+		ORDER BY ga.attended_at DESC`, groupID)
 	if err != nil {
 		return nil, err
 	}

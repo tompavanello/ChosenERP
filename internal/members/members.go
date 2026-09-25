@@ -167,7 +167,7 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, q string) ([]Member, error) 
 		SELECT `+memberCols+`
 		FROM members m
 		WHERE ($1 = '' OR m.full_name ILIKE '%' || $1 || '%')
-		ORDER BY m.full_name LIMIT 100`, q)
+		ORDER BY m.full_name`, q)
 	if err != nil {
 		return nil, err
 	}
@@ -302,6 +302,20 @@ func (r *Repo) SetPhoto(ctx context.Context, tx pgx.Tx, id string, photoURL *str
 		return nil, err
 	}
 	return r.Get(ctx, tx, updatedID)
+}
+
+// Delete remove definitivamente o membro no escopo da sessao (RLS). As tabelas
+// dependentes (historico, mandatos, presencas, etc.) tem FK ON DELETE
+// CASCADE/SET NULL, entao o Postgres limpa/desvincula os registros associados.
+func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
+	tag, err := tx.Exec(ctx, `DELETE FROM members WHERE id = $1::uuid`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }
 
 type CreateInput struct {

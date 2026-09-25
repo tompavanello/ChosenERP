@@ -94,6 +94,8 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.HandleFunc("POST /api/v1/auth/select-tenant", app.handleSelectTenant)
 	// Branding da igreja por slug (tela de login do subdominio).
 	mux.Handle("GET /api/v1/public/tenant/{slug}", app.publico(app.handlePublicTenant))
+	// Formulario de contato do site institucional (grava marketing_leads).
+	mux.Handle("POST /api/v1/public/leads", app.publico(app.handleCreateLead))
 
 	// Autenticado
 	authed := app.Authenticator
@@ -106,6 +108,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/members", authed(http.HandlerFunc(app.handleCreateMember)))
 	mux.Handle("GET /api/v1/members/{id}", authed(http.HandlerFunc(app.handleGetMember)))
 	mux.Handle("PATCH /api/v1/members/{id}", authed(http.HandlerFunc(app.handleUpdateMember)))
+	mux.Handle("DELETE /api/v1/members/{id}", authed(http.HandlerFunc(app.handleDeleteMember)))
 	mux.Handle("GET /api/v1/members/{id}/tree", authed(http.HandlerFunc(app.handleMemberTree)))
 	mux.Handle("POST /api/v1/members/{id}/relationships", authed(http.HandlerFunc(app.handleAddRelationship)))
 	mux.Handle("POST /api/v1/members/{id}/card", authed(http.HandlerFunc(app.handleIssueCard)))
@@ -160,15 +163,21 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/finance/categories", authed(http.HandlerFunc(app.handleCreateCategory)))
 	mux.Handle("PATCH /api/v1/finance/categories/{id}", authed(http.HandlerFunc(app.handleUpdateCategory)))
 	mux.Handle("DELETE /api/v1/finance/categories/{id}", authed(http.HandlerFunc(app.handleDeleteCategory)))
+	mux.Handle("GET /api/v1/finance/category-groups", authed(http.HandlerFunc(app.handleListCategoryGroups)))
+	mux.Handle("POST /api/v1/finance/category-groups", authed(http.HandlerFunc(app.handleCreateCategoryGroup)))
+	mux.Handle("PATCH /api/v1/finance/category-groups/{id}", authed(http.HandlerFunc(app.handleUpdateCategoryGroup)))
+	mux.Handle("DELETE /api/v1/finance/category-groups/{id}", authed(http.HandlerFunc(app.handleDeleteCategoryGroup)))
 	mux.Handle("GET /api/v1/finance/accounts", authed(http.HandlerFunc(app.handleListAccounts)))
 	mux.Handle("POST /api/v1/finance/accounts", authed(http.HandlerFunc(app.handleCreateAccount)))
 	mux.Handle("PATCH /api/v1/finance/accounts/{id}", authed(http.HandlerFunc(app.handleUpdateAccount)))
 	mux.Handle("DELETE /api/v1/finance/accounts/{id}", authed(http.HandlerFunc(app.handleDeleteAccount)))
 	mux.Handle("GET /api/v1/finance/transactions", authed(http.HandlerFunc(app.handleListTxn)))
 	mux.Handle("POST /api/v1/finance/transactions", authed(http.HandlerFunc(app.handleCreateTxn)))
+	mux.Handle("POST /api/v1/finance/transactions/batch", authed(http.HandlerFunc(app.handleCreateTxnBatch)))
 	mux.Handle("POST /api/v1/finance/transactions/import", authed(http.HandlerFunc(app.handleImportTransactions)))
 	mux.Handle("POST /api/v1/finance/transactions/import/preview", authed(http.HandlerFunc(app.handlePreviewTransactions)))
 	mux.Handle("POST /api/v1/finance/transactions/{id}/void", authed(http.HandlerFunc(app.handleVoidTxn)))
+	mux.Handle("DELETE /api/v1/finance/transactions/{id}", authed(http.HandlerFunc(app.handleDeleteTxn)))
 	mux.Handle("GET /api/v1/finance/transactions/{id}/events", authed(http.HandlerFunc(app.handleListTxnEvents)))
 	mux.Handle("GET /api/v1/finance/transactions/{id}/attachments", authed(http.HandlerFunc(app.handleListAttachments)))
 	mux.Handle("POST /api/v1/finance/transactions/{id}/attachments", authed(http.HandlerFunc(app.handleUploadAttachment)))
@@ -182,6 +191,21 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/finance/audits/{id}/close", authed(http.HandlerFunc(app.handleCloseAudit)))
 	mux.Handle("GET /api/v1/finance/audits/{id}/export", authed(http.HandlerFunc(app.handleExportAudit)))
 	mux.Handle("DELETE /api/v1/finance/audits/{id}", authed(http.HandlerFunc(app.handleDeleteAudit)))
+
+// Conciliacao financeira (trava o periodo ao conciliar)
+mux.Handle("GET /api/v1/finance/reconciliations", authed(http.HandlerFunc(app.handleListReconciliations)))
+mux.Handle("POST /api/v1/finance/reconciliations", authed(http.HandlerFunc(app.handleCreateReconciliation)))
+mux.Handle("GET /api/v1/finance/reconciliations/{id}", authed(http.HandlerFunc(app.handleGetReconciliation)))
+mux.Handle("POST /api/v1/finance/reconciliations/{id}/conciliate", authed(http.HandlerFunc(app.handleConciliateReconciliation)))
+mux.Handle("DELETE /api/v1/finance/reconciliations/{id}", authed(http.HandlerFunc(app.handleDeleteReconciliation)))
+
+// Conciliacao BANCARIA (importa extrato OFX/CSV e casa com os lancamentos)
+mux.Handle("GET /api/v1/finance/bank-imports", authed(http.HandlerFunc(app.handleListBankImports)))
+mux.Handle("POST /api/v1/finance/bank-imports", authed(http.HandlerFunc(app.handleImportBankStatement)))
+mux.Handle("GET /api/v1/finance/bank-imports/{id}", authed(http.HandlerFunc(app.handleGetBankImport)))
+mux.Handle("POST /api/v1/finance/bank-imports/{id}/entries/{entryId}/ignore", authed(http.HandlerFunc(app.handleIgnoreBankEntry)))
+mux.Handle("POST /api/v1/finance/bank-imports/{id}/entries/{entryId}/generate", authed(http.HandlerFunc(app.handleGenerateBankEntry)))
+mux.Handle("DELETE /api/v1/finance/bank-imports/{id}", authed(http.HandlerFunc(app.handleDeleteBankImport)))
 
 	// Download de anexos (arquivo por nome - opaco, nao requer auth)
 	mux.Handle("GET /api/v1/attachments/{filename}", http.HandlerFunc(app.handleDownloadAttachment))

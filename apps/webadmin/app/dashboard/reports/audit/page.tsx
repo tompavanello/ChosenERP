@@ -1,41 +1,52 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ShieldCheck, Plus, Search, Paperclip, Lock, ArrowLeft, CheckCircle2, Eye, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { Input, Field } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Drawer, Modal } from "@/components/ui/modal";
-import { SkeletonRows, EmptyState } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
+import { useAuth } from "@/components/providers/auth-provider";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import {
   listAudits, createAudit, getAudit, markAudit, closeAudit, deleteAudit, listAttachments,
   type FinancialAudit, type AuditItem, type FinancialAttachment,
 } from "@/lib/api";
 import { PAYMENT_METHODS } from "@/lib/constants";
-import { currency, datePt, dateTimePt } from "@/lib/format";
-
-function isoDate(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
+import { currency, datePt, dateTimePt, todayISO } from "@/lib/format";
 
 export default function AuditReportPage() {
   const { toast } = useToast();
+  const { hasPerm, user } = useAuth();
+  const canAudit = hasPerm("finance.audit");
+  const isHQ = user?.role === "super_admin" || user?.role === "admin_sede";
   const [audits, setAudits] = useState<FinancialAudit[] | null>(null);
   const [selected, setSelected] = useState<FinancialAudit | null>(null);
   const [items, setItems] = useState<AuditItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
+  // Ordenacao/filtro do grid de lancamentos da auditoria.
+  const [sortColumn, setSortColumn] = useState("occurred_at");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [itemSearch, setItemSearch] = useState("");
+  const [itemFrom, setItemFrom] = useState("");
+  const [itemTo, setItemTo] = useState("");
+  // Ordenacao/filtro da lista de auditorias (grid principal da tela).
+  const [auditSortColumn, setAuditSortColumn] = useState("period_start");
+  const [auditSortDirection, setAuditSortDirection] = useState<"asc" | "desc">("desc");
+  const [auditSearch, setAuditSearch] = useState("");
+  const [auditFrom, setAuditFrom] = useState("");
+  const [auditTo, setAuditTo] = useState("");
 
   const [showNew, setShowNew] = useState(false);
   const now = new Date();
   const [form, setForm] = useState({
     title: "Auditoria financeira",
-    period_start: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)),
-    period_end: isoDate(now),
+    period_start: todayISO(new Date(now.getFullYear(), now.getMonth(), 1)),
+    period_end: todayISO(now),
   });
   const [saving, setSaving] = useState(false);
 
@@ -61,6 +72,11 @@ export default function AuditReportPage() {
   async function openAudit(a: FinancialAudit) {
     setSelected(a);
     setLoadingItems(true);
+    setItemSearch("");
+    setItemFrom("");
+    setItemTo("");
+    setSortColumn("occurred_at");
+    setSortDirection("asc");
     try {
       const res = await getAudit(a.id);
       setSelected(res.audit);
@@ -163,6 +179,123 @@ export default function AuditReportPage() {
   const isOpen = selected?.status === "aberta";
   const auditedCount = items.filter((i) => i.audited).length;
 
+  // Filtro por descricao/conta/doador e por periodo (a data efetiva e
+  // YYYY-MM-DD, entao a comparacao lexicografica equivale a comparacao de data).
+  const filteredItems = useMemo(() => {
+    const q = itemSearch.trim().toLowerCase();
+    return items.filter((it) => {
+      if (q) {
+        const hay = [it.description, it.category_name, it.account_name, it.supplier_name, it.donor_name, it.receipt_ref]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (itemFrom && it.occurred_at < itemFrom) return false;
+      if (itemTo && it.occurred_at > itemTo) return false;
+      return true;
+    });
+  }, [items, itemSearch, itemFrom, itemTo]);
+
+  // Filtro por titulo e por periodo (auditorias que interceptam o intervalo).
+  const filteredAudits = useMemo(() => {
+    const q = auditSearch.trim().toLowerCase();
+    return (audits ?? []).filter((a) => {
+      if (q && !a.title.toLowerCase().includes(q) && !(a.signer_name ?? "").toLowerCase().includes(q)) return false;
+      if (auditFrom && a.period_end < auditFrom) return false;
+      if (auditTo && a.period_start > auditTo) return false;
+      return true;
+    });
+  }, [audits, auditSearch, auditFrom, auditTo]);
+
+  const handleAuditSort = (col: string) => {
+    if (auditSortColumn === col) {
+      setAuditSortDirection(auditSortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setAuditSortColumn(col);
+      setAuditSortDirection("asc");
+    }
+  };
+
+  const handleItemSort = (col: string) => {
+    if (sortColumn === col) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(col);
+      setSortDirection("asc");
+    }
+  };
+
+  const itemColumns: Column<AuditItem>[] = [
+    {
+      key: "audited",
+      label: "Auditado",
+      width: "w-20",
+      render: (it) => (
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-zinc-300 text-sky-600"
+          checked={it.audited}
+          disabled={!isOpen || !canAudit}
+          onChange={() => toggleOne(it)}
+        />
+      ),
+    },
+    {
+      key: "occurred_at",
+      label: "Data",
+      sortable: true,
+      width: "w-28",
+      render: (it) => <span className="text-zinc-500">{datePt(it.occurred_at)}</span>,
+    },
+    {
+      key: "type",
+      label: "Tipo",
+      sortable: true,
+      width: "w-24",
+      render: (it) => (
+        <Badge tone={it.type === "income" ? "green" : "red"}>
+          {it.type === "income" ? "Entrada" : "Saida"}
+        </Badge>
+      ),
+    },
+    {
+      key: "category_name",
+      label: "Conta contabil",
+      sortable: true,
+      render: (it) => <span className="text-zinc-500">{it.category_name ?? "-"}</span>,
+    },
+    {
+      key: "description",
+      label: "Descricao",
+      sortable: true,
+      render: (it) => <span className="text-zinc-500">{it.description ?? "-"}</span>,
+    },
+    {
+      key: "amount",
+      label: "Valor",
+      sortable: true,
+      align: "right",
+      render: (it) => (
+        <span className={`font-medium ${it.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
+          {currency(it.amount)}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      label: "",
+      width: "w-16",
+      align: "center",
+      render: (it) => (
+        <Button variant="ghost" className="h-7 px-2 text-xs" title="Detalhes do lancamento" onClick={() => openDetail(it)}>
+          <Eye className="h-4 w-4" />
+          {it.attachment_count > 0 && <span className="ml-0.5 text-[10px]">{it.attachment_count}</span>}
+        </Button>
+      ),
+    },
+  ];
+
   if (selected) {
     return (
       <div className="page">
@@ -174,9 +307,11 @@ export default function AuditReportPage() {
               <Button variant="ghost" onClick={() => { setSelected(null); loadAudits(); }}>
                 <ArrowLeft className="h-4 w-4" /> Voltar
               </Button>
-              <Button variant="ghost" onClick={() => removeAudit(selected)} title="Excluir auditoria">
-                <Trash2 className="h-4 w-4 text-red-500" /> Excluir
-              </Button>
+              {isHQ && (
+                <Button variant="ghost" onClick={() => removeAudit(selected)} title="Excluir auditoria">
+                  <Trash2 className="h-4 w-4 text-red-500" /> Excluir
+                </Button>
+              )}
               <ExportButtons
                 path={`/api/v1/finance/audits/${selected.id}/export`}
                 filenameBase={`auditoria-${selected.period_start}-${selected.period_end}`}
@@ -190,7 +325,7 @@ export default function AuditReportPage() {
           <span className="text-sm text-zinc-500">
             Auditados {auditedCount}/{items.length} - Total {currency(selected.total_amount)} - Auditado {currency(selected.audited_amount)}
           </span>
-          {isOpen && (
+          {isOpen && canAudit && (
             <div className="ml-auto flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => markAll(true)}>
                 <CheckCircle2 className="h-4 w-4" /> Marcar todos
@@ -217,57 +352,51 @@ export default function AuditReportPage() {
           </Card>
         )}
 
-        <Card className="overflow-hidden p-0">
-          {loadingItems ? (
-            <SkeletonRows />
-          ) : items.length === 0 ? (
-            <EmptyState icon={<ShieldCheck className="h-10 w-10" />} title="Sem lancamentos" description="Nenhum lancamento no periodo desta auditoria." />
-          ) : (
-            <Table>
-              <THead>
-                <TRow>
-                  <TH className="w-16">Auditado</TH>
-                  <TH>Data</TH>
-                  <TH>Tipo</TH>
-                  <TH>Conta contabil</TH>
-                  <TH>Descricao</TH>
-                  <TH className="text-right">Valor</TH>
-                  <TH className="w-16"></TH>
-                </TRow>
-              </THead>
-              <TBody>
-                {items.map((it) => (
-                  <TRow key={it.transaction_id}>
-                    <TD>
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-zinc-300 text-sky-600"
-                        checked={it.audited}
-                        disabled={!isOpen}
-                        onChange={() => toggleOne(it)}
-                      />
-                    </TD>
-                    <TD className="text-zinc-500">{datePt(it.occurred_at)}</TD>
-                    <TD>
-                      <Badge tone={it.type === "income" ? "green" : "red"}>
-                        {it.type === "income" ? "Entrada" : "Saida"}
-                      </Badge>
-                    </TD>
-                    <TD className="text-zinc-500">{it.category_name ?? "-"}</TD>
-                    <TD className="text-zinc-500">{it.description ?? "-"}</TD>
-                    <TD className={`text-right font-medium ${it.type === "income" ? "text-emerald-600" : "text-red-600"}`}>{currency(it.amount)}</TD>
-                    <TD className="text-center">
-                      <Button variant="ghost" className="h-7 px-2 text-xs" title="Detalhes do lancamento" onClick={() => openDetail(it)}>
-                        <Eye className="h-4 w-4" />
-                        {it.attachment_count > 0 && <span className="ml-0.5 text-[10px]">{it.attachment_count}</span>}
-                      </Button>
-                    </TD>
-                  </TRow>
-                ))}
-              </TBody>
-            </Table>
-          )}
-        </Card>
+        {items.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-end gap-2">
+            <div className="relative min-w-[220px] flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+              <Input
+                className="pl-8"
+                placeholder="Buscar por descricao, conta, doador..."
+                value={itemSearch}
+                onChange={(e) => setItemSearch(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-500">Periodo</span>
+              <Input type="date" className="w-40" value={itemFrom} onChange={(e) => setItemFrom(e.target.value)} aria-label="Data inicial" />
+              <span className="text-xs text-zinc-400">a</span>
+              <Input type="date" className="w-40" value={itemTo} onChange={(e) => setItemTo(e.target.value)} aria-label="Data final" />
+              {(itemSearch || itemFrom || itemTo) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setItemSearch(""); setItemFrom(""); setItemTo(""); }}
+                >
+                  Limpar
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+        {items.length > 0 && (itemSearch || itemFrom || itemTo) && (
+          <p className="mb-2 text-xs text-zinc-500">
+            Mostrando {filteredItems.length} de {items.length} lancamento(s).
+          </p>
+        )}
+
+        <DataTable
+          columns={itemColumns}
+          data={filteredItems}
+          keyExtractor={(it) => it.transaction_id}
+          loading={loadingItems}
+          sort={{ column: sortColumn, direction: sortDirection, onSort: handleItemSort }}
+          emptyIcon={<ShieldCheck className="h-10 w-10" />}
+          emptyMessage={items.length === 0 ? "Sem lancamentos" : "Nenhum lancamento no filtro"}
+          emptyDescription={items.length === 0 ? "Nenhum lancamento no periodo desta auditoria." : "Ajuste o periodo ou a busca."}
+          compact
+        />
 
         <Modal open={closeOpen} onClose={() => setCloseOpen(false)} title="Fechar e assinar auditoria">
           <form onSubmit={doClose} className="space-y-3 text-sm">
@@ -298,7 +427,7 @@ export default function AuditReportPage() {
                 </span>
               </div>
               <DetRow label="Tipo" value={detailItem.type === "income" ? "Entrada" : "Saida"} />
-              <DetRow label="Data" value={dateTimePt(detailItem.occurred_at)} />
+              <DetRow label="Data" value={datePt(detailItem.occurred_at)} />
               <DetRow label="Conta contabil" value={detailItem.category_name ?? "-"} />
               <DetRow label="Conta bancaria" value={detailItem.account_name ?? "-"} />
               <DetRow label="Fornecedor" value={detailItem.supplier_name ?? "-"} />
@@ -352,47 +481,106 @@ export default function AuditReportPage() {
     );
   }
 
+  const auditColumns: Column<FinancialAudit>[] = [
+    {
+      key: "title",
+      label: "Titulo",
+      sortable: true,
+      render: (a) => <span className="font-medium">{a.title}</span>,
+    },
+    {
+      key: "period_start",
+      label: "Periodo",
+      sortable: true,
+      sortValue: (a) => a.period_start,
+      render: (a) => <span className="text-zinc-500">{datePt(a.period_start)} a {datePt(a.period_end)}</span>,
+    },
+    {
+      key: "status",
+      label: "Situacao",
+      sortable: true,
+      width: "w-28",
+      render: (a) => (
+        <Badge tone={a.status === "aberta" ? "amber" : "green"}>
+          {a.status === "aberta" ? "Aberta" : "Fechada"}
+        </Badge>
+      ),
+    },
+    {
+      key: "audited_items",
+      label: "Auditados",
+      sortable: true,
+      align: "right",
+      width: "w-28",
+      render: (a) => <span className="text-zinc-500">{a.audited_items}/{a.total_items}</span>,
+    },
+    {
+      key: "actions",
+      label: "",
+      align: "right",
+      width: "w-40",
+      render: (a) => (
+        <div className="flex justify-end gap-1">
+          <Button size="sm" variant="outline" onClick={() => openAudit(a)}>
+            <Search className="h-4 w-4" /> Abrir
+          </Button>
+          {isHQ && (
+            <Button size="sm" variant="ghost" onClick={() => removeAudit(a)} aria-label="Excluir auditoria" title="Excluir">
+              <Trash2 className="h-4 w-4 text-red-500" />
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="page">
       <PageHeader
         title="Auditoria financeira"
         description="Lista lancamentos do periodo, permite marcar como auditado e fechar com assinatura"
-        actions={<Button onClick={() => setShowNew(true)}><Plus className="h-4 w-4" /> Nova auditoria</Button>}
+        actions={canAudit ? <Button onClick={() => setShowNew(true)}><Plus className="h-4 w-4" /> Nova auditoria</Button> : undefined}
       />
 
-      <Card className="overflow-hidden p-0">
-        {audits === null ? (
-          <SkeletonRows />
-        ) : audits.length === 0 ? (
-          <EmptyState icon={<ShieldCheck className="h-10 w-10" />} title="Nenhuma auditoria" description="Crie uma auditoria para um periodo e marque os lancamentos." />
-        ) : (
-          <Table>
-            <THead>
-              <TRow><TH>Titulo</TH><TH>Periodo</TH><TH>Situacao</TH><TH className="text-right">Auditados</TH><TH></TH></TRow>
-            </THead>
-            <TBody>
-              {audits.map((a) => (
-                <TRow key={a.id}>
-                  <TD className="font-medium">{a.title}</TD>
-                  <TD className="text-zinc-500">{datePt(a.period_start)} a {datePt(a.period_end)}</TD>
-                  <TD><Badge tone={a.status === "aberta" ? "amber" : "green"}>{a.status === "aberta" ? "Aberta" : "Fechada"}</Badge></TD>
-                  <TD className="text-right text-zinc-500">{a.audited_items}/{a.total_items}</TD>
-                  <TD className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button size="sm" variant="outline" onClick={() => openAudit(a)}>
-                        <Search className="h-4 w-4" /> Abrir
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => removeAudit(a)} aria-label="Excluir auditoria" title="Excluir">
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </div>
-                  </TD>
-                </TRow>
-              ))}
-            </TBody>
-          </Table>
-        )}
-      </Card>
+      {audits !== null && audits.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-end gap-2">
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+            <Input
+              className="pl-8"
+              placeholder="Buscar por titulo ou responsavel..."
+              value={auditSearch}
+              onChange={(e) => setAuditSearch(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-500">Periodo</span>
+            <Input type="date" className="w-40" value={auditFrom} onChange={(e) => setAuditFrom(e.target.value)} aria-label="Periodo inicial" />
+            <span className="text-xs text-zinc-400">a</span>
+            <Input type="date" className="w-40" value={auditTo} onChange={(e) => setAuditTo(e.target.value)} aria-label="Periodo final" />
+            {(auditSearch || auditFrom || auditTo) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setAuditSearch(""); setAuditFrom(""); setAuditTo(""); }}
+              >
+                Limpar
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <DataTable
+        columns={auditColumns}
+        data={filteredAudits}
+        keyExtractor={(a) => a.id}
+        loading={audits === null}
+        sort={{ column: auditSortColumn, direction: auditSortDirection, onSort: handleAuditSort }}
+        emptyIcon={<ShieldCheck className="h-10 w-10" />}
+        emptyMessage={audits && audits.length > 0 ? "Nenhuma auditoria no filtro" : "Nenhuma auditoria"}
+        emptyDescription={audits && audits.length > 0 ? "Ajuste o periodo ou a busca." : "Crie uma auditoria para um periodo e marque os lancamentos."}
+      />
 
       <Drawer open={showNew} onClose={() => setShowNew(false)} title="Nova auditoria">
         <form onSubmit={createNew} className="space-y-3">

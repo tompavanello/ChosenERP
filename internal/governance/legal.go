@@ -55,7 +55,7 @@ func (r *Repo) ListLegalDocuments(ctx context.Context, tx pgx.Tx, kind string) (
 	rows, err := tx.Query(ctx, `
 		SELECT `+legalCols+` FROM legal_documents
 		WHERE ($1 = '' OR kind = $1)
-		ORDER BY (expires_at IS NULL), expires_at, title LIMIT 500`, kind)
+		ORDER BY (expires_at IS NULL), expires_at, title`, kind)
 	if err != nil {
 		return nil, err
 	}

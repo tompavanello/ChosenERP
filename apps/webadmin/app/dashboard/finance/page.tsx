@@ -1,10 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Wallet, Plus, Eye, Send, Filter, Tags, Repeat, Banknote, Upload, FileText, Paperclip, Pencil, Trash2 } from "lucide-react";
-import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
-} from "recharts";
+import { ArrowDownRight, ArrowUpRight, Wallet, Plus, Eye, Send, Filter, Tags, Repeat, Banknote, Upload, FileText, Paperclip, Pencil, Trash2, FolderTree } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,22 +11,25 @@ import { Tabs } from "@/components/ui/tabs";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input, Field, Select } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable, Column } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
 import {
-   listCategories, listTransactions, getBalance, getMonthlyBalance,
+   listCategories, listTransactions, getBalance,
    getReceiptHTML, sendReceipt, createCategory, updateCategory, deleteCategory,
+   listCategoryGroups, createCategoryGroup, updateCategoryGroup, deleteCategoryGroup,
    listAccounts, createAccount, updateAccount, deleteAccount,
-   uploadAttachment, listAttachments, listDeliveries, createTransaction, voidTransaction,
+   uploadAttachment, listAttachments, listDeliveries, createTransaction, deleteTransaction,
    listTransactionEvents, previewTransactions, importTransactionsFile,
-   type Category, type Transaction, type Balance, type BankAccount,
+   type Category, type CategoryGroup, type Transaction, type Balance, type BankAccount,
    type FinancialAttachment, type Delivery, type ImportResult, type EventAllocation,
  } from "@/lib/api";
 import { PAYMENT_METHODS, ACCOUNT_TYPES } from "@/lib/constants";
-import { currency, datePt, dateTimePt, monthLabel } from "@/lib/format";
+import { currency, datePt, dateTimePt } from "@/lib/format";
 import { RecurringPanel } from "@/components/finance/recurring-panel";
+import { BulkEntry } from "@/components/finance/bulk-entry";
 import { TransactionForm, type TransactionFormState } from "@/components/finance/transaction-form";
 
 const PER_PAGE = 12;
@@ -87,10 +87,10 @@ export default function FinancePage() {
   const { toast } = useToast();
   const [tab, setTab] = useState("lancamentos");
   const [categories, setCategories] = useState<Category[]>([]);
+  const [groups, setGroups] = useState<CategoryGroup[]>([]);
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [balance, setBalance] = useState<Balance | null>(null);
-  const [series, setSeries] = useState<{ name: string; Entradas: number; Saidas: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState("");
   const [filterCat, setFilterCat] = useState("");
@@ -99,7 +99,7 @@ export default function FinancePage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PER_PAGE);
   const [sortColumn, setSortColumn] = useState("occurred_at");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [detail, setDetail] = useState<Transaction | null>(null);
   const [attachments, setAttachments] = useState<FinancialAttachment[]>([]);
   const [allocations, setAllocations] = useState<EventAllocation[]>([]);
@@ -115,7 +115,10 @@ export default function FinancePage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [sendDrawer, setSendDrawer] = useState<{ open: boolean; txn: Transaction | null; channel: "email" | "whatsapp" }>({ open: false, txn: null, channel: "email" });
-  const [catForm, setCatForm] = useState({ type: "income", code: "", name: "" });
+  const [catForm, setCatForm] = useState({ type: "income", code: "", name: "", group_id: "" });
+  const [showGroupForm, setShowGroupForm] = useState(false);
+  const [groupForm, setGroupForm] = useState({ name: "", sort_order: "" });
+  const [editingGroup, setEditingGroup] = useState<CategoryGroup | null>(null);
   const [acctForm, setAcctForm] = useState({ name: "", bank: "", bank_code: "", agency: "", account_number: "", account_type: "checking", initial_balance: "" });
   const [editingCat, setEditingCat] = useState<Category | null>(null);
   const [editingAcct, setEditingAcct] = useState<BankAccount | null>(null);
@@ -128,6 +131,7 @@ export default function FinancePage() {
     // carregamento do restante. Mas a lista de lancamentos AVISA quando falha
     // (antes o erro era engolido e a tela so ficava "vazia").
     const cat = await listCategories().catch(() => ({ categories: [] }));
+    const grp = await listCategoryGroups().catch(() => ({ groups: [] }));
     const accts = await listAccounts().catch(() => ({ accounts: [] }));
     try {
       const tx = await listTransactions();
@@ -137,11 +141,10 @@ export default function FinancePage() {
       toast(e instanceof Error ? e.message : "Falha ao carregar lancamentos", "error");
     }
     const bal = await getBalance().catch(() => null);
-    const mb = await getMonthlyBalance().catch(() => ({ series: [] }));
     setCategories(cat.categories);
+    setGroups(grp.groups);
     setAccounts(accts.accounts);
     setBalance(bal);
-    setSeries(mb.series.map((p) => ({ name: monthLabel(p.month), Entradas: p.income, Saidas: p.expense })));
     setLoading(false);
   }, [toast]);
 
@@ -176,9 +179,12 @@ export default function FinancePage() {
   const columns: Column<Transaction>[] = useMemo(() => [
     {
       key: "occurred_at",
-      label: "Data",
+      label: "Data efetiva",
       sortable: true,
       width: "w-28",
+      // Ordena pela data da ocorrencia e, dentro dela, pela sequencia do
+      // lancamento (created_at), igual a conciliacao/auditoria.
+      sortValue: (t) => `${t.occurred_at}T${t.created_at ?? ""}`,
       render: (t) => <span className="text-zinc-500">{datePt(t.occurred_at)}</span>,
     },
     {
@@ -233,20 +239,6 @@ export default function FinancePage() {
       render: (t) => <span className="text-zinc-500">{t.account_name ?? "-"}</span>,
     },
     {
-      key: "receipt_id",
-      label: "Recibo",
-      width: "w-44",
-      align: "center" as const,
-      render: (t) => {
-        if (!t.receipt_id) return <span className="text-zinc-400">-</span>;
-        return (
-          <div className="flex items-center justify-center">
-            <Button variant="ghost" size="sm" onClick={() => viewReceipt(t)} aria-label="Ver recibo" title="Ver recibo"><Eye className="h-3.5 w-3.5" /> Ver</Button>
-          </div>
-        );
-      },
-    },
-    {
       key: "amount",
       label: "Valor",
       sortable: false,
@@ -262,15 +254,18 @@ export default function FinancePage() {
       key: "id",
       label: "",
       sortable: false,
-      width: "w-28",
-      align: "center" as const,
+      width: "w-40",
+      align: "right" as const,
       render: (t) => (
-        <div className="flex items-center justify-center gap-0.5">
+        <div className="flex items-center justify-end gap-0.5">
+          {t.receipt_id && (
+            <Button variant="ghost" size="sm" onClick={() => viewReceipt(t)} aria-label="Ver recibo" title="Ver recibo"><Eye className="h-3.5 w-3.5" /> Ver</Button>
+          )}
           <Button variant="ghost" size="sm" onClick={() => openDetail(t)} aria-label="Ver detalhes" title="Detalhes"><Eye className="h-3.5 w-3.5" /></Button>
           {!t.voided_at && hasPerm("finance.write") && (
             <>
-              <Button variant="ghost" size="sm" onClick={() => openEdit(t)} aria-label="Editar" title="Editar (estorna e relanca)"><Pencil className="h-3.5 w-3.5" /></Button>
-              <Button variant="ghost" size="sm" onClick={() => removeTxn(t)} aria-label="Estornar" title="Estornar"><Trash2 className="h-3.5 w-3.5 text-red-500" /></Button>
+              <Button variant="ghost" size="sm" onClick={() => openEdit(t)} aria-label="Editar" title="Editar"><Pencil className="h-3.5 w-3.5" /></Button>
+              <Button variant="ghost" size="sm" onClick={() => removeTxn(t)} aria-label="Excluir" title="Excluir"><Trash2 className="h-3.5 w-3.5 text-red-500" /></Button>
             </>
           )}
         </div>
@@ -310,25 +305,24 @@ export default function FinancePage() {
     setShowNew(true);
   }
 
-  // "Alterar" = estornar o original e lancar o novo (o livro e append-only).
+  // "Alterar" = excluir o original e lancar o novo (o backend recalcula a cadeia).
   async function amendTxn(data: Record<string, unknown>) {
     if (!editing) return;
-    await voidTransaction(editing.id, "Correcao (estorno e relancamento)");
+    await deleteTransaction(editing.id);
     await createTransaction(data);
-    toast("Lancamento corrigido (original estornado).");
+    toast("Lancamento corrigido.");
     setEditing(null);
     await handleTxnSaved();
   }
 
   async function removeTxn(t: Transaction) {
-    if (!confirm("Estornar este lancamento? Ele sai dos relatorios, mas permanece no historico.")) return;
-    const reason = window.prompt("Motivo do estorno (opcional):") ?? "";
+    if (!confirm("Excluir definitivamente este lancamento? Esta acao nao pode ser desfeita.")) return;
     try {
-      await voidTransaction(t.id, reason);
-      toast("Lancamento estornado.");
+      await deleteTransaction(t.id);
+      toast("Lancamento excluido.");
       await handleTxnSaved();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro ao estornar", "error");
+      toast(err instanceof Error ? err.message : "Erro ao excluir", "error");
     }
   }
 
@@ -388,13 +382,23 @@ export default function FinancePage() {
   function closeCatForm() {
     setShowCatForm(false);
     setEditingCat(null);
-    setCatForm({ type: "income", code: "", name: "" });
+    setCatForm({ type: "income", code: "", name: "", group_id: "" });
   }
 
   function openCatEdit(c: Category) {
     setEditingCat(c);
-    setCatForm({ type: c.type, code: c.code, name: c.name });
+    setCatForm({ type: c.type, code: c.code, name: c.name, group_id: c.group_id ?? "" });
     setShowCatForm(true);
+  }
+
+  /** Recarrega plano de contas + grupos (usado apos qualquer alteracao). */
+  async function reloadPlan() {
+    const [cat, grp] = await Promise.all([
+      listCategories().catch(() => ({ categories: [] })),
+      listCategoryGroups().catch(() => ({ groups: [] })),
+    ]);
+    setCategories(cat.categories);
+    setGroups(grp.groups);
   }
 
   async function submitCat(e: React.FormEvent) {
@@ -408,7 +412,7 @@ export default function FinancePage() {
         toast("Conta contabil criada.");
       }
       closeCatForm();
-      setCategories(await listCategories().then((r) => r.categories));
+      await reloadPlan();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro", "error");
     }
@@ -417,7 +421,7 @@ export default function FinancePage() {
   async function toggleCategoryActive(c: Category) {
     try {
       await updateCategory(c.id, { is_active: !c.is_active });
-      setCategories(await listCategories().then((r) => r.categories));
+      await reloadPlan();
       toast(c.is_active ? "Conta contabil desativada." : "Conta contabil reativada.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro", "error");
@@ -429,7 +433,61 @@ export default function FinancePage() {
     try {
       await deleteCategory(c.id);
       toast("Conta contabil excluida.");
-      setCategories(await listCategories().then((r) => r.categories));
+      await reloadPlan();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro", "error");
+    }
+  }
+
+  function closeGroupForm() {
+    setShowGroupForm(false);
+    setEditingGroup(null);
+    setGroupForm({ name: "", sort_order: "" });
+  }
+
+  function openGroupEdit(g: CategoryGroup) {
+    setEditingGroup(g);
+    setGroupForm({ name: g.name, sort_order: String(g.sort_order) });
+    setShowGroupForm(true);
+  }
+
+  async function submitGroup(e: React.FormEvent) {
+    e.preventDefault();
+    const payload = {
+      name: groupForm.name,
+      sort_order: groupForm.sort_order === "" ? undefined : Number(groupForm.sort_order),
+    };
+    try {
+      if (editingGroup) {
+        await updateCategoryGroup(editingGroup.id, payload);
+        toast("Grupo atualizado.");
+      } else {
+        await createCategoryGroup(payload);
+        toast("Grupo criado.");
+      }
+      closeGroupForm();
+      await reloadPlan();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro", "error");
+    }
+  }
+
+  async function toggleGroupActive(g: CategoryGroup) {
+    try {
+      await updateCategoryGroup(g.id, { is_active: !g.is_active });
+      await reloadPlan();
+      toast(g.is_active ? "Grupo desativado." : "Grupo reativado.");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro", "error");
+    }
+  }
+
+  async function deleteGroup(g: CategoryGroup) {
+    if (!confirm(`Excluir o grupo "${g.name}"? As contas associadas ficam sem grupo.`)) return;
+    try {
+      await deleteCategoryGroup(g.id);
+      toast("Grupo excluido.");
+      await reloadPlan();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro", "error");
     }
@@ -547,6 +605,7 @@ export default function FinancePage() {
           { key: "recorrentes", label: "Recorrencias", icon: <Repeat className="h-4 w-4" /> },
           { key: "contas", label: "Contas Bancarias", icon: <Banknote className="h-4 w-4" /> },
           { key: "categorias", label: "Plano de Contas", icon: <Tags className="h-4 w-4" /> },
+          { key: "grupos", label: "Grupos", icon: <FolderTree className="h-4 w-4" /> },
         ]}
         active={tab}
         onChange={setTab}
@@ -564,68 +623,58 @@ export default function FinancePage() {
             </div>
           )}
 
-          {series.length > 0 && (
-            <Card className="mb-6">
-              <h3 className="mb-4 text-sm font-semibold text-zinc-700">Entradas x Saidas (mensal)</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#9ca3af" />
-                    <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" width={70} />
-                    <Tooltip formatter={(v: unknown) => currency(Number(v))} />
-                    <Legend />
-                    <Bar dataKey="Entradas" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Saidas" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+          {hasPerm("finance.write") && (
+            <Card className="mb-6 p-4">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Wallet className="h-4 w-4 text-sky-600" />
+                <h3 className="text-sm font-semibold text-zinc-700">Lancamento rapido (em lote)</h3>
+                <span className="text-xs text-zinc-400">Digite varias linhas e lance tudo de uma vez</span>
               </div>
+              <BulkEntry embedded onSaved={handleTxnSaved} />
             </Card>
           )}
 
-          <Card className="overflow-hidden p-0">
-            <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 p-4">
-              <div className="relative flex-1 min-w-48">
-                <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-                <Input className="pl-9" placeholder="Buscar por descricao" value={query} onChange={(e) => setQuery(e.target.value)} />
-              </div>
-              <Select className="w-36" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-                <option value="">Todos</option><option value="income">Entradas</option><option value="expense">Saidas</option>
-              </Select>
-               <Select className="w-44" value={filterCat} onChange={(e) => setFilterCat(e.target.value)}>
-                 <option value="">Todas as contas</option>
-                 {categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
-               </Select>
-               <Select className="w-44" value={filterAcct} onChange={(e) => setFilterAcct(e.target.value)}>
-                 <option value="">Todas contas</option>
-                 {accounts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
-               </Select>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="relative min-w-48 flex-1">
+              <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+              <Input className="pl-9" placeholder="Buscar por descricao" value={query} onChange={(e) => setQuery(e.target.value)} />
             </div>
+            <Select className="w-36" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+              <option value="">Todos</option><option value="income">Entradas</option><option value="expense">Saidas</option>
+            </Select>
+            <Select className="w-44" value={filterCat} onChange={(e) => setFilterCat(e.target.value)}>
+              <option value="">Todas as contas</option>
+              {categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
+            </Select>
+            <Select className="w-44" value={filterAcct} onChange={(e) => setFilterAcct(e.target.value)}>
+              <option value="">Todas contas</option>
+              {accounts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
+            </Select>
+          </div>
 
-             <DataTable
-               columns={columns}
-               data={filtered}
-               keyExtractor={(t) => t.id}
-               loading={loading}
-               emptyMessage="Sem lancamentos"
-               emptyIcon={<Wallet className="h-10 w-10" />}
-               pagination={{
-                 page,
-                 pageSize,
-                 total: filtered.length,
-                 onPageChange: setPage,
-                 onPageSizeChange: setPageSize,
-                 pageSizeOptions: [12, 25, 50],
-               }}
-               sort={{
-                 column: sortColumn,
-                 direction: sortDirection,
-                 onSort: handleSort,
-               }}
-               hoverable
-               striped
-             />
-           </Card>
+          <DataTable
+            columns={columns}
+            data={filtered}
+            keyExtractor={(t) => t.id}
+            loading={loading}
+            emptyMessage="Sem lancamentos"
+            emptyIcon={<Wallet className="h-10 w-10" />}
+            pagination={{
+              page,
+              pageSize,
+              total: filtered.length,
+              onPageChange: setPage,
+              onPageSizeChange: setPageSize,
+              pageSizeOptions: [12, 25, 50],
+            }}
+            sort={{
+              column: sortColumn,
+              direction: sortDirection,
+              onSort: handleSort,
+            }}
+            hoverable
+            compact
+          />
         </>
       )}
 
@@ -682,12 +731,13 @@ export default function FinancePage() {
             {hasPerm("finance.write") && <Button size="sm" onClick={() => setShowCatForm(true)}><Plus className="h-4 w-4" /> Conta contabil</Button>}
           </div>
           <Table>
-            <THead><TRow><TH>Nome</TH><TH>Codigo</TH><TH>Tipo</TH><TH>Ativa</TH><TH></TH></TRow></THead>
+            <THead><TRow><TH>Nome</TH><TH>Codigo</TH><TH>Grupo</TH><TH>Tipo</TH><TH>Ativa</TH><TH></TH></TRow></THead>
             <TBody>
               {categories.map((c) => (
                 <TRow key={c.id}>
                   <TD className="font-medium">{c.name}</TD>
                   <TD className="text-zinc-500">{c.code}</TD>
+                  <TD className="text-zinc-500">{c.group_name ?? "-"}</TD>
                   <TD><Badge tone={c.type === "income" ? "green" : "red"}>{c.type === "income" ? "Entrada" : "Saida"}</Badge></TD>
                   <TD><Badge tone={c.is_active ? "green" : "zinc"}>{c.is_active ? "Sim" : "Nao"}</Badge></TD>
                   <TD className="text-center">
@@ -707,7 +757,44 @@ export default function FinancePage() {
                   </TD>
                 </TRow>
               ))}
-              {categories.length === 0 && <TRow><TD colSpan={5} className="py-8 text-center text-zinc-400">Nenhuma categoria.</TD></TRow>}
+              {categories.length === 0 && <TRow><TD colSpan={6} className="py-8 text-center text-zinc-400">Nenhuma categoria.</TD></TRow>}
+            </TBody>
+          </Table>
+        </Card>
+      )}
+
+      {tab === "grupos" && (
+        <Card className="overflow-hidden p-0">
+          <div className="flex items-center justify-between border-b border-zinc-100 p-4">
+            <h3 className="text-sm font-semibold text-zinc-700">Grupos de contas</h3>
+            {hasPerm("finance.write") && <Button size="sm" onClick={() => setShowGroupForm(true)}><Plus className="h-4 w-4" /> Grupo</Button>}
+          </div>
+          <Table>
+            <THead><TRow><TH>Nome</TH><TH>Ordem</TH><TH>Ativo</TH><TH></TH></TRow></THead>
+            <TBody>
+              {groups.map((g) => (
+                <TRow key={g.id}>
+                  <TD className="font-medium">{g.name}</TD>
+                  <TD className="text-zinc-500">{g.sort_order}</TD>
+                  <TD><Badge tone={g.is_active ? "green" : "zinc"}>{g.is_active ? "Sim" : "Nao"}</Badge></TD>
+                  <TD className="text-center">
+                    {hasPerm("finance.write") && (
+                      <div className="flex justify-center gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => toggleGroupActive(g)}>
+                          {g.is_active ? "Desativar" : "Ativar"}
+                        </Button>
+                        <Button variant="ghost" className="h-7 w-7 p-0" onClick={() => openGroupEdit(g)} aria-label="Editar grupo" title="Editar">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" className="h-7 w-7 p-0" onClick={() => deleteGroup(g)} aria-label="Excluir grupo" title="Excluir">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </TD>
+                </TRow>
+              ))}
+              {groups.length === 0 && <TRow><TD colSpan={4} className="py-8 text-center text-zinc-400">Nenhum grupo cadastrado.</TD></TRow>}
             </TBody>
           </Table>
         </Card>
@@ -724,7 +811,8 @@ export default function FinancePage() {
             {detail.account_name && <div className="flex items-center justify-between"><span className="text-zinc-500"> Conta</span><span>{detail.account_name}</span></div>}
             {detail.supplier_name && <div className="flex items-center justify-between"><span className="text-zinc-500">Fornecedor</span><span>{detail.supplier_name}</span></div>}
             <div className="flex items-center justify-between"><span className="text-zinc-500">Forma de pagamento</span><span>{detail.payment_method ? PAYMENT_METHODS[detail.payment_method] ?? detail.payment_method : "-"}</span></div>
-            <div className="flex items-center justify-between"><span className="text-zinc-500">Data</span><span>{dateTimePt(detail.occurred_at)}</span></div>
+            <div className="flex items-center justify-between"><span className="text-zinc-500">Data efetiva</span><span>{datePt(detail.occurred_at)}</span></div>
+            <div className="flex items-center justify-between"><span className="text-zinc-500">Registrado em</span><span>{dateTimePt(detail.created_at)}</span></div>
             <div className="flex items-center justify-between"><span className="text-zinc-500">Recibo</span><span>{detail.receipt_ref ?? "-"}</span></div>
             <div className="flex items-start justify-between gap-4"><span className="text-zinc-500">Hash de integridade</span><span className="break-all text-xs text-zinc-400">{detail.hash}</span></div>
 
@@ -849,9 +937,28 @@ export default function FinancePage() {
           </Field>
           <Field label="Codigo *"><Input required placeholder="ex.: 101" value={catForm.code} onChange={(e) => setCatForm({ ...catForm, code: e.target.value })} /></Field>
           <Field label="Nome *"><Input required value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} /></Field>
+          <Field label="Grupo">
+            <Select value={catForm.group_id} onChange={(e) => setCatForm({ ...catForm, group_id: e.target.value })}>
+              <option value="">Sem grupo</option>
+              {groups.filter((g) => g.is_active).map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </Select>
+          </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" type="button" onClick={closeCatForm}>Cancelar</Button>
             <Button type="submit">{editingCat ? "Salvar" : "Criar"}</Button>
+          </div>
+        </form>
+      </Drawer>
+
+      <Drawer open={showGroupForm} onClose={closeGroupForm} title={editingGroup ? "Editar grupo" : "Novo grupo de contas"}>
+        <form onSubmit={submitGroup} className="space-y-3">
+          <Field label="Nome *"><Input required placeholder="ex.: Receitas" value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} /></Field>
+          <Field label="Ordem"><Input type="number" value={groupForm.sort_order} onChange={(e) => setGroupForm({ ...groupForm, sort_order: e.target.value })} placeholder="0" /></Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" type="button" onClick={closeGroupForm}>Cancelar</Button>
+            <Button type="submit">{editingGroup ? "Salvar" : "Criar"}</Button>
           </div>
         </form>
       </Drawer>
@@ -868,7 +975,7 @@ export default function FinancePage() {
               {Object.entries(ACCOUNT_TYPES).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
             </Select>
           </Field>
-          <Field label="Saldo inicial"><Input type="number" min="0" step="0.01" value={acctForm.initial_balance} onChange={(e) => setAcctForm({ ...acctForm, initial_balance: e.target.value })} /></Field>
+          <Field label="Saldo inicial"><CurrencyInput value={acctForm.initial_balance} onChange={(v) => setAcctForm({ ...acctForm, initial_balance: v })} /></Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" type="button" onClick={closeAcctForm}>Cancelar</Button>
             <Button type="submit">{editingAcct ? "Salvar" : "Criar"}</Button>

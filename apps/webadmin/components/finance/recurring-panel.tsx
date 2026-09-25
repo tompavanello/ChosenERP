@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input, Field, Select } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { SkeletonRows, EmptyState } from "@/components/ui/skeleton";
 import { Drawer } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
@@ -128,7 +129,7 @@ export function RecurringPanel() {
             </Select>
           </Field>
           <Field label="Valor (R$)*">
-            <Input type="number" min="0.01" step="0.01" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+            <CurrencyInput required value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} />
           </Field>
           <Field label="Frequencia">
             <Select value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value })}>

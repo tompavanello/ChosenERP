@@ -14,6 +14,7 @@ import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Drawer } from "@/components/ui/modal";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Tabs } from "@/components/ui/tabs";
 import { EmptyState, SkeletonRows } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -441,7 +442,7 @@ export default function EventsPage() {
               </Select>
             </Field>
             <Field label="Custo estimado (R$)" hint="Opcional.">
-              <Input type="number" min="0" step="0.01" className="h-8 text-sm" value={form.estimated_cost} onChange={(e) => setForm({ ...form, estimated_cost: e.target.value })} />
+              <CurrencyInput className="h-8 text-sm" value={form.estimated_cost} onChange={(v) => setForm({ ...form, estimated_cost: v })} />
             </Field>
             <Field label="Inicio - data *"><Input required type="date" className="h-8 text-sm" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
             <Field label="Inicio - hora *"><Input required type="time" className="h-8 text-sm" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} /></Field>

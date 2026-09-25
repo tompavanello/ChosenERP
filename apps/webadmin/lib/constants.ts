@@ -128,6 +128,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   "families.read": "Ver familias",
   "finance.read": "Ver financeiro",
   "finance.write": "Lancar financeiro",
+  "finance.reconcile": "Conciliar financeiro (trava o periodo)",
+  "finance.audit": "Auditar financeiro",
   "finance.authorize": "Aprovar orcamento",
   "ministries.write": "Gerir ministerios",
   "governance.write": "Gerir governanca",

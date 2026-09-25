@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Church, LayoutDashboard, Users, Wallet, LogOut, HeartHandshake, DoorOpen,
-  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, Baby, Truck, ShieldCheck, ChevronDown, ChevronRight,
+  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -45,6 +45,8 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
     title: "Financeiro",
     items: [
       { key: "finance", href: "/dashboard/finance", label: "Financeiro", icon: Wallet, perms: ["finance.read"] },
+      { key: "reconciliation", href: "/dashboard/finance/reconciliation", label: "Conciliacao", icon: ClipboardCheck, perms: ["finance.read"] },
+      { key: "audit", href: "/dashboard/reports/audit", label: "Auditoria financeira", icon: ShieldCheck, perms: ["finance.read"] },
       { key: "transfers", href: "/dashboard/transfers", label: "Repasses", icon: ArrowLeftRight, perms: ["finance.write"] },
     ],
   },
@@ -68,7 +70,6 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
       { key: "rep-dre", href: "/dashboard/reports/dre", label: "DRE", icon: TrendingUp, perms: ["finance.read"] },
       { key: "rep-statement", href: "/dashboard/reports/monthly-statement", label: "Demonstrativo Mensal", icon: FileSpreadsheet, perms: ["finance.read"] },
       { key: "rep-assembly", href: "/dashboard/reports/assembly", label: "Demonstrativo (Assembleia)", icon: FileSpreadsheet, perms: ["finance.read"] },
-      { key: "rep-audit", href: "/dashboard/reports/audit", label: "Auditoria financeira", icon: ShieldCheck, perms: ["finance.read"] },
       { key: "rep-inc-exp", href: "/dashboard/reports/income-expense", label: "Entradas x Saidas", icon: ArrowLeftRight, perms: ["finance.read"] },
       { key: "rep-consolidated", href: "/dashboard/reports/consolidated", label: "Consolidado Sede > Filiais", icon: Building2, perms: ["finance.read"] },
       { key: "rep-birthdays", href: "/dashboard/reports/birthdays", label: "Aniversariantes", icon: Cake, perms: ["members.read"] },

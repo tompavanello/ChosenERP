@@ -130,7 +130,7 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, from, to, ministryID string)
 		WHERE ($1 = '' OR r.starts_at::date >= $1::date)
 		  AND ($2 = '' OR r.starts_at::date <= $2::date)
 		  AND ($3 = '' OR r.ministry_id = $3::uuid)
-		ORDER BY r.starts_at DESC LIMIT 300`, from, to, ministryID)
+		ORDER BY r.starts_at DESC`, from, to, ministryID)
 	if err != nil {
 		return nil, err
 	}

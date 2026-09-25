@@ -60,7 +60,7 @@ func (r *Repo) ListTransfers(ctx context.Context, tx pgx.Tx) ([]Transfer, error)
 		FROM transfers tr
 		JOIN branches bf ON bf.id = tr.from_branch_id
 		JOIN branches bt ON bt.id = tr.to_branch_id
-		ORDER BY tr.executed_at DESC LIMIT 200`)
+		ORDER BY tr.executed_at DESC`)
 	if err != nil {
 		return nil, err
 	}

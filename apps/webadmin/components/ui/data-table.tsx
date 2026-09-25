@@ -190,7 +190,7 @@ export function DataTable<T>({  columns,
           renderMobileCard ela continua visivel e rola na horizontal, em vez de
           a pagina ficar em branco abaixo de 1024px. */}
       <div className={cn("overflow-x-auto", renderMobileCard && "hidden lg:block")}>
-        <table className="w-full min-w-max text-[13px]" role="grid">
+        <table className="w-full text-[13px]" role="grid">
           <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-zinc-50/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
             <tr>
               {selection && (
@@ -217,9 +217,9 @@ export function DataTable<T>({  columns,
                     "whitespace-nowrap px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500",
                     column.align === "center" && "text-center",
                     column.align === "right" && "text-right",
+                    column.width,
                     column.headerClassName
                   )}
-                  style={{ width: column.width }}
                   scope="col"
                 >
                   <SortableHeader column={column} sort={sort} onSort={handleSort} />

@@ -36,7 +36,9 @@ func RenderReceiptHTML(doc *Document, tenantName string) (string, error) {
 	}
 	when := ""
 	if t, err := time.Parse(time.RFC3339, c.OccurredAt); err == nil {
-		when = t.Format("02/01/2006 15:04")
+		when = t.Format("02/01/2006")
+	} else if t, err := time.Parse("2006-01-02", c.OccurredAt); err == nil {
+		when = t.Format("02/01/2006")
 	} else if c.OccurredAt != "" {
 		when = c.OccurredAt
 	}

@@ -389,20 +389,77 @@ func TestAppendOnly_FinancialTransactions_UpdateBlocked(t *testing.T) {
 	}
 }
 
-func TestAppendOnly_FinancialTransactions_DeleteBlocked(t *testing.T) {
-	var execErr error
-	if err := inBounds(t, bounds(fixTenantX, fixBranchA, "tesoureiro"), func(tx pgx.Tx) error {
-		_, execErr = tx.Exec(testCtx,
-			`DELETE FROM financial_transactions WHERE id = $1`, fixTxnA)
+// TestFinancialTransactions_HardDeleteRechains confirma que a exclusao REAL do
+// lancamento e permitida (migracao 000061) e que a hash-chain do tenant e
+// recalculada por fin_tx_rechain sem deixar lacuna.
+func TestFinancialTransactions_HardDeleteRechains(t *testing.T) {
+	err := inBounds(t, bounds(fixTenantX, fixBranchA, "tesoureiro"), func(tx pgx.Tx) error {
+		var id string
+		if err := tx.QueryRow(testCtx, `
+			INSERT INTO financial_transactions (tenant_id, branch_id, category_id, type, amount, currency)
+			VALUES ($1, $2, $3, 'income', 33.00, 'BRL')
+			RETURNING id::text`, fixTenantX, fixBranchA, fixCatA).Scan(&id); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(testCtx, `DELETE FROM financial_transactions WHERE id = $1::uuid`, id); err != nil {
+			t.Fatalf("DELETE definitivo deveria ser aceito: %v", err)
+		}
+		if _, err := tx.Exec(testCtx, `SELECT fin_tx_rechain($1::uuid)`, fixTenantX); err != nil {
+			t.Fatalf("fin_tx_rechain falhou: %v", err)
+		}
+		var n int
+		if err := tx.QueryRow(testCtx,
+			`SELECT count(*) FROM financial_transactions WHERE id = $1::uuid`, id).Scan(&n); err != nil {
+			return err
+		}
+		if n != 0 {
+			t.Errorf("lancamento excluido continuou no banco: %d", n)
+		}
 		return errRollback
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("WithTenant: %v", err)
 	}
-	if execErr == nil {
-		t.Fatal("DELETE em lancamento foi aceito; a tabela deve ser append-only")
-	}
-	if !strings.Contains(execErr.Error(), "append-only") {
-		t.Fatalf("erro inesperado (esperado 'append-only'): %v", execErr)
+}
+
+// TestMembers_DeleteCascades confirma que a exclusao definitiva do membro
+// remove os registros dependentes (historico e mandatos) por cascade.
+func TestMembers_DeleteCascades(t *testing.T) {
+	err := inBounds(t, bounds(fixTenantX, fixBranchA, "secretario"), func(tx pgx.Tx) error {
+		var memberID string
+		if err := tx.QueryRow(testCtx, `
+			INSERT INTO members (tenant_id, branch_id, first_name, last_name, full_name)
+			VALUES ($1, $2, 'Del', 'Teste', 'Del Teste')
+			RETURNING id::text`, fixTenantX, fixBranchA).Scan(&memberID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(testCtx, `
+			INSERT INTO member_history (tenant_id, branch_id, member_id, kind)
+			VALUES ($1, $2, $3, 'cadastro')`, fixTenantX, fixBranchA, memberID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(testCtx, `
+			INSERT INTO member_cargos (member_id, cargo_id, status)
+			VALUES ($1, $2, 'ativo')`, memberID, fixCargoA); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(testCtx, `DELETE FROM members WHERE id = $1::uuid`, memberID); err != nil {
+			t.Fatalf("DELETE de membro deveria funcionar: %v", err)
+		}
+		var h, c int
+		if err := tx.QueryRow(testCtx, `SELECT count(*) FROM member_history WHERE member_id = $1::uuid`, memberID).Scan(&h); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(testCtx, `SELECT count(*) FROM member_cargos WHERE member_id = $1::uuid`, memberID).Scan(&c); err != nil {
+			return err
+		}
+		if h != 0 || c != 0 {
+			t.Errorf("cascade incompleto: historico=%d mandatos=%d", h, c)
+		}
+		return errRollback
+	})
+	if err != nil {
+		t.Fatalf("WithTenant: %v", err)
 	}
 }
 

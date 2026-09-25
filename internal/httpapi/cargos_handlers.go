@@ -5,10 +5,14 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"chosenerp/internal/cargos"
 	"chosenerp/internal/store"
 )
+
+// errCargoDuplicado sinaliza 409 quando nome/slug ja existem no tenant.
+var errCargoDuplicado = errors.New("ja existe um cargo com este nome")
 
 // errCargoEmUso sinaliza 409 (conflito): o cargo tem historico de mandato.
 var errCargoEmUso = errors.New("cargo em uso")
@@ -65,6 +69,11 @@ func (a *App) handleCreateCargo(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			writeErr(w, http.StatusConflict, errCargoDuplicado.Error())
+			return
+		}
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -97,6 +106,11 @@ func (a *App) handleUpdateCargo(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if store.IsNotFound(err) {
 			writeErr(w, http.StatusNotFound, "cargo not found")
+			return
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			writeErr(w, http.StatusConflict, errCargoDuplicado.Error())
 			return
 		}
 		writeErr(w, http.StatusBadRequest, err.Error())

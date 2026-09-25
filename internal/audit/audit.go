@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -62,6 +63,19 @@ type Allocation struct {
 	Amount    float64 `json:"amount"`
 }
 
+// MarshalJSON serializa occurred_at como data pura (YYYY-MM-DD), alinhando a
+// auditoria pela competencia real do lancamento (sem deslocamento de fuso).
+func (it Item) MarshalJSON() ([]byte, error) {
+	type plain Item
+	return json.Marshal(struct {
+		plain
+		OccurredAt string `json:"occurred_at"`
+	}{
+		plain:      plain(it),
+		OccurredAt: it.OccurredAt.UTC().Format("2006-01-02"),
+	})
+}
+
 type CreateInput struct {
 	Title       string  `json:"title"`
 	PeriodStart string  `json:"period_start"`
@@ -104,7 +118,7 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx) ([]Audit, error) {
 		LEFT JOIN financial_audit_items i ON i.audit_id = a.id
 		LEFT JOIN financial_transactions t ON t.id = i.transaction_id
 		GROUP BY a.id
-		ORDER BY a.created_at DESC LIMIT 200`)
+		ORDER BY a.period_start DESC, a.period_end DESC, a.created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +165,7 @@ func (r *Repo) ListItems(ctx context.Context, tx pgx.Tx, id string) ([]Item, err
 		LEFT JOIN benefactors db ON db.id = t.benefactor_id
 		LEFT JOIN documents doc ON doc.kind = 'receipt' AND doc.content->>'tx_id' = t.id::text
 		WHERE i.audit_id = $1::uuid
-		ORDER BY t.occurred_at, t.id`, id)
+		ORDER BY t.occurred_at, t.created_at, t.id`, id)
 	if err != nil {
 		return nil, err
 	}

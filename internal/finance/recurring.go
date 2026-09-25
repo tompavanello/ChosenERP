@@ -111,16 +111,14 @@ func (r *Repo) CreateRecurring(ctx context.Context, tx pgx.Tx, tenantID, branchI
 	if !ok {
 		return nil, pgx.ErrNoRows
 	}
-	periodStart := time.Now()
-	if in.PeriodStart != nil && *in.PeriodStart != "" {
-		if t, err := time.Parse(time.RFC3339, *in.PeriodStart); err == nil {
-			periodStart = t
-		}
+	periodStart, err := parseOccurredAt(in.PeriodStart)
+	if err != nil {
+		return nil, err
 	}
 	next := nextRunFor(periodStart, in.Frequency, time.Now())
 
 	var rec Recurring
-	err := tx.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		INSERT INTO recurring_donations
 			(tenant_id, branch_id, member_id, benefactor_id, category_id, subtype,
 			 amount, frequency, period_start, next_run_at, payment_method, description, account_id)

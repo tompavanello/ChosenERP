@@ -5,6 +5,7 @@ import { Plus, ArrowRight, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input, Field, Select } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -84,7 +85,7 @@ export default function TransfersPage() {
               {branches.map((b) => (<option key={b.id} value={b.id}>{b.name}</option>))}
             </Select>
           </Field>
-          <Field label="Valor (R$) *"><Input required type="number" min="0" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></Field>
+          <Field label="Valor (R$) *"><CurrencyInput required value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} /></Field>
           <Field label="Regra (opcional)"><Input value={form.rule_name} placeholder="ex.: 10% sede" onChange={(e) => setForm({ ...form, rule_name: e.target.value })} /></Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" type="button" onClick={() => setOpen(false)}>Cancelar</Button>

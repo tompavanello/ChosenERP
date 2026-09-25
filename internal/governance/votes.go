@@ -105,7 +105,7 @@ func (r *Repo) ListVotes(ctx context.Context, tx pgx.Tx, status string) ([]Vote,
 		FROM votes v
 		LEFT JOIN minutes mi ON mi.id = v.minute_id
 		WHERE ($1 = '' OR v.status = $1)
-		ORDER BY v.created_at DESC LIMIT 300`, status)
+		ORDER BY v.created_at DESC`, status)
 	if err != nil {
 		return nil, err
 	}

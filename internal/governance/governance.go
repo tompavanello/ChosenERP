@@ -81,7 +81,7 @@ func (r *Repo) ListMinutes(ctx context.Context, tx pgx.Tx, from, to string) ([]M
 		FROM minutes m
 		WHERE ($1 = '' OR m.meeting_at::date >= $1::date)
 		  AND ($2 = '' OR m.meeting_at::date <= $2::date)
-		ORDER BY m.meeting_at DESC LIMIT 300`, from, to)
+		ORDER BY m.meeting_at DESC`, from, to)
 	if err != nil {
 		return nil, err
 	}

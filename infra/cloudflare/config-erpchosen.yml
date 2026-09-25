@@ -10,6 +10,10 @@ ingress:
     service: http://nginx:80
   - hostname: www.erpchosen.com.br
     service: http://nginx:80
+  # Site da IPI Lencois Paulista (app Next.js/Payload, porta interna 3000).
+  # Precisa vir ANTES do wildcard para nao cair no painel white-label.
+  - hostname: ipilencoispaulista.erpchosen.com.br
+    service: http://ipilp-moderno:3000
   - hostname: "*.erpchosen.com.br"
     service: http://nginx:80
   - service: http_status:404

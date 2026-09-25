@@ -142,6 +142,9 @@ export interface Member {
   /** Derivado no backend da situacao: "professo" quando ativo, senao "nao_professo". */
   roll_class?: string;
   profession?: string;
+  nationality?: string;
+  education?: string;
+  notes?: string;
   /** Legado: virou member_cargos (a API devolve os dois). */
   office?: string;
   cpf?: string;
@@ -228,6 +231,18 @@ export interface Category {
   code: string;
   name: string;
   is_active: boolean;
+  /** Grupo de contas ao qual a conta pertence (opcional). */
+  group_id?: string;
+  group_name?: string;
+}
+
+/** Grupo de contas do plano de contas (ex.: Receitas, Despesas). */
+export interface CategoryGroup {
+  id: string;
+  branch_id?: string;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
 }
 
 export interface BankAccount {
@@ -267,6 +282,8 @@ export interface Transaction {
   supplier_name?: string;
   hash: string;
   occurred_at: string;
+  /** Instante de criacao do registro (trilha de auditoria). */
+  created_at?: string;
   /** Preenchido quando o lancamento foi estornado (continua no historico). */
   voided_at?: string;
   void_reason?: string;
@@ -642,6 +659,37 @@ export const listMyTenants = () => api<{ tenants: Membership[] }>("/api/v1/me/te
 export const getPublicTenant = (slug: string) =>
   api<PublicTenant>(`/api/v1/public/tenant/${encodeURIComponent(slug)}`);
 
+// ---- CEP (ViaCEP) ----
+export interface CepResult {
+  zip_code: string;
+  street?: string;
+  district?: string;
+  city?: string;
+  state?: string;
+}
+
+/**
+ * Consulta o CEP no ViaCEP (chamada direta do browser; a API responde com CORS).
+ * Devolve null quando o CEP nao e encontrado (ViaCEP responde `{erro:true}`).
+ */
+export async function lookupCep(cep: string): Promise<CepResult | null> {
+  const digits = cep.replace(/\D/g, "");
+  if (digits.length !== 8) return null;
+  const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+  if (!res.ok) throw new Error("Falha ao consultar o CEP");
+  const data = (await res.json()) as {
+    erro?: boolean; logradouro?: string; bairro?: string; localidade?: string; uf?: string;
+  };
+  if (data.erro) return null;
+  return {
+    zip_code: digits,
+    street: data.logradouro || undefined,
+    district: data.bairro || undefined,
+    city: data.localidade || undefined,
+    state: data.uf || undefined,
+  };
+}
+
 // ---- Pessoas ----
 export const listMembers = () => api<{ members: Member[] }>("/api/v1/members");
 export const getMember = (id: string) => api<Member>(`/api/v1/members/${id}`);
@@ -649,6 +697,10 @@ export const createMember = (data: Record<string, unknown>) =>
   api<Member>("/api/v1/members", { method: "POST", body: JSON.stringify(data) });
 export const updateMember = (id: string, data: Record<string, unknown>) =>
   api<Member>(`/api/v1/members/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+
+/** Exclui definitivamente o membro. Restrito a Sede (super_admin/admin_sede). */
+export const deleteMember = (id: string) =>
+  api<{ ok: boolean }>(`/api/v1/members/${id}`, { method: "DELETE" });
 
 // ---- Historico eclesiastico do membro (requisito 1.8) ----
 export const listMemberHistory = (memberId: string) =>
@@ -816,6 +868,16 @@ export const updateCategory = (id: string, data: Record<string, unknown>) =>
   api<Category>(`/api/v1/finance/categories/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 export const deleteCategory = (id: string) =>
   api<{ ok: boolean }>(`/api/v1/finance/categories/${id}`, { method: "DELETE" });
+
+// ---- Grupos de contas ----
+export const listCategoryGroups = () =>
+  api<{ groups: CategoryGroup[] }>("/api/v1/finance/category-groups");
+export const createCategoryGroup = (data: Record<string, unknown>) =>
+  api<CategoryGroup>("/api/v1/finance/category-groups", { method: "POST", body: JSON.stringify(data) });
+export const updateCategoryGroup = (id: string, data: Record<string, unknown>) =>
+  api<CategoryGroup>(`/api/v1/finance/category-groups/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export const deleteCategoryGroup = (id: string) =>
+  api<{ ok: boolean }>(`/api/v1/finance/category-groups/${id}`, { method: "DELETE" });
 export const listAccounts = () => api<{ accounts: BankAccount[] }>("/api/v1/finance/accounts");
 export const createAccount = (data: Record<string, unknown>) =>
   api<BankAccount>("/api/v1/finance/accounts", { method: "POST", body: JSON.stringify(data) });
@@ -876,6 +938,92 @@ export const closeAudit = (id: string, data: Record<string, unknown>) =>
 export const deleteAudit = (id: string) =>
   api<{ ok: boolean }>(`/api/v1/finance/audits/${id}`, { method: "DELETE" });
 
+// ---- Conciliacao financeira (trava o periodo ao conciliar) ----
+export interface FinancialReconciliation {
+  id: string;
+  branch_id: string;
+  title: string;
+  period_start: string;
+  period_end: string;
+  status: "aberta" | "conciliada";
+  notes?: string;
+  reconciled_at?: string;
+  created_at: string;
+  total_items: number;
+  total_income: number;
+  total_expense: number;
+}
+export interface ReconciliationItem {
+  id: string;
+  occurred_at: string;
+  type: "income" | "expense";
+  amount: number;
+  description?: string;
+  category_name?: string;
+  account_name?: string;
+}
+export const listReconciliations = () =>
+  api<{ reconciliations: FinancialReconciliation[] }>("/api/v1/finance/reconciliations");
+export const createReconciliation = (data: Record<string, unknown>) =>
+  api<FinancialReconciliation>("/api/v1/finance/reconciliations", { method: "POST", body: JSON.stringify(data) });
+export const getReconciliation = (id: string) =>
+  api<{ reconciliation: FinancialReconciliation; items: ReconciliationItem[] }>(`/api/v1/finance/reconciliations/${id}`);
+export const conciliateReconciliation = (id: string) =>
+  api<FinancialReconciliation>(`/api/v1/finance/reconciliations/${id}/conciliate`, { method: "POST" });
+export const deleteReconciliation = (id: string) =>
+  api<{ ok: boolean }>(`/api/v1/finance/reconciliations/${id}`, { method: "DELETE" });
+
+// ---- Conciliacao bancaria (extrato OFX/CSV) ----
+export interface BankImport {
+  id: string;
+  branch_id: string;
+  account_id?: string;
+  account_name?: string;
+  filename: string;
+  format: "ofx" | "csv";
+  period_start?: string;
+  period_end?: string;
+  status: "aberta" | "conciliado";
+  total_entries: number;
+  matched_entries: number;
+  missing_entries: number;
+  created_at: string;
+}
+export interface BankEntry {
+  id: string;
+  posted_at: string;
+  amount: number;
+  direction: "income" | "expense";
+  memo?: string;
+  fitid?: string;
+  status: "pendente" | "conciliado" | "ignorado" | "lancamento_gerado";
+  transaction_id?: string;
+  transaction_description?: string;
+}
+export interface BankDivergence {
+  id: string;
+  occurred_at: string;
+  amount: number;
+  direction: "income" | "expense";
+  description?: string;
+  category_name?: string;
+}
+export const listBankImports = () =>
+  api<{ imports: BankImport[] }>("/api/v1/finance/bank-imports");
+export const importBankStatement = (data: { account_id: string; filename: string; data: string }) =>
+  api<BankImport>("/api/v1/finance/bank-imports", { method: "POST", body: JSON.stringify(data) });
+export const getBankImport = (id: string) =>
+  api<{ import: BankImport; entries: BankEntry[]; divergences: BankDivergence[] }>(`/api/v1/finance/bank-imports/${id}`);
+export const ignoreBankEntry = (importId: string, entryId: string) =>
+  api<{ ok: boolean }>(`/api/v1/finance/bank-imports/${importId}/entries/${entryId}/ignore`, { method: "POST" });
+export const generateBankEntry = (importId: string, entryId: string, data: Record<string, unknown>) =>
+  api<{ transaction: Transaction }>(`/api/v1/finance/bank-imports/${importId}/entries/${entryId}/generate`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const deleteBankImport = (id: string) =>
+  api<{ ok: boolean }>(`/api/v1/finance/bank-imports/${id}`, { method: "DELETE" });
+
 // ---- Demonstrativo para assembleia ----
 export interface AssemblyCategory { category_id: string; category: string; type: string; total: number; }
 export interface AssemblyBalance { income: number; expense: number; net: number; by_category: AssemblyCategory[]; }
@@ -901,6 +1049,8 @@ export interface ImportResult {
   imported: number;
   skipped: number;
   errors: { line: number; error: string }[];
+  /** IDs criados na ordem do lote (vazio nas linhas rejeitadas). */
+  created_ids?: string[];
 }
 export const importTransactions = (csv: string) =>
   api<ImportResult>("/api/v1/finance/transactions/import", {
@@ -913,6 +1063,17 @@ export const voidTransaction = (id: string, reason = "") =>
   api<{ ok: boolean }>(`/api/v1/finance/transactions/${id}/void`, {
     method: "POST",
     body: JSON.stringify({ reason }),
+  });
+
+/** Exclui DEFINITIVAMENTE um lancamento (recalcula a hash-chain no backend). */
+export const deleteTransaction = (id: string) =>
+  api<{ ok: boolean }>(`/api/v1/finance/transactions/${id}`, { method: "DELETE" });
+
+/** Cria varios lancamentos em uma unica chamada (entrada rapida). */
+export const createTransactionsBatch = (transactions: Record<string, unknown>[]) =>
+  api<ImportResult>("/api/v1/finance/transactions/batch", {
+    method: "POST",
+    body: JSON.stringify({ transactions }),
   });
 
 // ---- Rateio do lancamento por evento ----

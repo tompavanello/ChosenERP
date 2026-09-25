@@ -14,11 +14,11 @@ import { Tabs } from "@/components/ui/tabs";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge, type Tone } from "@/components/ui/badge";
 import { Field, Select } from "@/components/ui/input";
-import { Modal } from "@/components/ui/modal";
 import { SkeletonRows, EmptyState } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
-import { MemberForm } from "@/components/members/member-form";
+import { MemberBulkGrid } from "@/components/members/member-bulk-grid";
+import { PhotoField } from "@/components/people/photo-field";
 import { CardCell } from "@/components/members/card-cell";
 import { CargosSection } from "@/components/members/cargos-section";
 import { FamilySection } from "@/components/members/family-section";
@@ -26,7 +26,7 @@ import { HistorySection } from "@/components/members/history-section";
 import { FrequencySection } from "@/components/members/frequency-section";
 import { LgpdSection } from "@/components/members/lgpd-section";
 import {
-  getMember, getMemberTree, updateMember, syncMemberCargos, addRelationship, listMembers, assetURL,
+  getMember, getMemberTree, addRelationship, listMembers, assetURL,
   type Member, type MemberAddress, type Relationship,
 } from "@/lib/api";
 import { useBranches } from "@/lib/swr-hooks";
@@ -45,7 +45,6 @@ export default function MemberDetailPage() {
   const [others, setOthers] = useState<Member[]>([]);
   const [tab, setTab] = useState("dados");
   const [editando, setEditando] = useState(false);
-  const [salvando, setSalvando] = useState(false);
   const [rel, setRel] = useState({ relate_member_id: "", kind: "spouse" });
   const [loading, setLoading] = useState(true);
 
@@ -76,22 +75,6 @@ export default function MemberDetailPage() {
     const alvo = new URLSearchParams(window.location.search).get("tab");
     if (alvo) setTab(alvo);
   }, []);
-
-  async function salvar(data: Record<string, unknown>, ctx: { cargoIds: string[] }) {
-    setSalvando(true);
-    try {
-      const atualizado = await updateMember(id, data);
-      await syncMemberCargos(id, ctx.cargoIds);
-      setMember(atualizado);
-      setEditando(false);
-      toast("Perfil atualizado.");
-      await load();
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro ao salvar", "error");
-    } finally {
-      setSalvando(false);
-    }
-  }
 
   async function doLink(e: React.FormEvent) {
     e.preventDefault();
@@ -158,8 +141,8 @@ export default function MemberDetailPage() {
               onIssued={(ref) => setMember((m) => (m ? { ...m, card_ref: ref } : m))}
             />
             {canWrite && (
-              <Button variant="outline" onClick={() => setEditando(true)}>
-                <Pencil className="h-4 w-4" /> Editar
+              <Button variant="outline" onClick={() => setEditando((v) => !v)}>
+                <Pencil className="h-4 w-4" /> {editando ? "Fechar edicao" : "Editar"}
               </Button>
             )}
           </>
@@ -193,24 +176,31 @@ export default function MemberDetailPage() {
         </div>
       </Card>
 
-      <Modal
-        open={editando}
-        onClose={() => setEditando(false)}
-        size="lg"
-        title={`Editar - ${member.full_name}`}
-      >
-        {editando && (
-          <MemberForm
-            memberId={member.id}
-            initial={member}
-            saving={salvando}
-            submitLabel="Salvar alteracoes"
-            onSubmit={salvar}
-            onCancel={() => setEditando(false)}
-            onPhotoChange={(url) => setMember((m) => (m ? { ...m, photo_url: url } : m))}
+      {editando && canWrite && (
+        <Card className="mb-4 p-4">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Pencil className="h-4 w-4 text-sky-600" />
+            <h3 className="text-sm font-semibold text-zinc-700">Editar cadastro</h3>
+            <span className="text-xs text-zinc-400">
+              Altere os campos e salve; o complemento traz documentos, endereco (CEP automatico), cargos e mais
+            </span>
+          </div>
+          <div className="mb-4">
+            <PhotoField
+              memberId={member.id}
+              name={member.full_name}
+              photoUrl={member.photo_url}
+              onChange={(url) => setMember((m) => (m ? { ...m, photo_url: url } : m))}
+            />
+          </div>
+          <MemberBulkGrid
+            mode="edit"
+            members={[member]}
+            focusId={member.id}
+            onSaved={async () => { setEditando(false); await load(); }}
           />
-        )}
-      </Modal>
+        </Card>
+      )}
 
       <Tabs
         tabs={[
@@ -253,8 +243,8 @@ export default function MemberDetailPage() {
             {member.exited_at && <Info label="Data de saida" value={datePt(member.exited_at)} />}
           </dl>
           <p className="mt-4 border-t border-zinc-100 pt-2 text-xs text-zinc-400 dark:border-zinc-800">
-            Para alterar estes dados use <span className="font-medium">Editar</span> - o mesmo
-            formulario da inclusao, com foto, documentos e cargos.
+            Para alterar estes dados use <span className="font-medium">Editar</span> - o cadastro
+            em grid, com foto, documentos, endereco (CEP automatico) e cargos.
           </p>
         </Card>
       )}

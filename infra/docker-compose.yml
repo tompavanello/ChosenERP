@@ -70,6 +70,8 @@ services:
         condition: service_started
       webadmin:
         condition: service_started
+      marketing:
+        condition: service_started
     ports:
       - "${NGINX_HTTP_PORT:-80}:80"
     volumes:
@@ -162,6 +164,30 @@ services:
       API_ORIGIN: http://api:8080
     ports:
       - "${WEBADMIN_PORT:-33000}:33000"
+
+  ### Site institucional (Next.js 15) - landing no dominio central (apex/www).
+  ### O painel continua nos subdominios de igreja e em app.erpchosen.com.br.
+  marketing:
+    build:
+      context: ../apps/marketing
+      dockerfile: Dockerfile
+      args:
+        # Lido pelo rewrites() do next.config.ts em tempo de build.
+        API_ORIGIN: http://api:8080
+        # URL do painel usada nos CTAs "Entrar" (vai para o bundle do browser).
+        NEXT_PUBLIC_APP_URL: ${MARKETING_APP_URL:-https://app.erpchosen.com.br}
+        # WhatsApp comercial exibido no site (apenas digitos, com DDI/DDD).
+        NEXT_PUBLIC_WHATSAPP: ${MARKETING_WHATSAPP:-5548999990000}
+    image: chosenerp/marketing:local
+    container_name: chosen-marketing
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      API_ORIGIN: http://api:8080
+    ports:
+      - "${MARKETING_PORT:-33010}:33000"
 
   redis:
     image: redis:7-alpine

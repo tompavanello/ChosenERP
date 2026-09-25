@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Search, UserPlus, Users, Pencil, MessageCircle, Phone, Mail, IdCard, GitBranch,
+  Search, Users, MessageCircle, Phone, Mail, IdCard, GitBranch, Trash2, ListPlus,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -12,15 +12,14 @@ import { Card } from "@/components/ui/card";
 import { Badge, type Tone } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { StatCard } from "@/components/ui/stat-card";
-import { Modal } from "@/components/ui/modal";
 import { SkeletonRows, EmptyState } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
 import {
-  listMembers, createMember, updateMember, syncMemberCargos, assetURL, type Member,
+  listMembers, deleteMember, assetURL, type Member,
 } from "@/lib/api";
 import { useBranches } from "@/lib/swr-hooks";
-import { MemberForm } from "@/components/members/member-form";
+import { MemberBulkGrid } from "@/components/members/member-bulk-grid";
 import { CardCell } from "@/components/members/card-cell";
 import { RowActions } from "@/components/people/row-actions";
 import { MEMBERSHIP_STATUS, CARGO_KINDS } from "@/lib/constants";
@@ -32,7 +31,7 @@ const PER_PAGE = 15;
 const digits = (s?: string) => (s ?? "").replace(/\D/g, "");
 
 export default function MembersPage() {
-  const { hasPerm } = useAuth();
+  const { hasPerm, user } = useAuth();
   const { toast } = useToast();
   const { data: branchData } = useBranches();
   const [members, setMembers] = useState<Member[] | null>(null);
@@ -40,12 +39,14 @@ export default function MembersPage() {
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PER_PAGE);
-  const [showForm, setShowForm] = useState<{ mode: "create" } | { mode: "edit"; member: Member } | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [showQuick, setShowQuick] = useState(false);
   const [sortColumn, setSortColumn] = useState<string>("full_name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   const canWrite = hasPerm("members.write");
+  // Exclusao destrutiva: apenas a Sede (super_admin/admin_sede), alinhado ao
+  // gate do backend (handleDeleteMember).
+  const canDelete = user?.role === "super_admin" || user?.role === "admin_sede";
 
   // Nome da filial no lugar do UUID cru que aparecia na coluna.
   const branchName = useCallback(
@@ -100,26 +101,14 @@ export default function MembersPage() {
 
   useEffect(() => setPage(1), [query, status, pageSize]);
 
-  async function save(data: Record<string, unknown>, ctx: { cargoIds: string[] }) {
-    setSaving(true);
+  async function remove(m: Member) {
+    if (!confirm(`Excluir definitivamente o membro "${m.full_name}"? Historico, cargos, presencas e vinculos serao removidos. Esta acao nao pode ser desfeita.`)) return;
     try {
-      if (showForm?.mode === "edit") {
-        await updateMember(showForm.member.id, data);
-        // Os cargos sao um recurso a parte (tabela de mandatos): sincroniza
-        // depois do PATCH, quando ja existe id e o membro esta atualizado.
-        await syncMemberCargos(showForm.member.id, ctx.cargoIds);
-        toast("Membro atualizado.");
-      } else {
-        const novo = await createMember(data);
-        await syncMemberCargos(novo.id, ctx.cargoIds);
-        toast("Membro cadastrado.");
-      }
+      await deleteMember(m.id);
+      toast("Membro excluido.");
       await reload();
-      setShowForm(null);
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro", "error");
-    } finally {
-      setSaving(false);
+      toast(err instanceof Error ? err.message : "Erro ao excluir", "error");
     }
   }
 
@@ -273,10 +262,11 @@ export default function MembersPage() {
                   onClick: () => window.location.assign(`/dashboard/members/${m.id}?tab=familia`),
                 },
                 {
-                  label: "Editar",
-                  icon: <Pencil className="h-3.5 w-3.5" />,
-                  disabled: !canWrite,
-                  onClick: () => setShowForm({ mode: "edit", member: m }),
+                  label: "Excluir",
+                  icon: <Trash2 className="h-3.5 w-3.5" />,
+                  danger: true,
+                  disabled: !canDelete,
+                  onClick: () => remove(m),
                 },
               ]}
             />
@@ -284,7 +274,7 @@ export default function MembersPage() {
         ),
       },
     ],
-    [branchName, canWrite],
+    [branchName, canDelete],
   );
 
   /** Card do mobile: as mesmas informacoes essenciais, empilhadas. */
@@ -358,12 +348,26 @@ export default function MembersPage() {
         description="Cadastro, cargos, familia e carteirinha digital em um so lugar"
         actions={
           canWrite && (
-            <Button onClick={() => setShowForm({ mode: "create" })}>
-              <UserPlus className="h-4 w-4" /> Novo Membro
+            <Button variant="outline" onClick={() => setShowQuick((v) => !v)}>
+              <ListPlus className="h-4 w-4" /> {showQuick ? "Fechar cadastro rapido" : "Cadastro rapido"}
             </Button>
           )
         }
       />
+
+      {showQuick && canWrite && (
+        <Card className="mb-4 p-4">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Users className="h-4 w-4 text-sky-600" />
+            <h3 className="text-sm font-semibold text-zinc-700">Cadastro rapido de membros</h3>
+            <span className="text-xs text-zinc-400">
+              Cada linha e um membro; use o botao de complemento para documentos, endereco (CEP automatico), cargos e mais.
+              A edicao de um membro e feita na ficha dele.
+            </span>
+          </div>
+          <MemberBulkGrid onSaved={reload} />
+        </Card>
+      )}
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total" value={members ? String(stats.total) : "..."} icon={Users} />
@@ -398,25 +402,6 @@ export default function MembersPage() {
         </div>
       </Card>
 
-      {/* Um unico formulario para incluir e editar. */}
-      <Modal
-        open={showForm !== null}
-        onClose={() => setShowForm(null)}
-        size="lg"
-        title={showForm?.mode === "edit" ? `Editar - ${showForm.member.full_name}` : "Novo Membro"}
-      >
-        {showForm && (
-          <MemberForm
-            memberId={showForm.mode === "edit" ? showForm.member.id : undefined}
-            initial={showForm.mode === "edit" ? showForm.member : null}
-            saving={saving}
-            submitLabel={showForm.mode === "edit" ? "Salvar alteracoes" : "Cadastrar"}
-            onSubmit={save}
-            onCancel={() => setShowForm(null)}
-          />
-        )}
-      </Modal>
-
       {members === null ? (
         <Card>
           <SkeletonRows rows={8} />
@@ -426,7 +411,7 @@ export default function MembersPage() {
           <EmptyState
             icon={<Users className="h-10 w-10" />}
             title="Nenhum membro encontrado"
-            description="Ajuste a busca ou cadastre um novo membro."
+            description="Ajuste a busca ou use o Cadastro rapido para incluir membros."
           />
         </Card>
       ) : (

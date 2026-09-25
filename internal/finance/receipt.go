@@ -24,7 +24,7 @@ func (r *Repo) issueReceipt(ctx context.Context, tx pgx.Tx, tenantID, branchID s
 		"type":        t.Type,
 		"amount":      t.Amount,
 		"currency":    t.Currency,
-		"occurred_at": t.OccurredAt.Format(timeLayout),
+		"occurred_at": t.OccurredAt.UTC().Format(dateLayout),
 		"href":        "/api/v1/documents/by-token/" + token,
 	})
 	var docID string
@@ -111,8 +111,6 @@ func (r *Repo) GetMembershipCard(ctx context.Context, tx pgx.Tx, memberID string
 	}
 	return ref, token, nil
 }
-
-const timeLayout = "2006-01-02T15:04:05Z07:00"
 
 func randomToken(n int) string {
 	b := make([]byte, n)
