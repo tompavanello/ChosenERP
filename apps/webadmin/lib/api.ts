@@ -154,7 +154,7 @@ export interface Member {
   joined_at?: string;
   /** Endereco do membro (requisito 1.1). */
   address?: MemberAddress;
-  /** Motivo da baixa, quando a situacao e baixa/transferencia/falecimento. */
+  /** Motivo da inatividade, quando a situacao e "inactive". */
   exit_reason?: string;
   exited_at?: string;
   /** Data de casamento (aniversarios de casamento). */
@@ -184,8 +184,29 @@ export interface MemberHistory {
   member_id: string;
   occurred_at: string;
   kind: string;
+  event_kind_id?: string;
+  event_name?: string;
+  event_category?: string;
+  event_tone?: string;
   notes?: string;
   created_by?: string;
+  created_at: string;
+}
+
+/** Tipo de evento do catalogo configuravel da igreja (migracao 000065). */
+export interface MemberEventKind {
+  id: string;
+  name: string;
+  slug: string;
+  category: string;
+  tone: string;
+  sets_status?: string;
+  sets_exit_reason?: string;
+  clears_exit: boolean;
+  sets_baptism: boolean;
+  sets_date_field: string;
+  is_active: boolean;
+  sort_order: number;
   created_at: string;
 }
 
@@ -710,6 +731,22 @@ export const addMemberHistory = (memberId: string, data: Record<string, unknown>
     method: "POST",
     body: JSON.stringify(data),
   });
+
+// ---- Catalogo configuravel de eventos da vida eclesiastica (000065) ----
+export const listMemberEventKinds = () =>
+  api<{ event_kinds: MemberEventKind[] }>("/api/v1/member-event-kinds");
+export const createMemberEventKind = (data: Partial<MemberEventKind>) =>
+  api<MemberEventKind>("/api/v1/member-event-kinds", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const updateMemberEventKind = (id: string, data: Partial<MemberEventKind>) =>
+  api<MemberEventKind>(`/api/v1/member-event-kinds/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+export const deleteMemberEventKind = (id: string) =>
+  api<{ ok: boolean }>(`/api/v1/member-event-kinds/${id}`, { method: "DELETE" });
 export const getMemberTree = (id: string) =>
   api<{ member: Member; relationships: Relationship[] }>(`/api/v1/members/${id}/tree`);
 export const addRelationship = (id: string, relateMemberId: string, kind: string) =>

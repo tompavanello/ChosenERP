@@ -297,8 +297,12 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | POST | `/api/v1/members/{id}/cargos` | Bearer | Atribui cargo (`started_at`, `ends_at`, `status`) |
 | PATCH | `/api/v1/members/{id}/cargos/{linkId}` | Bearer | Edita mandato; `ends_at: ""` **limpa** o vencimento |
 | DELETE | `/api/v1/members/{id}/cargos/{linkId}` | Bearer | Remove o mandato do historico |
-| GET  | `/api/v1/members/{id}/history` | Bearer | Historico eclesiastico (append-only) |
-| POST | `/api/v1/members/{id}/history` | Bearer | Registra evento no historico |
+| GET  | `/api/v1/member-event-kinds` | Bearer | Catalogo configuravel de eventos da vida eclesiastica (000065) |
+| POST | `/api/v1/member-event-kinds` | Bearer | Cria tipo de evento (e define o que ele movimenta) |
+| PATCH | `/api/v1/member-event-kinds/{id}` | Bearer | Edita/ativa/desativa tipo de evento |
+| DELETE | `/api/v1/member-event-kinds/{id}` | Bearer | Exclui tipo de evento (**409** se houver historico - desative) |
+| GET  | `/api/v1/members/{id}/history` | Bearer | Vida eclesiastica do membro (append-only + hash-chain) |
+| POST | `/api/v1/members/{id}/history` | Bearer | Lanca evento (`event_kind_id`/`kind`); aplica os efeitos do tipo no membro |
 | GET  | `/api/v1/members/{id}/frequency` | Bearer | Historico de frequencia |
 | POST | `/api/v1/members/{id}/frequency` | Bearer | Atualiza a frequencia (mantem historico) |
 | GET  | `/api/v1/event-kinds` | Bearer | Tipos de evento |
@@ -429,6 +433,19 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 - Migracoes versionadas em `db/migrations/*.up.sql` (e `.down.sql`).
 - O binario as embute e aplica no boot, rastreando versoes em `schema_migrations`.
 - Convencao: `0000xx_nome_curto.up.sql`.
+- **Vida eclesiastica (`000065`)**: `member_event_kinds` e o catalogo configuravel
+  de eventos (substitui a lista fixa e os 15 tipos do legado `cadorg`). Cada tipo
+  declara o que movimenta o membro (`sets_status`, `sets_exit_reason`, `clears_exit`,
+  `sets_baptism`, `sets_date_field`); o `POST /members/{id}/history` aplica os
+  efeitos na mesma transacao. Seed por tenant; `create_tenant` tambem semeia.
+- **Situacao do membro (`000066`)**: `members.membership_status` tem so **3**
+  valores - `active` (Ativo Professo), `member` (Ativo Nao Professo) e `inactive`
+  (Inativo). A antiga distincao (baixado/transferido/falecido/outros) foi
+  colapsada em `inactive` e vive no **motivo** (`exit_reason`, obrigatorio quando
+  inativo). Os tipos de saida do catalogo (`000065`) gravam `inactive` + o motivo.
+- **Importacao do legado**: `go run ./cmd/import-legacy-history` (uma vez, fora das
+  migracoes). Le `cadcre`/`cadorg` do banco MCM/IPI e grava em `member_history`,
+  casando o membro por `external_id = 'sincad:<cpf>'` e caindo para CPF. Idempotente.
 
 ## Build da imagem da API
 

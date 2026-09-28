@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Building2, Church, Globe, Pencil, Plus, Trash2 } from "lucide-react";
+import { Building2, CalendarHeart, Church, Globe, Pencil, Plus, Trash2 } from "lucide-react";
+import { EventKindsSection } from "@/components/settings/event-kinds-section";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -332,6 +333,7 @@ export default function SettingsPage() {
         tabs={[
           { key: "igreja", label: "Dados da igreja", icon: <Church className="h-4 w-4" /> },
           { key: "filiais", label: "Filiais", icon: <Building2 className="h-4 w-4" /> },
+          { key: "eventos", label: "Eventos eclesiasticos", icon: <CalendarHeart className="h-4 w-4" /> },
           ...(isSuperAdmin
             ? [{ key: "igrejas", label: "Igrejas", icon: <Globe className="h-4 w-4" /> }]
             : []),
@@ -449,6 +451,8 @@ export default function SettingsPage() {
           )}
         </Card>
       )}
+
+      {tab === "eventos" && <EventKindsSection canWrite={canWrite} />}
 
       {tab === "igrejas" && isSuperAdmin && (
         <Card className="overflow-hidden p-0">

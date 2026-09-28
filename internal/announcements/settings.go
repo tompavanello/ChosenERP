@@ -196,7 +196,7 @@ func (r *Repo) BirthdayRecipients(ctx context.Context, tx pgx.Tx, tenantID strin
 		  AND birth_date IS NOT NULL
 		  AND EXTRACT(MONTH FROM birth_date) = $2
 		  AND EXTRACT(DAY FROM birth_date) = $3
-		  AND membership_status NOT IN ('dismissed','transferred','deceased')
+		  AND membership_status <> 'inactive'
 		ORDER BY full_name`, tenantID, month, day)
 	if err != nil {
 		return nil, err

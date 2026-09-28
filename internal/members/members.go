@@ -260,8 +260,15 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput,
 			baptism_location = COALESCE($17, m.baptism_location),
 			joined_at = COALESCE($18::date, m.joined_at),
 			address = COALESCE($19::jsonb, m.address),
-			exit_reason = COALESCE($20, m.exit_reason),
-			exited_at = COALESCE($21::date, m.exited_at),
+			exit_reason = CASE
+				WHEN btrim(COALESCE($20::text,'')) <> '' THEN btrim($20::text)
+				WHEN COALESCE($13, m.membership_status) = 'inactive' THEN COALESCE(m.exit_reason, 'outro')
+				WHEN COALESCE($13, m.membership_status) IN ('active','member') THEN NULL
+				ELSE m.exit_reason END,
+			exited_at = CASE
+				WHEN COALESCE($13, m.membership_status) = 'inactive' THEN COALESCE($21::date, m.exited_at, now()::date)
+				WHEN COALESCE($13, m.membership_status) IN ('active','member') THEN NULL
+				ELSE COALESCE($21::date, m.exited_at) END,
 			marriage_date = COALESCE($22::date, m.marriage_date),
 			updated_at = now()
 		WHERE m.id = $1::uuid
@@ -279,16 +286,24 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput,
 	if in.MembershipStatus != nil && *in.MembershipStatus != "" {
 		newStatus = *in.MembershipStatus
 	}
+	m, err := r.Get(ctx, tx, updatedID)
+	if err != nil {
+		return nil, err
+	}
 	if newStatus != oldStatus {
-		notes := "Situacao alterada de '" + oldStatus + "' para '" + newStatus + "'"
-		if in.ExitReason != nil && *in.ExitReason != "" {
-			notes += " (motivo: " + *in.ExitReason + ")"
+		reason := ""
+		if m.ExitReason != nil {
+			reason = *m.ExitReason
 		}
-		if err := insertHistory(ctx, tx, id, historyKindForStatus(newStatus), notes, actorID); err != nil {
+		notes := "Situacao alterada de '" + oldStatus + "' para '" + newStatus + "'"
+		if reason != "" {
+			notes += " (motivo: " + reason + ")"
+		}
+		if err := insertHistory(ctx, tx, id, historyKindForStatus(newStatus, reason), notes, actorID); err != nil {
 			return nil, err
 		}
 	}
-	return r.Get(ctx, tx, updatedID)
+	return m, nil
 }
 
 // SetPhoto grava a foto do membro. Chamado apenas pelo endpoint de upload, que
@@ -341,6 +356,9 @@ type CreateInput struct {
 	JoinedAt         *string  `json:"joined_at"`
 	Address          *Address `json:"address"`
 	MarriageDate     *string  `json:"marriage_date"`
+	// Motivo/data da inatividade (so fazem sentido com status 'inactive').
+	ExitReason *string `json:"exit_reason"`
+	ExitedAt   *string `json:"exited_at"`
 	// photo_url fica de fora: so o upload grava a foto (ver UpdateInput).
 }
 
@@ -350,6 +368,16 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 	if status == "" {
 		status = "member"
 	}
+	// Inativo sempre tem motivo; as demais situacoes nao carregam motivo.
+	exitReason := in.ExitReason
+	if status == "inactive" {
+		if exitReason == nil || strings.TrimSpace(*exitReason) == "" {
+			fallback := "outro"
+			exitReason = &fallback
+		}
+	} else {
+		exitReason = nil
+	}
 	full := strings.TrimSpace(in.FirstName + " " + in.LastName)
 	var newID string
 	err := tx.QueryRow(ctx, `
@@ -358,17 +386,19 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 			 nickname, email, phone, whatsapp, birth_date, gender,
 			 marital_status, profession, office, membership_status,
 			 cpf, rg, baptism_date, baptism_location, joined_at, address, marriage_date,
-			 nationality, education, notes)
+			 nationality, education, notes, exit_reason, exited_at)
 		VALUES
 			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date, $11,
 			 $12, $13, $14, $15, $16, $17, $18::date, $19, $20::date, $21::jsonb, $22::date,
-			 $23, $24, $25)
+			 $23, $24, $25, $26,
+			 CASE WHEN $15 = 'inactive' THEN COALESCE($27::date, now()::date) ELSE NULL END)
 		RETURNING id::text`,
 		tenantID, branchID, in.FirstName, in.LastName, full,
 		in.Nickname, in.Email, in.Phone, in.Whatsapp, in.BirthDate, in.Gender,
 		in.MaritalStatus, in.Profession, in.Office, status,
 		in.CPF, in.RG, in.BaptismDate, in.BaptismLocation, in.JoinedAt,
-		in.Address, in.MarriageDate, in.Nationality, in.Education, in.Notes).Scan(&newID)
+		in.Address, in.MarriageDate, in.Nationality, in.Education, in.Notes,
+		exitReason, in.ExitedAt).Scan(&newID)
 	if err != nil {
 		return nil, err
 	}

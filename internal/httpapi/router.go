@@ -17,6 +17,7 @@ import (
 	"chosenerp/internal/groups"
 	"chosenerp/internal/kids"
 	"chosenerp/internal/lgpd"
+	"chosenerp/internal/memberevents"
 	"chosenerp/internal/members"
 	"chosenerp/internal/ministries"
 	"chosenerp/internal/org"
@@ -51,13 +52,14 @@ type App struct {
 	Org           *org.Repo
 	Rosters       *rosters.Repo
 	Kids          *kids.Repo
+	MemberEvents  *memberevents.Repo
 	Dispatch      *delivery.Dispatcher
 	// Limitador protege as rotas /api/v1/public/* (sem auth).
 	Limitador *limitadorPublico
 }
 
 // NewRouter monta o gateway HTTP e suas rotas.
-func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo *members.Repo, finRepo *finance.Repo, auditRepo *audit.Repo, docRepo *documents.Repo, famRepo *families.Repo, visitRepo *visitors.Repo, benefRepo *benefactors.Repo, suppliersRepo *suppliers.Repo, ministRepo *ministries.Repo, groupsRepo *groups.Repo, annRepo *announcements.Repo, cargosRepo *cargos.Repo, usersRepo *users.Repo, eventsRepo *events.Repo, lgpdRepo *lgpd.Repo, govRepo *governance.Repo, orgRepo *org.Repo, rostersRepo *rosters.Repo, kidsRepo *kids.Repo, dispatcher *delivery.Dispatcher) http.Handler {
+func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo *members.Repo, finRepo *finance.Repo, auditRepo *audit.Repo, docRepo *documents.Repo, famRepo *families.Repo, visitRepo *visitors.Repo, benefRepo *benefactors.Repo, suppliersRepo *suppliers.Repo, ministRepo *ministries.Repo, groupsRepo *groups.Repo, annRepo *announcements.Repo, cargosRepo *cargos.Repo, usersRepo *users.Repo, eventsRepo *events.Repo, lgpdRepo *lgpd.Repo, govRepo *governance.Repo, orgRepo *org.Repo, rostersRepo *rosters.Repo, kidsRepo *kids.Repo, memberEventsRepo *memberevents.Repo, dispatcher *delivery.Dispatcher) http.Handler {
 	app := &App{
 		Config:        cfg,
 		Store:         st,
@@ -81,6 +83,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 		Org:           orgRepo,
 		Rosters:       rostersRepo,
 		Kids:          kidsRepo,
+		MemberEvents:  memberEventsRepo,
 		Dispatch:      dispatcher,
 		Limitador:     newLimitadorPublico(),
 	}
@@ -120,6 +123,12 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	// Historico eclesiastico do membro (requisito 1.8)
 	mux.Handle("GET /api/v1/members/{id}/history", authed(http.HandlerFunc(app.handleListMemberHistory)))
 	mux.Handle("POST /api/v1/members/{id}/history", authed(http.HandlerFunc(app.handleAddMemberHistory)))
+
+	// Catalogo configuravel de eventos da vida eclesiastica (000065)
+	mux.Handle("GET /api/v1/member-event-kinds", authed(http.HandlerFunc(app.handleListMemberEventKinds)))
+	mux.Handle("POST /api/v1/member-event-kinds", authed(http.HandlerFunc(app.handleCreateMemberEventKind)))
+	mux.Handle("PATCH /api/v1/member-event-kinds/{id}", authed(http.HandlerFunc(app.handleUpdateMemberEventKind)))
+	mux.Handle("DELETE /api/v1/member-event-kinds/{id}", authed(http.HandlerFunc(app.handleDeleteMemberEventKind)))
 
 	// Cargos (funcoes/ministerios) e mandatos do membro
 	mux.Handle("GET /api/v1/cargos", authed(http.HandlerFunc(app.handleListCargos)))

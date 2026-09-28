@@ -137,6 +137,7 @@ export function PersonForm({
     () => (initial as PersonInput | null | undefined)?.photo_url ?? undefined,
   );
   const [tab, setTab] = useState<"dados" | "igreja">("dados");
+  const [formError, setFormError] = useState<string | null>(null);
   const isSaving = saving ?? loading ?? false;
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -179,6 +180,13 @@ export function PersonForm({
     if (entityType === "benefactor") {
       data.name = `${form.first_name} ${form.last_name}`.trim() || form.nickname;
     }
+    // Inativo exige o motivo da inatividade (a subdivisao do status).
+    if (isMember && form.membership_status === "inactive" && !form.exit_reason) {
+      setTab("igreja");
+      setFormError("Informe o motivo da inatividade.");
+      return;
+    }
+    setFormError(null);
     await onSubmit(data, { cargoIds });
   }
 
@@ -344,7 +352,7 @@ export function PersonForm({
       {isMember && (
         <div className={tab === "igreja" ? undefined : "hidden"}>
         <Section title="Vida eclesiastica">
-          <Field label="Status">
+          <Field label="Situacao">
             <Combobox
               value={form.membership_status}
               placeholder="Selecione..."
@@ -357,13 +365,13 @@ export function PersonForm({
           </Field>
           {isExit && (
             <>
-              <Field label="Motivo da baixa" hint="Requisito 1.7.">
+              <Field label="Motivo da inatividade *" hint="Requisito 1.7 - subdivisao do status Inativo.">
                 <Select className="h-8 text-sm" value={form.exit_reason} onChange={(e) => set("exit_reason", e.target.value)}>
                   <option value="">-</option>
                   {Object.entries(EXIT_REASONS).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
                 </Select>
               </Field>
-              <Field label="Data de saida">
+              <Field label="Data de inatividade">
                 <Input type="date" className="h-8 text-sm" value={form.exited_at} onChange={(e) => set("exited_at", e.target.value)} />
               </Field>
             </>
@@ -396,6 +404,12 @@ export function PersonForm({
             <Textarea rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
           </Field>
         </Section>
+      )}
+
+      {formError && (
+        <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300">
+          {formError}
+        </p>
       )}
 
       <div className="flex justify-end gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">

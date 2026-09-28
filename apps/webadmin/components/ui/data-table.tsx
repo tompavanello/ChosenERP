@@ -324,8 +324,8 @@ export function createStatusColumn<T>(key: string): Column<T> {
     render: (row) => {
       const status = row[key as keyof T] as string;
       const statusMap: Record<string, { label: string; tone: Tone }> = {
-        active: { label: "Ativo", tone: "green" },
-        member: { label: "Membro", tone: "green" },
+        active: { label: "Ativo Professo", tone: "green" },
+        member: { label: "Ativo Nao Professo", tone: "sky" },
         inactive: { label: "Inativo", tone: "zinc" },
         visitor: { label: "Visitante", tone: "amber" },
         converted: { label: "Convertido", tone: "green" },
@@ -333,8 +333,6 @@ export function createStatusColumn<T>(key: string): Column<T> {
         coffee_pastor: { label: "Cafe c/ Pastor", tone: "sky" },
         course: { label: "Curso", tone: "sky" },
         cell: { label: "Celula", tone: "indigo" },
-        transferred: { label: "Transferido", tone: "sky" },
-        deceased: { label: "Falecido", tone: "red" },
       };
       const config = statusMap[status] ?? { label: status || "-", tone: "zinc" as Tone };
       return <Badge tone={config.tone}>{config.label}</Badge>;

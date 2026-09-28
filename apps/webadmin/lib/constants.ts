@@ -1,28 +1,24 @@
-// Situacao no Rol (requisito 1.6). "professo" e DERIVADO: so `active` e
-// professo (nao existe "professo inativo"); `member` e o nao professo que
-// segue ativo na igreja. Espelha o CHECK da migracao 000022.
+// Situacao no Rol (requisito 1.6, revisada pela migracao 000066): 3 situacoes.
+// "professo" e DERIVADO: so `active` e professo (nao existe "professo inativo").
+// `inactive` e subdividido pelo MOTIVO da inatividade (EXIT_REASONS).
 export const MEMBERSHIP_STATUS: Record<string, { label: string; tone: string }> = {
-  active: { label: "Ativo (professo)", tone: "green" },
-  member: { label: "Nao professo", tone: "sky" },
+  active: { label: "Ativo Professo", tone: "green" },
+  member: { label: "Ativo Nao Professo", tone: "sky" },
   inactive: { label: "Inativo", tone: "zinc" },
-  dismissed: { label: "Baixado do Rol", tone: "red" },
-  transferred: { label: "Transferido", tone: "amber" },
-  deceased: { label: "Falecido", tone: "zinc" },
-  other: { label: "Outros", tone: "zinc" },
 };
 
-/** Motivos de baixa (requisito 1.7). Espelha o CHECK da migracao 000022. */
+/** Motivos da inatividade (requisito 1.7). Espelha o CHECK da migracao 000022. */
 export const EXIT_REASONS: Record<string, string> = {
   falecimento: "Falecimento",
-  desligamento: "Desligamento a pedido do membro",
+  desligamento: "Desligamento",
   transferencia: "Transferencia para outra igreja",
   abandono: "Abandono das atividades eclesiasticas",
   ausencia: "Ausencia superior a 1 ano",
   outro: "Outro",
 };
 
-/** Situacoes que exigem motivo/data de saida (baixa do Rol). */
-export const EXIT_STATUSES = ["dismissed", "transferred", "deceased"];
+/** Situacoes que exigem motivo/data de inatividade. */
+export const EXIT_STATUSES = ["inactive"];
 
 /** Frequencia do membro (requisito 1.5), com historico. */
 export const FREQUENCY: Record<string, { label: string; tone: string }> = {
@@ -31,22 +27,59 @@ export const FREQUENCY: Record<string, { label: string; tone: string }> = {
   nao_frequente: { label: "Nao frequente", tone: "zinc" },
 };
 
-/** Tipos de evento do historico eclesiastico (requisito 1.8). */
+/** Tipos de evento do historico eclesiastico (requisito 1.8).
+ *  Fallback de exibicao: a fonte de verdade e o catalogo configuravel
+ *  `member-event-kinds` (migracao 000065). */
 export const MEMBER_HISTORY_KINDS: Record<string, string> = {
   cadastro: "Cadastro",
   status: "Alteracao de situacao",
   reativacao: "Reativacao",
-  batismo_infantil: "Batismo infantil",
+  batismo_infantil: "Batismo de crianca",
+  batismo_crianca: "Batismo de crianca",
+  batismo_profissao_fe: "Batismo e profissao de fe",
+  apresentacao_crianca: "Apresentacao de crianca",
   profissao_fe: "Profissao de fe",
-  recebido_jurisdicao: "Recebido por jurisdicao",
-  recebido_transferencia: "Recebido por transferencia",
-  transferencia: "Transferencia para outra igreja",
+  recebido_jurisdicao: "Recebimento por jurisdicao",
+  recebido_transferencia: "Recebimento por transferencia",
+  saida_transferencia: "Saida por transferencia",
+  transferencia: "Saida por transferencia",
+  desligamento_pedido: "Desligamento a pedido do membro",
+  desligamento_disciplinar: "Desligamento por ato disciplinar",
   desligamento: "Desligamento",
+  abandono_atividades: "Abandono das atividades",
   abandono: "Abandono das atividades",
   baixa_rol: "Baixa do Rol",
-  falecimento: "Falecimento",
+  saida_falecimento: "Saida por falecimento",
+  falecimento: "Saida por falecimento",
+  ordenacao_diacono: "Ordenacao de diacono(a)",
+  ordenacao_presbitero: "Ordenacao de presbitero(a)",
+  dissolucao_pastoral: "Dissolucao das relacoes pastorais",
+  decisao_presbiterio: "Decisao do presbiterio",
   outro: "Outros",
 };
+
+/** Agrupamento dos eventos da vida eclesiastica por categoria (000065). */
+export const EVENT_CATEGORY: Record<string, { label: string; order: number }> = {
+  batismo: { label: "Batismo", order: 1 },
+  profissao: { label: "Profissao de fe", order: 2 },
+  recepcao: { label: "Recepcao", order: 3 },
+  retorno: { label: "Retorno", order: 4 },
+  saida: { label: "Saida / Baixa", order: 5 },
+  ordenacao: { label: "Ordenacao", order: 6 },
+  disciplina: { label: "Disciplina", order: 7 },
+  sistema: { label: "Sistema (automatico)", order: 8 },
+  outro: { label: "Outros", order: 9 },
+};
+
+/** Campos de data que um evento pode atualizar. */
+export const EVENT_DATE_FIELDS: Record<string, string> = {
+  none: "Nao atualiza data",
+  joined_at: "Membro desde",
+  marriage_date: "Data de casamento",
+};
+
+/** Tons aceitos pelo Badge. */
+export const EVENT_TONES = ["zinc", "sky", "green", "amber", "red", "indigo", "brand"];
 
 export const GENDER: Record<string, string> = { male: "Masculino", female: "Feminino", other: "Outro" };
 

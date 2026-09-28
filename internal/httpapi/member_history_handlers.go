@@ -40,12 +40,14 @@ func (a *App) handleAddMemberHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	id := r.PathValue("id")
 	var in struct {
-		Kind       string `json:"kind"`
-		Notes      string `json:"notes"`
-		OccurredAt string `json:"occurred_at"`
+		Kind            string `json:"kind"`
+		EventKindID     string `json:"event_kind_id"`
+		Notes           string `json:"notes"`
+		OccurredAt      string `json:"occurred_at"`
+		BaptismLocation string `json:"baptism_location"`
 	}
-	if err := readJSON(r, &in); err != nil || in.Kind == "" {
-		writeErr(w, http.StatusBadRequest, "kind required")
+	if err := readJSON(r, &in); err != nil || (in.Kind == "" && in.EventKindID == "") {
+		writeErr(w, http.StatusBadRequest, "event_kind_id ou kind required")
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -56,7 +58,8 @@ func (a *App) handleAddMemberHistory(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		var err error
-		entry, err = a.Members.AddHistory(r.Context(), tx, id, in.Kind, in.Notes, in.OccurredAt, claims.UserID)
+		entry, err = a.Members.AddHistory(r.Context(), tx, id, in.EventKindID, in.Kind,
+			in.Notes, in.OccurredAt, in.BaptismLocation, claims.UserID)
 		return err
 	})
 	if err != nil {

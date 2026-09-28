@@ -222,8 +222,7 @@ func monthParam(r *http.Request) int {
 var monthNamesPT = [...]string{"", "janeiro", "fevereiro", "marco", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"}
 
 var statusLabels = map[string]string{
-	"active": "Ativo (professo)", "member": "Nao professo", "inactive": "Inativo",
-	"dismissed": "Baixado do Rol", "transferred": "Transferido", "deceased": "Falecido", "other": "Outros",
+	"active": "Ativo Professo", "member": "Ativo Nao Professo", "inactive": "Inativo",
 }
 
 var maritalLabels = map[string]string{

@@ -417,13 +417,13 @@ export function MemberBulkGrid({
                         <SubField label="Membro desde"><Input type="date" className="h-8 text-xs" value={r.joined_at} onChange={(e) => update(r.key, { joined_at: e.target.value })} /></SubField>
                         {EXIT_STATUSES.includes(r.membership_status) && (
                           <>
-                            <SubField label="Motivo da baixa">
+                            <SubField label="Motivo da inatividade">
                               <Select className="h-8 text-xs" value={r.exit_reason} onChange={(e) => update(r.key, { exit_reason: e.target.value })}>
                                 <option value="">-</option>
                                 {Object.entries(EXIT_REASONS).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
                               </Select>
                             </SubField>
-                            <SubField label="Data de saida"><Input type="date" className="h-8 text-xs" value={r.exited_at} onChange={(e) => update(r.key, { exited_at: e.target.value })} /></SubField>
+                            <SubField label="Data de inatividade"><Input type="date" className="h-8 text-xs" value={r.exited_at} onChange={(e) => update(r.key, { exited_at: e.target.value })} /></SubField>
                           </>
                         )}
                       </div>

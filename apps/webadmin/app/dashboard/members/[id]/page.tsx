@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
   ArrowLeft, Award, FileText, GitBranch, HeartHandshake, History, Link as LinkIcon, Pencil,
-  Phone, Sparkles, User, Users, Activity, ShieldCheck,
+  Phone, User, Users, Activity, ShieldCheck,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -209,9 +209,8 @@ export default function MemberDetailPage() {
           { key: "cargos", label: "Cargos", icon: <Award className="h-4 w-4" /> },
           { key: "familia", label: "Familia", icon: <Users className="h-4 w-4" /> },
           { key: "vinc", label: "Vinculos", icon: <GitBranch className="h-4 w-4" /> },
-          { key: "espiritual", label: "Espiritual", icon: <Sparkles className="h-4 w-4" /> },
           { key: "freq", label: "Frequencia", icon: <Activity className="h-4 w-4" /> },
-          { key: "hist", label: "Historico", icon: <History className="h-4 w-4" /> },
+          { key: "hist", label: "Vida eclesiastica", icon: <History className="h-4 w-4" /> },
           { key: "docs", label: "Documentos", icon: <FileText className="h-4 w-4" /> },
           { key: "lgpd", label: "LGPD", icon: <ShieldCheck className="h-4 w-4" /> },
         ]}
@@ -234,13 +233,13 @@ export default function MemberDetailPage() {
             />
             <Info label="CPF" value={member.cpf} />
             <Info label="RG" value={member.rg} />
-            <Info label="Status" value={st.label} />
+            <Info label="Situacao" value={st.label} />
             <Info label="Classificacao no Rol" value={member.roll_class === "professo" ? "Professo" : "Nao professo"} />
             <Info label="Filial" value={branchName(member.branch_id)} />
             {member.exit_reason && (
-              <Info label="Motivo da baixa" value={EXIT_REASONS[member.exit_reason] ?? member.exit_reason} />
+              <Info label="Motivo da inatividade" value={EXIT_REASONS[member.exit_reason] ?? member.exit_reason} />
             )}
-            {member.exited_at && <Info label="Data de saida" value={datePt(member.exited_at)} />}
+            {member.exited_at && <Info label="Data de inatividade" value={datePt(member.exited_at)} />}
           </dl>
           <p className="mt-4 border-t border-zinc-100 pt-2 text-xs text-zinc-400 dark:border-zinc-800">
             Para alterar estes dados use <span className="font-medium">Editar</span> - o cadastro
@@ -345,30 +344,31 @@ export default function MemberDetailPage() {
         </div>
       )}
 
-      {tab === "espiritual" && (
-        <Card>
-          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Info label="Filial" value={branchName(member.branch_id)} />
-            <Info label="Batismo" value={datePt(member.baptism_date)} />
-            <Info label="Local do batismo" value={member.baptism_location} />
-            <Info label="Casamento" value={datePt(member.marriage_date)} />
-            <Info label="Membro desde" value={datePt(member.joined_at)} />
-            <Info
-              label="Idade"
-              value={
-                member.birth_date && age(member.birth_date) !== null
-                  ? `${age(member.birth_date)} anos`
-                  : "-"
-              }
-            />
-            <Info label="Cadastrado em" value={datePt(member.created_at)} />
-          </dl>
-        </Card>
-      )}
-
       {tab === "freq" && <FrequencySection memberId={member.id} canWrite={canWrite} />}
 
-      {tab === "hist" && <HistorySection memberId={member.id} canWrite={canWrite} />}
+      {tab === "hist" && (
+        <div className="space-y-4">
+          <Card>
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <Info label="Filial" value={branchName(member.branch_id)} />
+              <Info label="Batismo" value={datePt(member.baptism_date)} />
+              <Info label="Local do batismo" value={member.baptism_location} />
+              <Info label="Casamento" value={datePt(member.marriage_date)} />
+              <Info label="Membro desde" value={datePt(member.joined_at)} />
+              <Info
+                label="Idade"
+                value={
+                  member.birth_date && age(member.birth_date) !== null
+                    ? `${age(member.birth_date)} anos`
+                    : "-"
+                }
+              />
+              <Info label="Cadastrado em" value={datePt(member.created_at)} />
+            </dl>
+          </Card>
+          <HistorySection memberId={member.id} canWrite={canWrite} onChanged={load} />
+        </div>
+      )}
 
       {tab === "docs" && (
         <Card className="p-3">
