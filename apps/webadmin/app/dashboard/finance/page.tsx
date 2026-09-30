@@ -183,6 +183,16 @@ export default function FinancePage() {
 
   const columns: Column<Transaction>[] = useMemo(() => [
     {
+      key: "occurred_at",
+      label: "Data efetiva",
+      sortable: true,
+      width: "w-28",
+      // Ordena pela data da ocorrencia e, dentro dela, pela sequencia do
+      // lancamento (entry_seq), igual a conciliacao/auditoria.
+      sortValue: (t) => `${t.occurred_at}T${String(t.entry_seq ?? 0).padStart(6, "0")}T${t.created_at ?? ""}`,
+      render: (t) => <span className="text-zinc-500">{datePt(t.occurred_at)}</span>,
+    },
+    {
       key: "entry_seq",
       label: "Seq.",
       sortable: true,
@@ -215,16 +225,6 @@ export default function FinancePage() {
           )}
         </div>
       ),
-    },
-    {
-      key: "occurred_at",
-      label: "Data efetiva",
-      sortable: true,
-      width: "w-28",
-      // Ordena pela data da ocorrencia e, dentro dela, pela sequencia do
-      // lancamento (entry_seq), igual a conciliacao/auditoria.
-      sortValue: (t) => `${t.occurred_at}T${String(t.entry_seq ?? 0).padStart(6, "0")}T${t.created_at ?? ""}`,
-      render: (t) => <span className="text-zinc-500">{datePt(t.occurred_at)}</span>,
     },
     {
       key: "description",
