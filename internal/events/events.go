@@ -46,7 +46,12 @@ type Event struct {
 	CostActual     float64   `json:"cost_actual"`
 	InvitedCount   int       `json:"invited_count"`
 	Notes          *string   `json:"notes,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
+	// Origin identifica quem gerou a ocorrencia: 'manual' (extra/avulso),
+	// 'programacao' (grade recorrente) ou 'escala' (voluntarios). `origin_id`
+	// aponta para a definicao de origem (sem FK - origem polimorfica).
+	Origin   string  `json:"origin"`
+	OriginID *string `json:"origin_id,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type CreateInput struct {
@@ -122,52 +127,6 @@ func (r *Repo) ListKinds(ctx context.Context, tx pgx.Tx) ([]Kind, error) {
 	return out, rows.Err()
 }
 
-func (r *Repo) CreateKind(ctx context.Context, tx pgx.Tx, tenantID, branchID string, in KindInput) (*Kind, error) {
-	var k Kind
-	err := tx.QueryRow(ctx, `
-		INSERT INTO event_kinds (tenant_id, branch_id, name, slug, sort_order, is_active, color)
-		VALUES ($1, NULLIF($2,'')::uuid, $3, $4, $5, COALESCE($6::boolean, true), $7)
-		RETURNING id::text, branch_id::text, name, slug, sort_order, is_active, color`,
-		tenantID, branchID, in.Name, in.Slug, in.SortOrder, in.IsActive, in.Color).
-		Scan(&k.ID, &k.BranchID, &k.Name, &k.Slug, &k.SortOrder, &k.IsActive, &k.Color)
-	return &k, err
-}
-
-func (r *Repo) UpdateKind(ctx context.Context, tx pgx.Tx, id string, in KindInput) (*Kind, error) {
-	var k Kind
-	err := tx.QueryRow(ctx, `
-		UPDATE event_kinds SET
-			name = COALESCE(NULLIF($2,''), name),
-			slug = COALESCE(NULLIF($3,''), slug),
-			sort_order = $4,
-			is_active = COALESCE($5::boolean, is_active),
-			color = COALESCE($6, color)
-		WHERE id = $1::uuid
-		RETURNING id::text, branch_id::text, name, slug, sort_order, is_active, color`,
-		id, in.Name, in.Slug, in.SortOrder, in.IsActive, in.Color).
-		Scan(&k.ID, &k.BranchID, &k.Name, &k.Slug, &k.SortOrder, &k.IsActive, &k.Color)
-	return &k, err
-}
-
-// DeleteKind recusa excluir um tipo ainda usado por eventos (sugere desativar).
-func (r *Repo) DeleteKind(ctx context.Context, tx pgx.Tx, id string) error {
-	var used int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM church_events WHERE kind_id = $1::uuid`, id).Scan(&used); err != nil {
-		return err
-	}
-	if used > 0 {
-		return ErrKindInUse
-	}
-	tag, err := tx.Exec(ctx, `DELETE FROM event_kinds WHERE id = $1::uuid`, id)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return pgx.ErrNoRows
-	}
-	return nil
-}
-
 // ---- Eventos ----
 
 const eventCols = `e.id::text, e.branch_id::text, e.kind_id::text, k.name,
@@ -176,13 +135,13 @@ const eventCols = `e.id::text, e.branch_id::text, e.kind_id::text, k.name,
 	e.attendance_mode, e.estimated_cost::float8,
 	(SELECT count(*) FROM event_invitees i WHERE i.event_id = e.id)::int,
 	(SELECT COALESCE(SUM(a.amount),0) FROM financial_event_allocations a WHERE a.event_id = e.id)::float8,
-	e.notes, e.created_at`
+	e.notes, e.origin, e.origin_id::text, e.created_at`
 
 func scanEvent(row pgx.Row) (*Event, error) {
 	var e Event
 	err := row.Scan(&e.ID, &e.BranchID, &e.KindID, &e.KindName, &e.StartsAt, &e.EndsAt,
 		&e.ParticipantsCount, &e.AttendanceCount, &e.AttendanceMode, &e.EstimatedCost,
-		&e.InvitedCount, &e.CostActual, &e.Notes, &e.CreatedAt)
+		&e.InvitedCount, &e.CostActual, &e.Notes, &e.Origin, &e.OriginID, &e.CreatedAt)
 	return &e, err
 }
 
@@ -461,15 +420,6 @@ func (r *Repo) SetFrequency(ctx context.Context, tx pgx.Tx, memberID, frequency,
 }
 
 // ---- helpers ----
-
-// ErrKindInUse sinaliza que o tipo de evento nao pode ser excluido.
-var ErrKindInUse = errKindInUse{}
-
-type errKindInUse struct{}
-
-func (errKindInUse) Error() string {
-	return "nao e possivel excluir: ha eventos usando este tipo. Desative-o."
-}
 
 func parseTime(s string) (time.Time, error) {
 	if t, err := time.Parse(time.RFC3339, s); err == nil {

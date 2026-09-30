@@ -57,7 +57,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
       { key: "rosters", href: "/dashboard/rosters", label: "Escalas", icon: CalendarClock, perms: ["ministries.read"] },
       { key: "kids", href: "/dashboard/kids", label: "Kids", icon: Baby, perms: ["members.read"] },
       { key: "events", href: "/dashboard/events", label: "Eventos", icon: CalendarDays, perms: ["members.read"] },
-      { key: "cultos", href: "/dashboard/cultos", label: "Cultos", icon: CalendarHeart, perms: ["members.read"] },
+      { key: "programacao", href: "/dashboard/programacao", label: "Programacao", icon: CalendarHeart, perms: ["members.read"] },
       { key: "governance", href: "/dashboard/governance", label: "Governanca", icon: Gavel, perms: ["governance.read"] },
       { key: "users", href: "/dashboard/users", label: "Usuarios", icon: UserCog, perms: ["users.read"] },
       { key: "settings", href: "/dashboard/settings", label: "Configuracoes", icon: Settings, perms: ["settings.read"] },

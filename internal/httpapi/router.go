@@ -8,7 +8,6 @@ import (
 	"chosenerp/internal/auth"
 	"chosenerp/internal/benefactors"
 	"chosenerp/internal/cargos"
-	"chosenerp/internal/cultos"
 	"chosenerp/internal/delivery"
 	"chosenerp/internal/documents"
 	"chosenerp/internal/events"
@@ -22,6 +21,7 @@ import (
 	"chosenerp/internal/members"
 	"chosenerp/internal/ministries"
 	"chosenerp/internal/org"
+	"chosenerp/internal/programacao"
 	"chosenerp/internal/rosters"
 	"chosenerp/internal/store"
 	"chosenerp/internal/suppliers"
@@ -46,7 +46,7 @@ type App struct {
 	Groups        *groups.Repo
 	Announcements *announcements.Repo
 	Cargos        *cargos.Repo
-	Cultos        *cultos.Repo
+	Programacao   *programacao.Repo
 	Users         *users.Repo
 	Events        *events.Repo
 	LGPD          *lgpd.Repo
@@ -61,7 +61,7 @@ type App struct {
 }
 
 // NewRouter monta o gateway HTTP e suas rotas.
-func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo *members.Repo, finRepo *finance.Repo, auditRepo *audit.Repo, docRepo *documents.Repo, famRepo *families.Repo, visitRepo *visitors.Repo, benefRepo *benefactors.Repo, suppliersRepo *suppliers.Repo, ministRepo *ministries.Repo, groupsRepo *groups.Repo, annRepo *announcements.Repo, cargosRepo *cargos.Repo, cultosRepo *cultos.Repo, usersRepo *users.Repo, eventsRepo *events.Repo, lgpdRepo *lgpd.Repo, govRepo *governance.Repo, orgRepo *org.Repo, rostersRepo *rosters.Repo, kidsRepo *kids.Repo, memberEventsRepo *memberevents.Repo, dispatcher *delivery.Dispatcher) http.Handler {
+func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo *members.Repo, finRepo *finance.Repo, auditRepo *audit.Repo, docRepo *documents.Repo, famRepo *families.Repo, visitRepo *visitors.Repo, benefRepo *benefactors.Repo, suppliersRepo *suppliers.Repo, ministRepo *ministries.Repo, groupsRepo *groups.Repo, annRepo *announcements.Repo, cargosRepo *cargos.Repo, programacaoRepo *programacao.Repo, usersRepo *users.Repo, eventsRepo *events.Repo, lgpdRepo *lgpd.Repo, govRepo *governance.Repo, orgRepo *org.Repo, rostersRepo *rosters.Repo, kidsRepo *kids.Repo, memberEventsRepo *memberevents.Repo, dispatcher *delivery.Dispatcher) http.Handler {
 	app := &App{
 		Config:        cfg,
 		Store:         st,
@@ -78,7 +78,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 		Groups:        groupsRepo,
 		Announcements: annRepo,
 		Cargos:        cargosRepo,
-		Cultos:        cultosRepo,
+		Programacao:   programacaoRepo,
 		Users:         usersRepo,
 		Events:        eventsRepo,
 		LGPD:          lgpdRepo,
@@ -336,11 +336,8 @@ mux.Handle("DELETE /api/v1/finance/bank-imports/{id}", authed(http.HandlerFunc(a
 	mux.Handle("POST /api/v1/auth/mfa/enable", authed(http.HandlerFunc(app.handleMFAEnable)))
 	mux.Handle("POST /api/v1/auth/mfa/disable", authed(http.HandlerFunc(app.handleMFADisable)))
 
-	// Eventos, tipos de evento, chamada nominal e frequencia do membro
+	// Eventos, tipos de evento (catalogo selado, somente leitura), chamada nominal e frequencia do membro
 	mux.Handle("GET /api/v1/event-kinds", authed(http.HandlerFunc(app.handleListEventKinds)))
-	mux.Handle("POST /api/v1/event-kinds", authed(http.HandlerFunc(app.handleCreateEventKind)))
-	mux.Handle("PATCH /api/v1/event-kinds/{id}", authed(http.HandlerFunc(app.handleUpdateEventKind)))
-	mux.Handle("DELETE /api/v1/event-kinds/{id}", authed(http.HandlerFunc(app.handleDeleteEventKind)))
 	mux.Handle("GET /api/v1/events", authed(http.HandlerFunc(app.handleListEvents)))
 	mux.Handle("POST /api/v1/events", authed(http.HandlerFunc(app.handleCreateEvent)))
 	mux.Handle("GET /api/v1/events/{id}", authed(http.HandlerFunc(app.handleGetEvent)))
@@ -353,12 +350,12 @@ mux.Handle("DELETE /api/v1/finance/bank-imports/{id}", authed(http.HandlerFunc(a
 	mux.Handle("GET /api/v1/members/{id}/frequency", authed(http.HandlerFunc(app.handleListFrequency)))
 	mux.Handle("POST /api/v1/members/{id}/frequency", authed(http.HandlerFunc(app.handleSetFrequency)))
 
-	// Cultos: grade de horarios e publicacao na agenda de eventos
-	mux.Handle("GET /api/v1/cultos", authed(http.HandlerFunc(app.handleListCultos)))
-	mux.Handle("POST /api/v1/cultos", authed(http.HandlerFunc(app.handleCreateCulto)))
-	mux.Handle("POST /api/v1/cultos/generate", authed(http.HandlerFunc(app.handleGenerateCultos)))
-	mux.Handle("PATCH /api/v1/cultos/{id}", authed(http.HandlerFunc(app.handleUpdateCulto)))
-	mux.Handle("DELETE /api/v1/cultos/{id}", authed(http.HandlerFunc(app.handleDeleteCulto)))
+	// Programacao: grade de horarios recorrentes e publicacao na agenda
+	mux.Handle("GET /api/v1/programacoes", authed(http.HandlerFunc(app.handleListProgramacao)))
+	mux.Handle("POST /api/v1/programacoes", authed(http.HandlerFunc(app.handleCreateProgramacao)))
+	mux.Handle("POST /api/v1/programacoes/generate", authed(http.HandlerFunc(app.handleGenerateProgramacao)))
+	mux.Handle("PATCH /api/v1/programacoes/{id}", authed(http.HandlerFunc(app.handleUpdateProgramacao)))
+	mux.Handle("DELETE /api/v1/programacoes/{id}", authed(http.HandlerFunc(app.handleDeleteProgramacao)))
 
 	// LGPD: consentimento, portabilidade e anonimizacao
 	mux.Handle("GET /api/v1/consent-terms", authed(http.HandlerFunc(app.handleListConsentTerms)))

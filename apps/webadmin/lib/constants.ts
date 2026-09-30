@@ -90,6 +90,24 @@ export const WEEKDAYS: Record<number, string> = {
 /** Ordem de exibicao dos dias da semana (comeca no domingo). */
 export const WEEKDAY_ORDER = [0, 1, 2, 3, 4, 5, 6];
 
+/** Tipos FIXOS de programacao (000069). Espelha o catalogo selado event_kinds. */
+export const PROGRAM_KINDS: Record<string, { label: string; tone: string }> = {
+  culto: { label: "Culto", tone: "sky" },
+  oracao: { label: "Relogio de Oracao", tone: "indigo" },
+  celula: { label: "Celula / Pequeno Grupo", tone: "green" },
+  ebd: { label: "Escola Biblica", tone: "amber" },
+  ensaio: { label: "Ensaio", tone: "brand" },
+  reuniao: { label: "Reuniao", tone: "zinc" },
+  outro: { label: "Outro", tone: "zinc" },
+};
+
+/** Origem de uma ocorrencia na agenda (church_events.origin). */
+export const EVENT_ORIGIN: Record<string, { label: string; tone: string }> = {
+  manual: { label: "Avulso", tone: "zinc" },
+  programacao: { label: "Programacao", tone: "sky" },
+  escala: { label: "Escala", tone: "indigo" },
+};
+
 export const GENDER: Record<string, string> = { male: "Masculino", female: "Feminino", other: "Outro" };
 
 export const MARITAL_STATUS: Record<string, string> = {

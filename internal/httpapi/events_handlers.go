@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
@@ -10,7 +9,7 @@ import (
 	"chosenerp/internal/store"
 )
 
-// ---- Tipos de evento ----
+// ---- Tipos de evento (catalogo SELADO - somente leitura, 000069) ----
 
 func (a *App) handleListEventKinds(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
@@ -30,81 +29,6 @@ func (a *App) handleListEventKinds(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"kinds": out})
-}
-
-func (a *App) handleCreateEventKind(w http.ResponseWriter, r *http.Request) {
-	claims, ok := claimsFrom(r.Context())
-	if !ok {
-		writeErr(w, http.StatusUnauthorized, "unauthenticated")
-		return
-	}
-	var in events.KindInput
-	if err := readJSON(r, &in); err != nil || in.Name == "" || in.Slug == "" {
-		writeErr(w, http.StatusBadRequest, "name e slug sao obrigatorios")
-		return
-	}
-	b := boundsFromClaims(claims)
-	var k *events.Kind
-	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
-		var err error
-		k, err = a.Events.CreateKind(r.Context(), tx, claims.TenantID, claims.BranchID, in)
-		return err
-	})
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusCreated, k)
-}
-
-func (a *App) handleUpdateEventKind(w http.ResponseWriter, r *http.Request) {
-	claims, ok := claimsFrom(r.Context())
-	if !ok {
-		writeErr(w, http.StatusUnauthorized, "unauthenticated")
-		return
-	}
-	var in events.KindInput
-	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid body")
-		return
-	}
-	b := boundsFromClaims(claims)
-	var k *events.Kind
-	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
-		var err error
-		k, err = a.Events.UpdateKind(r.Context(), tx, r.PathValue("id"), in)
-		return err
-	})
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, k)
-}
-
-func (a *App) handleDeleteEventKind(w http.ResponseWriter, r *http.Request) {
-	claims, ok := claimsFrom(r.Context())
-	if !ok {
-		writeErr(w, http.StatusUnauthorized, "unauthenticated")
-		return
-	}
-	b := boundsFromClaims(claims)
-	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
-		return a.Events.DeleteKind(r.Context(), tx, r.PathValue("id"))
-	})
-	if err != nil {
-		if errors.Is(err, events.ErrKindInUse) {
-			writeErr(w, http.StatusConflict, err.Error())
-			return
-		}
-		if store.IsNotFound(err) {
-			writeErr(w, http.StatusNotFound, "tipo nao encontrado")
-			return
-		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 // ---- Eventos ----

@@ -1779,6 +1779,9 @@ export interface ChurchEvent {
   cost_actual: number;
   invited_count: number;
   notes?: string;
+  /** Origem da ocorrencia: manual (avulso), programacao ou escala. */
+  origin: "manual" | "programacao" | "escala";
+  origin_id?: string;
   created_at: string;
 }
 export interface EventInvitee {
@@ -1806,12 +1809,6 @@ export interface FrequencyEntry {
 }
 
 export const listEventKinds = () => api<{ kinds: EventKind[] }>("/api/v1/event-kinds");
-export const createEventKind = (data: Record<string, unknown>) =>
-  api<EventKind>("/api/v1/event-kinds", { method: "POST", body: JSON.stringify(data) });
-export const updateEventKind = (id: string, data: Record<string, unknown>) =>
-  api<EventKind>(`/api/v1/event-kinds/${id}`, { method: "PATCH", body: JSON.stringify(data) });
-export const deleteEventKind = (id: string) =>
-  api<{ ok: boolean }>(`/api/v1/event-kinds/${id}`, { method: "DELETE" });
 
 export const listEvents = (params: { from?: string; to?: string; kind?: string } = {}) => {
   const q = new URLSearchParams();
@@ -1851,14 +1848,16 @@ export const setMemberFrequency = (memberId: string, data: Record<string, unknow
     body: JSON.stringify(data),
   });
 
-// ---- Cultos (grade de horarios recorrentes) ----
-export interface Culto {
+// ---- Programacao (grade de horarios recorrentes) ----
+export type ProgramacaoKind = "culto" | "oracao" | "celula" | "ebd" | "ensaio" | "reuniao" | "outro";
+
+export interface Programacao {
   id: string;
   branch_id: string;
   name: string;
-  event_kind_id?: string;
-  event_kind_name?: string;
-  event_kind_color?: string;
+  kind: ProgramacaoKind;
+  kind_name?: string;
+  kind_color?: string;
   /** 0=domingo .. 6=sabado (mesma convencao do Postgres EXTRACT(DOW)). */
   weekday: number;
   /** "HH:MM". */
@@ -1871,16 +1870,16 @@ export interface Culto {
   created_at: string;
 }
 
-export const listCultos = () => api<{ cultos: Culto[] }>("/api/v1/cultos");
-export const createCulto = (data: Record<string, unknown>) =>
-  api<Culto>("/api/v1/cultos", { method: "POST", body: JSON.stringify(data) });
-export const updateCulto = (id: string, data: Record<string, unknown>) =>
-  api<Culto>(`/api/v1/cultos/${id}`, { method: "PATCH", body: JSON.stringify(data) });
-export const deleteCulto = (id: string) =>
-  api<{ ok: boolean }>(`/api/v1/cultos/${id}`, { method: "DELETE" });
-/** Publica as ocorrencias dos cultos na agenda no periodo [from,to]. Idempotente. */
-export const generateCultoEvents = (data: { from: string; to: string; culto_id?: string }) =>
-  api<{ created: number }>("/api/v1/cultos/generate", { method: "POST", body: JSON.stringify(data) });
+export const listProgramacoes = () => api<{ programacoes: Programacao[] }>("/api/v1/programacoes");
+export const createProgramacao = (data: Record<string, unknown>) =>
+  api<Programacao>("/api/v1/programacoes", { method: "POST", body: JSON.stringify(data) });
+export const updateProgramacao = (id: string, data: Record<string, unknown>) =>
+  api<Programacao>(`/api/v1/programacoes/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export const deleteProgramacao = (id: string) =>
+  api<{ ok: boolean }>(`/api/v1/programacoes/${id}`, { method: "DELETE" });
+/** Publica as ocorrencias na agenda no periodo [from,to]. Idempotente. */
+export const generateProgramacaoEvents = (data: { from: string; to: string; programacao_id?: string }) =>
+  api<{ created: number }>("/api/v1/programacoes/generate", { method: "POST", body: JSON.stringify(data) });
 
 // ---- App do membro (publico por token) ----
 /**

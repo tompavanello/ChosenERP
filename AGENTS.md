@@ -305,12 +305,9 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | POST | `/api/v1/members/{id}/history` | Bearer | Lanca evento (`event_kind_id`/`kind`); aplica os efeitos do tipo no membro |
 | GET  | `/api/v1/members/{id}/frequency` | Bearer | Historico de frequencia |
 | POST | `/api/v1/members/{id}/frequency` | Bearer | Atualiza a frequencia (mantem historico) |
-| GET  | `/api/v1/event-kinds` | Bearer | Tipos de evento |
-| POST | `/api/v1/event-kinds` | Bearer | Cria tipo de evento |
-| PATCH | `/api/v1/event-kinds/{id}` | Bearer | Edita tipo de evento |
-| DELETE | `/api/v1/event-kinds/{id}` | Bearer | Exclui tipo de evento (409 se em uso) |
-| GET  | `/api/v1/events?from=&to=&kind=` | Bearer | Lista eventos |
-| POST | `/api/v1/events` | Bearer | Cria evento (data/hora, tipo, total) |
+| GET  | `/api/v1/event-kinds` | Bearer | Tipos de evento (catalogo SELADO, somente leitura - 000069) |
+| GET  | `/api/v1/events?from=&to=&kind=` | Bearer | Lista eventos (agenda unificada; cada um tem `origin`) |
+| POST | `/api/v1/events` | Bearer | Cria evento AVULSO (data/hora, tipo, total) |
 | GET  | `/api/v1/events/{id}` | Bearer | Detalhe do evento |
 | PATCH | `/api/v1/events/{id}` | Bearer | Edita evento |
 | DELETE | `/api/v1/events/{id}` | Bearer | Exclui evento |
@@ -318,11 +315,11 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | POST | `/api/v1/events/{id}/attendance` | Bearer | Salva chamada nominal + total |
 | GET  | `/api/v1/events/{id}/invitees` | Bearer | Convocados (pessoas/ministerios) |
 | POST | `/api/v1/events/{id}/invitees` | Bearer | Define os convocados do evento |
-| GET  | `/api/v1/cultos` | Bearer | Grade de horarios dos cultos (000068) |
-| POST | `/api/v1/cultos` | Bearer | Cria um culto (dia/hora/duracao/tipo/local) |
-| POST | `/api/v1/cultos/generate` | Bearer | Publica as ocorrencias na agenda (periodo; idempotente) |
-| PATCH | `/api/v1/cultos/{id}` | Bearer | Edita o culto |
-| DELETE | `/api/v1/cultos/{id}` | Bearer | Exclui o culto (eventos publicados permanecem) |
+| GET  | `/api/v1/programacoes` | Bearer | Grade de horarios recorrentes (000069) |
+| POST | `/api/v1/programacoes` | Bearer | Cria horario (kind fixo: culto/oracao/celula/ebd/ensaio/reuniao/outro) |
+| POST | `/api/v1/programacoes/generate` | Bearer | Publica as ocorrencias na agenda (periodo; idempotente) |
+| PATCH | `/api/v1/programacoes/{id}` | Bearer | Edita o horario |
+| DELETE | `/api/v1/programacoes/{id}` | Bearer | Exclui o horario (eventos publicados permanecem) |
 | GET  | `/api/v1/consent-terms` | Bearer | Termos de consentimento (LGPD) |
 | POST | `/api/v1/consent-terms` | Bearer (Sede) | Cria termo de consentimento |
 | GET  | `/api/v1/members/{id}/consents` | Bearer | Consentimentos do membro |
