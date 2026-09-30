@@ -271,8 +271,8 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput)
 func (r *Repo) generateEvent(ctx context.Context, tx pgx.Tx, rosterID string) error {
 	var eventID string
 	err := tx.QueryRow(ctx, `
-		INSERT INTO church_events (tenant_id, branch_id, kind_id, starts_at, ends_at, participants_count, attendance_mode, notes, created_by, origin, origin_id)
-		SELECT r.tenant_id, r.branch_id, r.event_kind_id, r.starts_at, r.ends_at, 0, 'nominal', r.title, r.created_by, 'escala', r.id
+		INSERT INTO church_events (tenant_id, branch_id, kind_id, title, starts_at, ends_at, participants_count, attendance_mode, notes, created_by, origin, origin_id)
+		SELECT r.tenant_id, r.branch_id, r.event_kind_id, r.title, r.starts_at, r.ends_at, 0, 'nominal', r.title, r.created_by, 'escala', r.id
 		FROM rosters r WHERE r.id = $1::uuid
 		RETURNING id::text`, rosterID).Scan(&eventID)
 	if err != nil {

@@ -30,6 +30,8 @@ type Programacao struct {
 	Kind            string    `json:"kind"`
 	KindName        *string   `json:"kind_name,omitempty"`
 	KindColor       *string   `json:"kind_color,omitempty"`
+	// Title e o titulo amigavel (usado quando kind='outro').
+	Title           *string   `json:"title,omitempty"`
 	Weekday         int       `json:"weekday"`
 	StartTime       string    `json:"start_time"` // "HH:MM"
 	DurationMinutes int       `json:"duration_minutes"`
@@ -43,6 +45,7 @@ type Programacao struct {
 type CreateInput struct {
 	Name            string  `json:"name"`
 	Kind            string  `json:"kind"`
+	Title           *string `json:"title"`
 	Weekday         int     `json:"weekday"`
 	StartTime       string  `json:"start_time"`
 	DurationMinutes int     `json:"duration_minutes"`
@@ -55,6 +58,7 @@ type CreateInput struct {
 type UpdateInput struct {
 	Name            *string `json:"name"`
 	Kind            *string `json:"kind"`
+	Title           *string `json:"title"`
 	Weekday         *int    `json:"weekday"`
 	StartTime       *string `json:"start_time"`
 	DurationMinutes *int    `json:"duration_minutes"`
@@ -67,13 +71,13 @@ type UpdateInput struct {
 type Repo struct{}
 
 // cols faz o join de exibicao com o catalogo selado (nome/cor do tipo).
-const cols = `p.id::text, p.branch_id::text, p.name, p.kind, k.name, k.color,
+const cols = `p.id::text, p.branch_id::text, p.name, p.kind, k.name, k.color, p.title,
 	p.weekday, to_char(p.start_time,'HH24:MI'), p.duration_minutes,
 	p.location, p.notes, p.is_active, p.sort_order, p.created_at`
 
 func scan(row pgx.Row) (*Programacao, error) {
 	var p Programacao
-	err := row.Scan(&p.ID, &p.BranchID, &p.Name, &p.Kind, &p.KindName, &p.KindColor,
+	err := row.Scan(&p.ID, &p.BranchID, &p.Name, &p.Kind, &p.KindName, &p.KindColor, &p.Title,
 		&p.Weekday, &p.StartTime, &p.DurationMinutes, &p.Location, &p.Notes,
 		&p.IsActive, &p.SortOrder, &p.CreatedAt)
 	if err != nil {
@@ -128,12 +132,12 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID, actorI
 	var id string
 	err := tx.QueryRow(ctx, `
 		INSERT INTO programacoes
-			(tenant_id, branch_id, name, kind, weekday, start_time,
+			(tenant_id, branch_id, name, kind, title, weekday, start_time,
 			 duration_minutes, location, notes, is_active, sort_order, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6::time, $7, $8, $9,
-			COALESCE($10, true), $11, $12::uuid)
+		VALUES ($1, $2, $3, $4, NULLIF(btrim($5),''), $6, $7::time, $8, $9, $10,
+			COALESCE($11, true), $12, $13::uuid)
 		RETURNING id::text`,
-		tenantID, branchID, strings.TrimSpace(in.Name), kind, in.Weekday,
+		tenantID, branchID, strings.TrimSpace(in.Name), kind, str(in.Title), in.Weekday,
 		in.StartTime, dur, in.Location, in.Notes, in.IsActive, order, actorID).Scan(&id)
 	if err != nil {
 		return nil, err
@@ -152,6 +156,7 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput)
 		UPDATE programacoes p SET
 			name = COALESCE(NULLIF(btrim($2),''), p.name),
 			kind = COALESCE($3, p.kind),
+			title = CASE WHEN $11::boolean THEN NULLIF(btrim($12),'') ELSE p.title END,
 			weekday = COALESCE($4, p.weekday),
 			start_time = COALESCE($5::time, p.start_time),
 			duration_minutes = COALESCE($6, p.duration_minutes),
@@ -163,7 +168,8 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput)
 		WHERE p.id = $1::uuid
 		RETURNING p.id::text`,
 		id, in.Name, kindPtr, in.Weekday, in.StartTime, in.DurationMinutes,
-		in.Location, in.Notes, in.IsActive, in.SortOrder).Scan(&updatedID)
+		in.Location, in.Notes, in.IsActive, in.SortOrder,
+		in.Title != nil, str(in.Title)).Scan(&updatedID)
 	if err != nil {
 		return nil, err
 	}
@@ -191,8 +197,8 @@ func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
 func (r *Repo) GenerateEvents(ctx context.Context, tx pgx.Tx, programacaoID, from, to, actorID string) (int64, error) {
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO church_events
-			(tenant_id, branch_id, kind_id, starts_at, ends_at, attendance_mode, notes, created_by, origin, origin_id)
-		SELECT p.tenant_id, p.branch_id, k.id,
+			(tenant_id, branch_id, kind_id, title, starts_at, ends_at, attendance_mode, notes, created_by, origin, origin_id)
+		SELECT p.tenant_id, p.branch_id, k.id, p.title,
 		       ((g.d::date + p.start_time) AT TIME ZONE tz.tz),
 		       ((g.d::date + p.start_time + make_interval(mins => p.duration_minutes)) AT TIME ZONE tz.tz),
 		       'nominal', p.notes, $4::uuid, 'programacao', p.id
@@ -217,4 +223,11 @@ func (r *Repo) GenerateEvents(ctx context.Context, tx pgx.Tx, programacaoID, fro
 		return 0, err
 	}
 	return tag.RowsAffected(), nil
+}
+
+func str(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

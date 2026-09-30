@@ -30,7 +30,7 @@ import { currency, dateTimePt } from "@/lib/format";
 import { EVENT_ORIGIN } from "@/lib/constants";
 
 const EMPTY_EVENT = {
-  kind_id: "", date: new Date().toISOString().slice(0, 10), start_time: "19:00",
+  kind_id: "", title: "", date: new Date().toISOString().slice(0, 10), start_time: "19:00",
   end_date: "", end_time: "", attendance_mode: "nominal", participants_count: "",
   estimated_cost: "", notes: "",
 };
@@ -119,6 +119,7 @@ export default function EventsPage() {
     const e = ev.ends_at ? new Date(ev.ends_at) : null;
     setForm({
       kind_id: ev.kind_id ?? "",
+      title: ev.title ?? "",
       date: dayKey(d),
       start_time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
       end_date: e ? dayKey(e) : "",
@@ -150,6 +151,7 @@ export default function EventsPage() {
       const endDate = form.end_date || form.date;
       const payload: Record<string, unknown> = {
         kind_id: form.kind_id || undefined,
+        title: form.title || undefined,
         starts_at: `${form.date}T${form.start_time}`,
         ends_at: form.end_time ? `${endDate}T${form.end_time}` : undefined,
         participants_count: total,
@@ -286,7 +288,10 @@ export default function EventsPage() {
                         {dateTimePt(ev.starts_at)}
                         {ev.ends_at && <span className="block text-xs text-zinc-400">ate {dateTimePt(ev.ends_at)}</span>}
                       </TD>
-                      <TD><Badge tone="sky">{ev.kind_name ?? "-"}</Badge></TD>
+                      <TD>
+                        <Badge tone="sky">{ev.kind_name ?? "-"}</Badge>
+                        {ev.title && <span className="mt-0.5 block text-xs text-zinc-400">{ev.title}</span>}
+                      </TD>
                       <TD>
                         <Badge tone={(EVENT_ORIGIN[ev.origin]?.tone as Tone) ?? "zinc"} className="text-[10px]">
                           {EVENT_ORIGIN[ev.origin]?.label ?? ev.origin}
@@ -355,7 +360,7 @@ export default function EventsPage() {
                           style={{ backgroundColor: color + "22", color, borderLeft: `3px solid ${color}` }}
                           title={ev.kind_name ?? "Evento"}
                         >
-                          {format(parseISO(ev.starts_at), "HH:mm")} {ev.kind_name ?? "Evento"}
+                          {format(parseISO(ev.starts_at), "HH:mm")} {ev.title ?? ev.kind_name ?? "Evento"}
                         </button>
                       );
                     })}
@@ -421,6 +426,9 @@ export default function EventsPage() {
                 <option value="">-</option>
                 {kinds.filter((k) => k.is_active).map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
               </Select>
+            </Field>
+            <Field label="Titulo" hint="Opcional - aparece no calendario no lugar do tipo.">
+              <Input className="h-8 text-sm" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Ex: Retiro de Jovens" />
             </Field>
             <Field label="Custo estimado (R$)" hint="Opcional.">
               <CurrencyInput className="h-8 text-sm" value={form.estimated_cost} onChange={(v) => setForm({ ...form, estimated_cost: v })} />

@@ -36,6 +36,7 @@ type Event struct {
 	BranchID          string     `json:"branch_id"`
 	KindID            *string    `json:"kind_id,omitempty"`
 	KindName          *string    `json:"kind_name,omitempty"`
+	Title             *string    `json:"title,omitempty"`
 	StartsAt          time.Time  `json:"starts_at"`
 	EndsAt            *time.Time `json:"ends_at,omitempty"`
 	ParticipantsCount int        `json:"participants_count"`
@@ -56,6 +57,7 @@ type Event struct {
 
 type CreateInput struct {
 	KindID            *string  `json:"kind_id"`
+	Title             *string  `json:"title"`
 	StartsAt          string   `json:"starts_at"`
 	EndsAt            *string  `json:"ends_at"`
 	ParticipantsCount int      `json:"participants_count"`
@@ -66,6 +68,7 @@ type CreateInput struct {
 
 type UpdateInput struct {
 	KindID            *string  `json:"kind_id"`
+	Title             *string  `json:"title"`
 	StartsAt          *string  `json:"starts_at"`
 	EndsAt            *string  `json:"ends_at"`
 	ParticipantsCount *int     `json:"participants_count"`
@@ -129,7 +132,7 @@ func (r *Repo) ListKinds(ctx context.Context, tx pgx.Tx) ([]Kind, error) {
 
 // ---- Eventos ----
 
-const eventCols = `e.id::text, e.branch_id::text, e.kind_id::text, k.name,
+const eventCols = `e.id::text, e.branch_id::text, e.kind_id::text, k.name, e.title,
 	e.starts_at, e.ends_at, e.participants_count,
 	(SELECT count(*) FROM event_attendance a WHERE a.event_id = e.id AND a.present)::int,
 	e.attendance_mode, e.estimated_cost::float8,
@@ -139,7 +142,7 @@ const eventCols = `e.id::text, e.branch_id::text, e.kind_id::text, k.name,
 
 func scanEvent(row pgx.Row) (*Event, error) {
 	var e Event
-	err := row.Scan(&e.ID, &e.BranchID, &e.KindID, &e.KindName, &e.StartsAt, &e.EndsAt,
+	err := row.Scan(&e.ID, &e.BranchID, &e.KindID, &e.KindName, &e.Title, &e.StartsAt, &e.EndsAt,
 		&e.ParticipantsCount, &e.AttendanceCount, &e.AttendanceMode, &e.EstimatedCost,
 		&e.InvitedCount, &e.CostActual, &e.Notes, &e.Origin, &e.OriginID, &e.CreatedAt)
 	return &e, err
@@ -196,10 +199,10 @@ func (r *Repo) CreateEvent(ctx context.Context, tx pgx.Tx, tenantID, branchID, a
 		mode = *in.AttendanceMode
 	}
 	err = tx.QueryRow(ctx, `
-		INSERT INTO church_events (tenant_id, branch_id, kind_id, starts_at, ends_at, participants_count, attendance_mode, estimated_cost, notes, created_by)
-		VALUES ($1, NULLIF($2,'')::uuid, NULLIF($3,'')::uuid, $4, $5, $6, $7, $8, $9, $10::uuid)
+		INSERT INTO church_events (tenant_id, branch_id, kind_id, starts_at, ends_at, participants_count, attendance_mode, estimated_cost, notes, title, created_by)
+		VALUES ($1, NULLIF($2,'')::uuid, NULLIF($3,'')::uuid, $4, $5, $6, $7, $8, $9, NULLIF($11,''), $10::uuid)
 		RETURNING id::text`,
-		tenantID, branchID, str(in.KindID), starts, ends, in.ParticipantsCount, mode, in.EstimatedCost, in.Notes, actorID).Scan(&newID)
+		tenantID, branchID, str(in.KindID), starts, ends, in.ParticipantsCount, mode, in.EstimatedCost, in.Notes, actorID, str(in.Title)).Scan(&newID)
 	if err != nil {
 		return nil, err
 	}
@@ -232,11 +235,12 @@ func (r *Repo) UpdateEvent(ctx context.Context, tx pgx.Tx, id string, in UpdateI
 			notes = COALESCE($7, e.notes),
 			attendance_mode = COALESCE($8, e.attendance_mode),
 			estimated_cost = COALESCE($9, e.estimated_cost),
+			title = CASE WHEN $10::boolean THEN NULLIF(btrim($11),'') ELSE e.title END,
 			updated_at = now()
 		WHERE e.id = $1::uuid
 		RETURNING e.id::text`,
 		id, in.KindID != nil, str(in.KindID), startsPtr, endsPtr, in.ParticipantsCount, in.Notes,
-		in.AttendanceMode, in.EstimatedCost).Scan(&updatedID)
+		in.AttendanceMode, in.EstimatedCost, in.Title != nil, str(in.Title)).Scan(&updatedID)
 	if err != nil {
 		return nil, err
 	}

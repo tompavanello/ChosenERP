@@ -1770,6 +1770,8 @@ export interface ChurchEvent {
   branch_id: string;
   kind_id?: string;
   kind_name?: string;
+  /** Titulo amigavel da ocorrencia (ex.: programacao de tipo "outro"). */
+  title?: string;
   starts_at: string;
   ends_at?: string;
   participants_count: number;
@@ -1858,6 +1860,8 @@ export interface Programacao {
   kind: ProgramacaoKind;
   kind_name?: string;
   kind_color?: string;
+  /** Titulo amigavel (usado quando kind='outro'). */
+  title?: string;
   /** 0=domingo .. 6=sabado (mesma convencao do Postgres EXTRACT(DOW)). */
   weekday: number;
   /** "HH:MM". */

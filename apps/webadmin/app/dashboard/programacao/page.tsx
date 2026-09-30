@@ -27,7 +27,7 @@ function addDaysISO(days: number) {
 }
 
 const EMPTY = {
-  name: "", kind: "culto", weekday: "0", start_time: "19:00",
+  name: "", kind: "culto", title: "", weekday: "0", start_time: "19:00",
   duration_minutes: "90", location: "", notes: "", is_active: "true", sort_order: "0",
 };
 
@@ -78,6 +78,7 @@ export default function ProgramacaoPage() {
     setForm({
       name: p.name,
       kind: p.kind,
+      title: p.title ?? "",
       weekday: String(p.weekday),
       start_time: p.start_time.slice(0, 5),
       duration_minutes: String(p.duration_minutes || 90),
@@ -96,6 +97,7 @@ export default function ProgramacaoPage() {
     const payload = {
       name: form.name.trim(),
       kind: form.kind,
+      title: form.kind === "outro" ? form.title : "",
       weekday: Number(form.weekday),
       start_time: form.start_time,
       duration_minutes: Number(form.duration_minutes) || 90,
@@ -200,7 +202,7 @@ export default function ProgramacaoPage() {
                 const k = PROGRAM_KINDS[p.kind] ?? PROGRAM_KINDS.outro;
                 return (
                   <TRow key={p.id}>
-                    <TD><Badge tone={k.tone as Tone} className="text-[10px]">{k.label}</Badge></TD>
+                    <TD><Badge tone={k.tone as Tone} className="text-[10px]">{p.kind === "outro" && p.title ? p.title : k.label}</Badge></TD>
                     <TD className="text-sm text-zinc-500">{WEEKDAYS[p.weekday] ?? p.weekday}</TD>
                     <TD className="font-medium tabular-nums">{p.start_time}</TD>
                     <TD className="font-medium">{p.name}</TD>
@@ -238,6 +240,11 @@ export default function ProgramacaoPage() {
               {Object.entries(PROGRAM_KINDS).map(([v, k]) => <option key={v} value={v}>{k.label}</option>)}
             </Select>
           </Field>
+          {form.kind === "outro" && (
+            <Field label="Digite o titulo" hint="Aparece na agenda no lugar de 'Outro'.">
+              <Input className="h-8 text-sm" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Ex: Ensaio de teatro" />
+            </Field>
+          )}
           <Field label="Nome" required>
             <Input required className="h-8 text-sm" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex: Culto de Domingo" />
           </Field>
