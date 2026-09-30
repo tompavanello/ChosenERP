@@ -58,6 +58,10 @@ type Transaction struct {
 	OccurredAt time.Time `json:"occurred_at"`
 	// CreatedAt e o instante em que o registro foi criado (trilha de auditoria).
 	CreatedAt time.Time `json:"created_at"`
+	// EntrySeq e a sequencia manual do lancamento no escopo
+	// (tenant, filial, conta bancaria, data). Serve para alinhar a ordem com o
+	// extrato. Fica FORA da hash-chain e pode ser alterada (dado de ordenacao).
+	EntrySeq *int `json:"entry_seq,omitempty"`
 	// Estorno (o lancamento permanece no historico, mas sai dos relatorios).
 	VoidedAt   *time.Time `json:"voided_at,omitempty"`
 	VoidReason *string    `json:"void_reason,omitempty"`
@@ -67,6 +71,11 @@ type Transaction struct {
 	// Fornecedor associado (normalmente em despesas).
 	SupplierID   *string `json:"supplier_id,omitempty"`
 	SupplierName *string `json:"supplier_name,omitempty"`
+	// Origem da entrada: membro doador, benfeitor cadastrado ou identificacao
+	// livre (doador avulso). DonorName e resolvido (donor_name > membro > benfeitor).
+	DonorMemberID *string `json:"donor_member_id,omitempty"`
+	BenefactorID  *string `json:"benefactor_id,omitempty"`
+	DonorName     *string `json:"donor_name,omitempty"`
 }
 
 // MarshalJSON serializa occurred_at como data pura (YYYY-MM-DD). A data efetiva
@@ -286,8 +295,13 @@ type CreateTxnInput struct {
 	Description   *string `json:"description"`
 	DonorMemberID *string `json:"donor_member_id"`
 	BenefactorID  *string `json:"benefactor_id"`
+	DonorName     *string `json:"donor_name"`
 	SupplierID    *string `json:"supplier_id"`
 	OccurredAt    *string `json:"occurred_at"`
+	// EntrySeq e a posicao desejada no escopo (tenant, filial, conta, data).
+	// Se informada, empurra os lancamentos daquela posicao em diante; se nula,
+	// o lancamento e anexado ao fim do escopo.
+	EntrySeq *int `json:"entry_seq"`
 	// Rateio opcional do lancamento entre eventos (custo real por evento).
 	EventAllocations []EventAllocationInput `json:"event_allocations"`
 }
@@ -322,6 +336,14 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 		return nil, "", "", "", fmt.Errorf("a conta selecionada e de %s, mas o lancamento e de %s", catType, in.Type)
 	}
 
+	// A identificacao livre (doador avulso) so vale quando nao ha membro nem
+	// benfeitor vinculado - evita gravar o nome resolvido de volta em donor_name
+	// ao editar um lancamento identificado.
+	if (in.DonorMemberID != nil && *in.DonorMemberID != "") ||
+		(in.BenefactorID != nil && *in.BenefactorID != "") {
+		in.DonorName = nil
+	}
+
 	// A data efetiva vem do formulario (AAAA-MM-DD, DD/MM/AAAA ou RFC3339). Antes
 	// so RFC3339 era aceito e, ao falhar, caia silenciosamente em "agora" - por
 	// isso todo lancamento retroativo virava a data de hoje.
@@ -329,25 +351,71 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 	if err != nil {
 		return nil, "", "", "", err
 	}
+
+	// Sequencia do lancamento no escopo (tenant, filial, conta, data). O lock
+	// por escopo evita corrida ao calcular a proxima posicao / renumerar.
+	acct := ""
+	if in.AccountID != nil {
+		acct = *in.AccountID
+	}
+	scopeDate := when.UTC().Format(dateLayout)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		tenantID+"|"+branchID+"|"+acct+"|"+scopeDate); err != nil {
+		return nil, "", "", "", err
+	}
+	entrySeq := 0
+	if in.EntrySeq != nil && *in.EntrySeq > 0 {
+		entrySeq = *in.EntrySeq
+		if _, err := tx.Exec(ctx, `
+			UPDATE financial_transactions
+			SET entry_seq = entry_seq + 1
+			WHERE tenant_id = $1::uuid
+			  AND branch_id = NULLIF($2,'')::uuid
+			  AND COALESCE(account_id, '00000000-0000-0000-0000-000000000000'::uuid)
+			      = COALESCE(NULLIF($3,'')::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+			  AND (occurred_at AT TIME ZONE 'UTC')::date = $4::date
+			  AND entry_seq >= $5`,
+			tenantID, branchID, acct, scopeDate, entrySeq); err != nil {
+			return nil, "", "", "", err
+		}
+	} else {
+		if err := tx.QueryRow(ctx, `
+			SELECT COALESCE(MAX(entry_seq), 0) + 1
+			FROM financial_transactions
+			WHERE tenant_id = $1::uuid
+			  AND branch_id = NULLIF($2,'')::uuid
+			  AND COALESCE(account_id, '00000000-0000-0000-0000-000000000000'::uuid)
+			      = COALESCE(NULLIF($3,'')::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+			  AND (occurred_at AT TIME ZONE 'UTC')::date = $4::date`,
+			tenantID, branchID, acct, scopeDate).Scan(&entrySeq); err != nil {
+			return nil, "", "", "", err
+		}
+	}
+
 	status := false
+	var outSeq int
 	var t Transaction
 	err = tx.QueryRow(ctx, `
 		INSERT INTO financial_transactions
 			(tenant_id, branch_id, category_id, type, amount, currency,
-			 payment_method, donor_member_id, benefactor_id, supplier_id, is_anonymous, description, occurred_at, account_id)
+			 payment_method, donor_member_id, benefactor_id, donor_name, supplier_id, is_anonymous, description, occurred_at, account_id, entry_seq)
 		VALUES ($1, NULLIF($2,'')::uuid, NULLIF($3,'')::uuid, $4, $5, 'BRL',
-			 $6, NULLIF($7,'')::uuid, NULLIF($8,'')::uuid, NULLIF($13,'')::uuid, $9, $10, $11, NULLIF($12,'')::uuid)
+			 $6, NULLIF($7,'')::uuid, NULLIF($8,'')::uuid, NULLIF($14,''), NULLIF($13,'')::uuid, $9, $10, $11, NULLIF($12,'')::uuid, $15)
 		RETURNING id::text, branch_id::text, category_id::text, account_id::text,
+		          donor_member_id::text, benefactor_id::text, donor_name, entry_seq,
 		          type, amount::float8, currency, payment_method, is_anonymous,
 		          description, receipt_issued, hash, occurred_at, created_at`,
 		tenantID, branchID, nullIfEmpty(in.CategoryID), in.Type, in.Amount,
 		in.PaymentMethod, in.DonorMemberID, in.BenefactorID, in.IsAnonymous, in.Description, when, in.AccountID,
-		in.SupplierID).
-		Scan(&t.ID, &t.BranchID, &t.CategoryID, &t.AccountID, &t.Type, &t.Amount, &t.Currency,
+		in.SupplierID, in.DonorName, entrySeq).
+		Scan(&t.ID, &t.BranchID, &t.CategoryID, &t.AccountID,
+			&t.DonorMemberID, &t.BenefactorID, &t.DonorName, &outSeq,
+			&t.Type, &t.Amount, &t.Currency,
 			&t.PaymentMethod, &t.IsAnonymous, &t.Description, &status, &t.Hash, &t.OccurredAt, &t.CreatedAt)
 	if err != nil {
 		return nil, "", "", "", err
 	}
+	t.EntrySeq = &outSeq
 	t.ReceiptIssued = status
 
 	// Gera recibo digital automatico (documento).
@@ -360,6 +428,60 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 		return nil, "", "", "", err
 	}
 	return &t, docID, ref, token, nil
+}
+
+// Reorder renumera os lancamentos informados (1..N) na ordem exata do slice,
+// dentro do escopo do primeiro (tenant, filial, conta, data). Todos os ids devem
+// pertencer ao mesmo escopo (mesma conta e mesmo dia). A sequencia e apenas de
+// ordenacao - nao entra na hash-chain -, entao o guard append-only nao bloqueia
+// (somente entry_seq muda).
+func (r *Repo) Reorder(ctx context.Context, tx pgx.Tx, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT id::text, tenant_id::text, branch_id::text, COALESCE(account_id::text,''),
+		       (occurred_at AT TIME ZONE 'UTC')::date::text
+		FROM financial_transactions
+		WHERE id = ANY($1::uuid[])`, ids)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var scTenant, scBranch, scAccount, scDate string
+	first := true
+	count := 0
+	for rows.Next() {
+		var id, tenant, branch, account, date string
+		if err := rows.Scan(&id, &tenant, &branch, &account, &date); err != nil {
+			return err
+		}
+		if first {
+			scTenant, scBranch, scAccount, scDate = tenant, branch, account, date
+			first = false
+		} else if tenant != scTenant || branch != scBranch || account != scAccount || date != scDate {
+			return fmt.Errorf("os lancamentos devem ser da mesma conta e da mesma data")
+		}
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if count != len(ids) {
+		return pgx.ErrNoRows
+	}
+	// Mesmo lock usado no Create, para nao correr com insercoes.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		scTenant+"|"+scBranch+"|"+scAccount+"|"+scDate); err != nil {
+		return err
+	}
+	for i, id := range ids {
+		if _, err := tx.Exec(ctx,
+			`UPDATE financial_transactions SET entry_seq = $2 WHERE id = $1::uuid`, id, i+1); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // insertEventAllocations grava o rateio do lancamento entre eventos. Valores nao
@@ -520,8 +642,10 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind string) ([]Transaction,
 		SELECT t.id::text, t.branch_id::text, t.category_id::text, c.name,
 		       t.account_id::text, a.name,
 		       t.supplier_id::text, s.name,
+		       t.donor_member_id::text, t.benefactor_id::text,
+		       COALESCE(t.donor_name, dm.full_name, db.name),
 		       t.type, t.amount::float8, t.currency, t.payment_method,
-		       t.is_anonymous, t.description, t.receipt_issued, t.hash, t.occurred_at, t.created_at,
+		       t.is_anonymous, t.description, t.receipt_issued, t.hash, t.occurred_at, t.created_at, t.entry_seq,
 		       d.id::text, d.document_ref, d.qr_token,
 		       t.voided_at, t.void_reason,
 		       (SELECT count(*) FROM financial_attachments fa WHERE fa.transaction_id = t.id)::int,
@@ -531,8 +655,10 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind string) ([]Transaction,
 		LEFT JOIN financial_categories c ON c.id = t.category_id
 		LEFT JOIN financial_accounts a ON a.id = t.account_id
 		LEFT JOIN suppliers s ON s.id = t.supplier_id
+		LEFT JOIN members dm ON dm.id = t.donor_member_id
+		LEFT JOIN benefactors db ON db.id = t.benefactor_id
 		LEFT JOIN documents d ON d.kind = 'receipt' AND d.content->>'tx_id' = t.id::text
-		ORDER BY t.occurred_at, t.created_at, t.id`, kind)
+		ORDER BY t.occurred_at, t.entry_seq NULLS LAST, t.created_at, t.id`, kind)
 	if err != nil {
 		return nil, err
 	}
@@ -543,8 +669,9 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind string) ([]Transaction,
 		if err := rows.Scan(&t.ID, &t.BranchID, &t.CategoryID, &t.CategoryName,
 			&t.AccountID, &t.AccountName,
 			&t.SupplierID, &t.SupplierName,
+			&t.DonorMemberID, &t.BenefactorID, &t.DonorName,
 			&t.Type, &t.Amount, &t.Currency, &t.PaymentMethod,
-			&t.IsAnonymous, &t.Description, &t.ReceiptIssued, &t.Hash, &t.OccurredAt, &t.CreatedAt,
+			&t.IsAnonymous, &t.Description, &t.ReceiptIssued, &t.Hash, &t.OccurredAt, &t.CreatedAt, &t.EntrySeq,
 			&t.ReceiptID, &t.ReceiptRef, &t.ReceiptToken,
 			&t.VoidedAt, &t.VoidReason, &t.AttachmentCount, &t.AttachmentURL); err != nil {
 			return nil, err

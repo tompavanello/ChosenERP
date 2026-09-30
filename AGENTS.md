@@ -367,6 +367,7 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | POST | `/api/v1/finance/transactions/batch` | Bearer | Lanca varios de uma vez (grid em lote; erros por linha) |
 | POST | `/api/v1/finance/transactions/import` | Bearer | Importa lancamentos (CSV ou XLSX, com mapeamento de colunas) |
 | POST | `/api/v1/finance/transactions/import/preview` | Bearer | Pre-visualiza as linhas da planilha para mapear colunas |
+| POST | `/api/v1/finance/transactions/reorder` | Bearer | Renumera a sequencia (entry_seq) dos lancamentos da mesma conta/data |
 | DELETE | `/api/v1/finance/transactions/{id}` | Bearer | Exclui o lancamento definitivamente (recalcula hash-chain) |
 | POST | `/api/v1/finance/transactions/{id}/void` | Bearer | Estorna o lancamento (legado; sai dos relatorios) |
 | GET  | `/api/v1/finance/transactions/{id}/events` | Bearer | Rateio do lancamento por evento |

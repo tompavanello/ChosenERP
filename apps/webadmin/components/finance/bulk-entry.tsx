@@ -33,6 +33,7 @@ interface BulkRow {
   payment_method: string;
   donor_member_id: string;
   benefactor_id: string;
+  donor_name: string;
   supplier_id: string;
   is_anonymous: boolean;
   event_ids: string[];
@@ -56,6 +57,7 @@ function emptyRow(): BulkRow {
     payment_method: "pix",
     donor_member_id: "",
     benefactor_id: "",
+    donor_name: "",
     supplier_id: "",
     is_anonymous: false,
     event_ids: [],
@@ -178,7 +180,7 @@ export function BulkEntry({
   function complementCount(r: BulkRow): number {
     return [
       r.account_id || defaultAccountId, r.payment_method,
-      r.benefactor_id, r.supplier_id, r.donor_member_id,
+      r.benefactor_id, r.supplier_id, r.donor_member_id, r.donor_name,
     ].filter(Boolean).length + (r.event_ids.length > 0 ? 1 : 0);
   }
 
@@ -198,6 +200,7 @@ export function BulkEntry({
       occurred_at: r.occurred_at || defaultDate || undefined,
       donor_member_id: r.donor_member_id || undefined,
       benefactor_id: r.benefactor_id || undefined,
+      donor_name: (!r.donor_member_id && !r.benefactor_id) ? (r.donor_name || undefined) : undefined,
       supplier_id: r.supplier_id || undefined,
       is_anonymous: r.is_anonymous,
       event_allocations: r.event_ids.length
@@ -374,7 +377,7 @@ export function BulkEntry({
                               searchPlaceholder="Buscar membro..."
                               emptyMessage="Nenhum membro encontrado"
                               options={members.map((m) => ({ value: m.id, label: m.full_name }))}
-                              onChange={(v) => update(r.key, { donor_member_id: v, benefactor_id: v ? "" : r.benefactor_id })}
+                              onChange={(v) => update(r.key, { donor_member_id: v, benefactor_id: v ? "" : r.benefactor_id, donor_name: v ? "" : r.donor_name })}
                               className="w-44"
                             />
                           )}
@@ -497,6 +500,7 @@ export function BulkEntry({
                                   update(r.key, {
                                     benefactor_id: v,
                                     donor_member_id: v ? "" : r.donor_member_id,
+                                    donor_name: v ? "" : r.donor_name,
                                   });
                                 }}
                               >
@@ -505,6 +509,21 @@ export function BulkEntry({
                                   <option key={b.id} value={b.id}>{b.name}</option>
                                 ))}
                               </Select>
+                            </SubField>
+                          )}
+                          {eff === "income" && !r.benefactor_id && (
+                            <SubField label="Doador avulso">
+                              <Input
+                                className="h-8 text-xs"
+                                placeholder="Nome de doador nao cadastrado"
+                                value={r.donor_name}
+                                onChange={(e) =>
+                                  update(r.key, {
+                                    donor_name: e.target.value,
+                                    is_anonymous: e.target.value ? false : r.is_anonymous,
+                                  })
+                                }
+                              />
                             </SubField>
                           )}
                           {eff === "expense" && (

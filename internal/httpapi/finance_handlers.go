@@ -328,6 +328,41 @@ func (a *App) handleCreateTxnBatch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
+// handleReorderTxns renumera uma lista de lancamentos da MESMA conta e data,
+// na ordem enviada, para alinhar a sequencia com o extrato. Somente entry_seq e
+// alterado (fora da hash-chain).
+func (a *App) handleReorderTxns(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var in struct {
+		OrderedIDs []string `json:"ordered_ids"`
+	}
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if len(in.OrderedIDs) == 0 {
+		writeErr(w, http.StatusBadRequest, "nenhum lancamento informado")
+		return
+	}
+	b := boundsFromClaims(claims)
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		return a.Finance.Reorder(r.Context(), tx, in.OrderedIDs)
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) || store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "lancamento nao encontrado no escopo")
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 // handleImportTransactions importa lancamentos em lote via CSV ou planilha
 // (XLSX). Aceita o CSV com cabecalho padrao (`csv`) ou um arquivo em base64 com
 // mapeamento de colunas e linha inicial (`data`/`filename`/`start_row`/`mapping`).

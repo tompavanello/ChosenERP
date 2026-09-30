@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Wallet, Plus, Eye, Send, Filter, Tags, Repeat, Banknote, Upload, FileText, Paperclip, Pencil, Trash2, FolderTree } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Wallet, Plus, Eye, Send, Filter, Tags, Repeat, Banknote, Upload, FileText, Paperclip, Pencil, Trash2, FolderTree, ChevronUp, ChevronDown } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,7 +22,7 @@ import {
    listCategoryGroups, createCategoryGroup, updateCategoryGroup, deleteCategoryGroup,
    listAccounts, createAccount, updateAccount, deleteAccount,
    uploadAttachment, listAttachments, listDeliveries, createTransaction, deleteTransaction,
-   listTransactionEvents, previewTransactions, importTransactionsFile,
+   listTransactionEvents, previewTransactions, importTransactionsFile, reorderTransactions,
    type Category, type CategoryGroup, type Transaction, type Balance, type BankAccount,
    type FinancialAttachment, type Delivery, type ImportResult, type EventAllocation,
  } from "@/lib/api";
@@ -50,6 +50,11 @@ function colLetter(i: number): string {
   let n = i;
   do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } while (n >= 0);
   return s;
+}
+
+// Escopo da sequencia do lancamento: filial + conta bancaria + data efetiva.
+function scopeKeyOf(t: Transaction): string {
+  return `${t.branch_id}|${t.account_id ?? ""}|${t.occurred_at.slice(0, 10)}`;
 }
 
 function fileToBase64(f: File): Promise<string> {
@@ -178,13 +183,47 @@ export default function FinancePage() {
 
   const columns: Column<Transaction>[] = useMemo(() => [
     {
+      key: "entry_seq",
+      label: "Seq.",
+      sortable: true,
+      width: "w-24",
+      sortValue: (t) => t.entry_seq ?? 0,
+      render: (t) => (
+        <div className="flex items-center gap-1">
+          <span className="w-6 text-right text-xs font-medium tabular-nums text-zinc-500">{t.entry_seq ?? "-"}</span>
+          {hasPerm("finance.write") && !t.voided_at && (
+            <div className="flex flex-col">
+              <button
+                type="button"
+                aria-label="Mover para cima"
+                title="Mover para cima"
+                className="text-zinc-400 hover:text-sky-600"
+                onClick={() => moveEntrySeq(t, -1)}
+              >
+                <ChevronUp className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                aria-label="Mover para baixo"
+                title="Mover para baixo"
+                className="text-zinc-400 hover:text-sky-600"
+                onClick={() => moveEntrySeq(t, 1)}
+              >
+                <ChevronDown className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
       key: "occurred_at",
       label: "Data efetiva",
       sortable: true,
       width: "w-28",
       // Ordena pela data da ocorrencia e, dentro dela, pela sequencia do
-      // lancamento (created_at), igual a conciliacao/auditoria.
-      sortValue: (t) => `${t.occurred_at}T${t.created_at ?? ""}`,
+      // lancamento (entry_seq), igual a conciliacao/auditoria.
+      sortValue: (t) => `${t.occurred_at}T${String(t.entry_seq ?? 0).padStart(6, "0")}T${t.created_at ?? ""}`,
       render: (t) => <span className="text-zinc-500">{datePt(t.occurred_at)}</span>,
     },
     {
@@ -239,6 +278,15 @@ export default function FinancePage() {
       render: (t) => <span className="text-zinc-500">{t.account_name ?? "-"}</span>,
     },
     {
+      key: "donor_name",
+      label: "Doador",
+      render: (t) => (
+        <span className="text-zinc-500">
+          {t.is_anonymous ? "Anonimo" : (t.donor_name ?? "-")}
+        </span>
+      ),
+    },
+    {
       key: "amount",
       label: "Valor",
       sortable: false,
@@ -271,7 +319,7 @@ export default function FinancePage() {
         </div>
       ),
     },
-  ], [hasPerm]);
+  ], [hasPerm, txns]);
 
   async function handleTxnSaved() {
     // Invalidar apenas as listas de transacoes e saldo, nao todas as APIs.
@@ -281,6 +329,28 @@ export default function FinancePage() {
     ]);
     setTxns(tx.transactions);
     setBalance(bal);
+  }
+
+  // Move o lancamento uma posicao para cima/baixo dentro do escopo (filial+
+  // conta+data), renumerando o grupo. So entry_seq muda no backend.
+  async function moveEntrySeq(t: Transaction, dir: -1 | 1) {
+    const key = scopeKeyOf(t);
+    const group = (Array.isArray(txns) ? txns : [])
+      .filter((x) => scopeKeyOf(x) === key)
+      .sort((a, b) =>
+        (a.entry_seq ?? Number.MAX_SAFE_INTEGER) - (b.entry_seq ?? Number.MAX_SAFE_INTEGER) ||
+        a.occurred_at.localeCompare(b.occurred_at) ||
+        (a.created_at ?? "").localeCompare(b.created_at ?? ""));
+    const idx = group.findIndex((x) => x.id === t.id);
+    const swap = idx + dir;
+    if (idx < 0 || swap < 0 || swap >= group.length) return;
+    [group[idx], group[swap]] = [group[swap], group[idx]];
+    try {
+      await reorderTransactions(group.map((x) => x.id));
+      await handleTxnSaved();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao reordenar", "error");
+    }
   }
 
   async function viewReceipt(t: Transaction) {
@@ -810,6 +880,9 @@ export default function FinancePage() {
             <div className="flex items-center justify-between"><span className="text-zinc-500">Conta contabil</span><span>{detail.category_name ?? "-"}</span></div>
             {detail.account_name && <div className="flex items-center justify-between"><span className="text-zinc-500"> Conta</span><span>{detail.account_name}</span></div>}
             {detail.supplier_name && <div className="flex items-center justify-between"><span className="text-zinc-500">Fornecedor</span><span>{detail.supplier_name}</span></div>}
+            {detail.type === "income" && (
+              <div className="flex items-center justify-between"><span className="text-zinc-500">Doador</span><span>{detail.is_anonymous ? "Anonimo" : (detail.donor_name ?? "-")}</span></div>
+            )}
             <div className="flex items-center justify-between"><span className="text-zinc-500">Forma de pagamento</span><span>{detail.payment_method ? PAYMENT_METHODS[detail.payment_method] ?? detail.payment_method : "-"}</span></div>
             <div className="flex items-center justify-between"><span className="text-zinc-500">Data efetiva</span><span>{datePt(detail.occurred_at)}</span></div>
             <div className="flex items-center justify-between"><span className="text-zinc-500">Registrado em</span><span>{dateTimePt(detail.created_at)}</span></div>
@@ -921,8 +994,10 @@ export default function FinancePage() {
             occurred_at: editing.occurred_at.slice(0, 10),
             donor_member_id: editing.donor_member_id ?? "",
             benefactor_id: editing.benefactor_id ?? "",
+            donor_name: editing.donor_name ?? "",
             supplier_id: editing.supplier_id ?? "",
             is_anonymous: editing.is_anonymous,
+            entry_seq: editing.entry_seq !== undefined && editing.entry_seq !== null ? String(editing.entry_seq) : "",
           } : undefined}
           submitLabel={editing ? "Salvar alteracoes" : "Lancar"}
         />

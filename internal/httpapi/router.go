@@ -188,6 +188,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/finance/transactions/batch", authed(http.HandlerFunc(app.handleCreateTxnBatch)))
 	mux.Handle("POST /api/v1/finance/transactions/import", authed(http.HandlerFunc(app.handleImportTransactions)))
 	mux.Handle("POST /api/v1/finance/transactions/import/preview", authed(http.HandlerFunc(app.handlePreviewTransactions)))
+	mux.Handle("POST /api/v1/finance/transactions/reorder", authed(http.HandlerFunc(app.handleReorderTxns)))
 	mux.Handle("POST /api/v1/finance/transactions/{id}/void", authed(http.HandlerFunc(app.handleVoidTxn)))
 	mux.Handle("DELETE /api/v1/finance/transactions/{id}", authed(http.HandlerFunc(app.handleDeleteTxn)))
 	mux.Handle("GET /api/v1/finance/transactions/{id}/events", authed(http.HandlerFunc(app.handleListTxnEvents)))

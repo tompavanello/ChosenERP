@@ -299,6 +299,10 @@ export interface Transaction {
   receipt_token?: string;
   donor_member_id?: string;
   benefactor_id?: string;
+  /** Nome do doador (membro, benfeitor ou avulso) resolvido pelo backend. */
+  donor_name?: string;
+  /** Sequencia do lancamento no escopo (filial, conta, data). */
+  entry_seq?: number;
   supplier_id?: string;
   supplier_name?: string;
   hash: string;
@@ -1079,6 +1083,13 @@ export const createTransaction = (data: Record<string, unknown>) =>
   api<{ transaction: Transaction; receipt_ref: string; receipt_token: string }>("/api/v1/finance/transactions", {
     method: "POST",
     body: JSON.stringify(data),
+  });
+
+/** Renumera os lancamentos da mesma conta/data na ordem enviada. */
+export const reorderTransactions = (orderedIds: string[]) =>
+  api<{ ok: boolean }>("/api/v1/finance/transactions/reorder", {
+    method: "POST",
+    body: JSON.stringify({ ordered_ids: orderedIds }),
   });
 
 // ---- Importacao em lote de lancamentos (CSV/planilha) ----

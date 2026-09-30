@@ -27,8 +27,12 @@ export interface TransactionFormState {
   occurred_at: string;
   donor_member_id: string;
   benefactor_id: string;
+  /** Doador avulso: identificacao livre (nao cadastrado). */
+  donor_name: string;
   supplier_id: string;
   is_anonymous: boolean;
+  /** Posicao na sequencia do dia/conta (vazio = anexa ao fim). */
+  entry_seq: string;
 }
 
 const EMPTY: TransactionFormState = {
@@ -41,8 +45,10 @@ const EMPTY: TransactionFormState = {
   occurred_at: todayISO(),
   donor_member_id: "",
   benefactor_id: "",
+  donor_name: "",
   supplier_id: "",
   is_anonymous: false,
+  entry_seq: "",
 };
 
 export interface TransactionFormProps {
@@ -168,8 +174,10 @@ export function TransactionForm({
       occurred_at: form.occurred_at || undefined,
       donor_member_id: form.donor_member_id || undefined,
       benefactor_id: form.benefactor_id || undefined,
+      donor_name: (!form.donor_member_id && !form.benefactor_id) ? (form.donor_name || undefined) : undefined,
       supplier_id: form.supplier_id || undefined,
       is_anonymous: form.is_anonymous,
+      entry_seq: form.entry_seq === "" ? undefined : Number(form.entry_seq),
     };
     if (alloc.length > 0) {
       payload.event_allocations = alloc.map((a) => ({
@@ -257,6 +265,16 @@ export function TransactionForm({
             disabled={saving}
           />
         </Field>
+        <Field label="Posicao (Seq.)" hint="Opcional - posicao no dia/conta; os demais sao renumerados.">
+          <Input
+            type="number"
+            min={1}
+            placeholder="Fim"
+            value={form.entry_seq}
+            onChange={(e) => set("entry_seq", e.target.value)}
+            disabled={saving}
+          />
+        </Field>
         <Field label="Forma de pagamento">
           <Select
             value={form.payment_method}
@@ -297,7 +315,7 @@ export function TransactionForm({
       </Section>
 
       {form.type === "income" && (
-        <Section title="Doacao" hint="Associe a um membro ou benfeitor para emissao automatica de recibo.">
+        <Section title="Doacao" hint="Associe a um membro, benfeitor ou identifique um doador avulso.">
           <Field label="Membro doador">
             <Combobox
               value={form.donor_member_id}
@@ -307,7 +325,7 @@ export function TransactionForm({
               options={members.map((m) => ({ value: m.id, label: m.full_name }))}
               onChange={(v) => {
                 set("donor_member_id", v);
-                if (v) set("benefactor_id", "");
+                if (v) { set("benefactor_id", ""); set("donor_name", ""); }
                 if (!v) set("is_anonymous", false);
               }}
               className="w-full"
@@ -323,13 +341,27 @@ export function TransactionForm({
                 options={benefactors.map((b) => ({ value: b.id, label: b.name }))}
                 onChange={(v) => {
                   set("benefactor_id", v);
-                  if (v) set("donor_member_id", "");
+                  if (v) { set("donor_member_id", ""); set("donor_name", ""); }
                 }}
                 className="w-full"
               />
             </Field>
           )}
           {!form.donor_member_id && !form.benefactor_id && (
+            <Field label="Doador avulso" hint="Nome/documento de quem doou sem cadastro.">
+              <Input
+                value={form.donor_name}
+                placeholder="Ex.: Visitante Maria - oferta de missoes"
+                maxLength={200}
+                disabled={saving}
+                onChange={(e) => {
+                  set("donor_name", e.target.value);
+                  if (e.target.value) set("is_anonymous", false);
+                }}
+              />
+            </Field>
+          )}
+          {!form.donor_member_id && !form.benefactor_id && !form.donor_name && (
             <Field label="Anonimo">
               <div className="flex items-center gap-2 pt-1">
                 <input
