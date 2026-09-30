@@ -155,17 +155,17 @@ func (a *App) handleGenerateProgramacao(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	b := boundsFromClaims(claims)
-	var created int64
+	var created, updated int64
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
 		var err error
-		created, err = a.Programacao.GenerateEvents(r.Context(), tx, in.ProgramacaoID, in.From, in.To, claims.UserID)
+		created, updated, err = a.Programacao.GenerateEvents(r.Context(), tx, in.ProgramacaoID, in.From, in.To, claims.UserID)
 		return err
 	})
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"created": created})
+	writeJSON(w, http.StatusOK, map[string]any{"created": created, "updated": updated})
 }
 
 // isISODate confere o formato YYYY-MM-DD sem depender do parser do Postgres.

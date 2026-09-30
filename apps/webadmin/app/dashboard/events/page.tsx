@@ -289,8 +289,14 @@ export default function EventsPage() {
                         {ev.ends_at && <span className="block text-xs text-zinc-400">ate {dateTimePt(ev.ends_at)}</span>}
                       </TD>
                       <TD>
-                        <Badge tone="sky">{ev.kind_name ?? "-"}</Badge>
-                        {ev.title && <span className="mt-0.5 block text-xs text-zinc-400">{ev.title}</span>}
+                        {ev.title ? (
+                          <>
+                            <span className="text-sm font-medium">{ev.title}</span>
+                            <span className="mt-0.5 block text-xs text-zinc-400">{ev.kind_name ?? "-"}</span>
+                          </>
+                        ) : (
+                          <Badge tone="sky">{ev.kind_name ?? "-"}</Badge>
+                        )}
                       </TD>
                       <TD>
                         <Badge tone={(EVENT_ORIGIN[ev.origin]?.tone as Tone) ?? "zinc"} className="text-[10px]">

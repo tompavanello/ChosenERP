@@ -192,10 +192,33 @@ func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
 // GenerateEvents publica na agenda (church_events) as ocorrencias no periodo
 // [from,to]. Sem id, publica TODAS as programacoes ativas que o usuario pode
 // escrever. A hora local e convertida pelo timezone do tenant e a ocorrencia e
-// marcada com origin='programacao'. Idempotente (pula culto+horario ja
-// publicados). Devolve quantos eventos foram criados.
-func (r *Repo) GenerateEvents(ctx context.Context, tx pgx.Tx, programacaoID, from, to, actorID string) (int64, error) {
+// marcada com origin='programacao'. As ocorrencias do periodo ja existentes sao
+// ATUALIZADAS (titulo/tipo/notas) e as novas sao inseridas - idempotente, mas
+// reflete a grade atual. Devolve quantas foram criadas e quantas atualizadas.
+func (r *Repo) GenerateEvents(ctx context.Context, tx pgx.Tx, programacaoID, from, to, actorID string) (created, updated int64, err error) {
+	// 1) Reflete a grade atual nas ocorrencias ja publicadas (ex.: o titulo de
+	//    um evento de tipo 'outro' foi definido depois de ja publicado antes).
 	tag, err := tx.Exec(ctx, `
+		UPDATE church_events e SET
+			title = p.title,
+			kind_id = k.id,
+			notes = p.notes,
+			updated_at = now()
+		FROM programacoes p
+		LEFT JOIN event_kinds k ON k.tenant_id = p.tenant_id AND k.slug = p.kind
+		WHERE e.origin = 'programacao' AND e.origin_id = p.id
+		  AND (NULLIF($1,'')::uuid IS NULL OR p.id = NULLIF($1,'')::uuid)
+		  AND (e.title IS DISTINCT FROM p.title
+		       OR e.kind_id IS DISTINCT FROM k.id
+		       OR e.notes IS DISTINCT FROM p.notes)`,
+		programacaoID)
+	if err != nil {
+		return 0, 0, err
+	}
+	updated = tag.RowsAffected()
+
+	// 2) Insere as ocorrencias novas do periodo.
+	tag2, err := tx.Exec(ctx, `
 		INSERT INTO church_events
 			(tenant_id, branch_id, kind_id, title, starts_at, ends_at, attendance_mode, notes, created_by, origin, origin_id)
 		SELECT p.tenant_id, p.branch_id, k.id, p.title,
@@ -220,9 +243,10 @@ func (r *Repo) GenerateEvents(ctx context.Context, tx pgx.Tx, programacaoID, fro
 		  )`,
 		programacaoID, from, to, actorID)
 	if err != nil {
-		return 0, err
+		return 0, updated, err
 	}
-	return tag.RowsAffected(), nil
+	created = tag2.RowsAffected()
+	return created, updated, nil
 }
 
 func str(s *string) string {

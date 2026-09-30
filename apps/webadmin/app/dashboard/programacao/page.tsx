@@ -148,9 +148,12 @@ export default function ProgramacaoPage() {
         to: pubForm.to,
         programacao_id: publish.item?.id,
       });
-      toast(r.created > 0
-        ? `${r.created} ocorrencia(s) publicada(s) na agenda.`
-        : "Nada a publicar: as ocorrencias do periodo ja estavam na agenda.");
+      const partes: string[] = [];
+      if (r.created) partes.push(`${r.created} nova(s)`);
+      if (r.updated) partes.push(`${r.updated} atualizada(s)`);
+      toast(partes.length
+        ? `Agenda: ${partes.join(", ")}.`
+        : "Nada a publicar: as ocorrencias ja estavam atualizadas.");
       setPublish({ open: false });
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao publicar", "error");

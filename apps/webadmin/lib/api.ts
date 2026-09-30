@@ -1883,7 +1883,7 @@ export const deleteProgramacao = (id: string) =>
   api<{ ok: boolean }>(`/api/v1/programacoes/${id}`, { method: "DELETE" });
 /** Publica as ocorrencias na agenda no periodo [from,to]. Idempotente. */
 export const generateProgramacaoEvents = (data: { from: string; to: string; programacao_id?: string }) =>
-  api<{ created: number }>("/api/v1/programacoes/generate", { method: "POST", body: JSON.stringify(data) });
+  api<{ created: number; updated: number }>("/api/v1/programacoes/generate", { method: "POST", body: JSON.stringify(data) });
 
 // ---- App do membro (publico por token) ----
 /**
