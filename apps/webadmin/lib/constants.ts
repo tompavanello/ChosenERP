@@ -82,6 +82,14 @@ export const EVENT_DATE_FIELDS: Record<string, string> = {
 /** Tons aceitos pelo Badge. */
 export const EVENT_TONES = ["zinc", "sky", "green", "amber", "red", "indigo", "brand"];
 
+/** Dias da semana (0=domingo .. 6=sabado), na convencao do EXTRACT(DOW) do Postgres. */
+export const WEEKDAYS: Record<number, string> = {
+  0: "Domingo", 1: "Segunda", 2: "Terca", 3: "Quarta", 4: "Quinta", 5: "Sexta", 6: "Sabado",
+};
+
+/** Ordem de exibicao dos dias da semana (comeca no domingo). */
+export const WEEKDAY_ORDER = [0, 1, 2, 3, 4, 5, 6];
+
 export const GENDER: Record<string, string> = { male: "Masculino", female: "Feminino", other: "Outro" };
 
 export const MARITAL_STATUS: Record<string, string> = {

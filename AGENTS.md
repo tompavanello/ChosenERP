@@ -318,6 +318,11 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | POST | `/api/v1/events/{id}/attendance` | Bearer | Salva chamada nominal + total |
 | GET  | `/api/v1/events/{id}/invitees` | Bearer | Convocados (pessoas/ministerios) |
 | POST | `/api/v1/events/{id}/invitees` | Bearer | Define os convocados do evento |
+| GET  | `/api/v1/cultos` | Bearer | Grade de horarios dos cultos (000068) |
+| POST | `/api/v1/cultos` | Bearer | Cria um culto (dia/hora/duracao/tipo/local) |
+| POST | `/api/v1/cultos/generate` | Bearer | Publica as ocorrencias na agenda (periodo; idempotente) |
+| PATCH | `/api/v1/cultos/{id}` | Bearer | Edita o culto |
+| DELETE | `/api/v1/cultos/{id}` | Bearer | Exclui o culto (eventos publicados permanecem) |
 | GET  | `/api/v1/consent-terms` | Bearer | Termos de consentimento (LGPD) |
 | POST | `/api/v1/consent-terms` | Bearer (Sede) | Cria termo de consentimento |
 | GET  | `/api/v1/members/{id}/consents` | Bearer | Consentimentos do membro |

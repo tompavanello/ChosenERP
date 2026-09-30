@@ -1851,6 +1851,37 @@ export const setMemberFrequency = (memberId: string, data: Record<string, unknow
     body: JSON.stringify(data),
   });
 
+// ---- Cultos (grade de horarios recorrentes) ----
+export interface Culto {
+  id: string;
+  branch_id: string;
+  name: string;
+  event_kind_id?: string;
+  event_kind_name?: string;
+  event_kind_color?: string;
+  /** 0=domingo .. 6=sabado (mesma convencao do Postgres EXTRACT(DOW)). */
+  weekday: number;
+  /** "HH:MM". */
+  start_time: string;
+  duration_minutes: number;
+  location?: string;
+  notes?: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+export const listCultos = () => api<{ cultos: Culto[] }>("/api/v1/cultos");
+export const createCulto = (data: Record<string, unknown>) =>
+  api<Culto>("/api/v1/cultos", { method: "POST", body: JSON.stringify(data) });
+export const updateCulto = (id: string, data: Record<string, unknown>) =>
+  api<Culto>(`/api/v1/cultos/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export const deleteCulto = (id: string) =>
+  api<{ ok: boolean }>(`/api/v1/cultos/${id}`, { method: "DELETE" });
+/** Publica as ocorrencias dos cultos na agenda no periodo [from,to]. Idempotente. */
+export const generateCultoEvents = (data: { from: string; to: string; culto_id?: string }) =>
+  api<{ created: number }>("/api/v1/cultos/generate", { method: "POST", body: JSON.stringify(data) });
+
 // ---- App do membro (publico por token) ----
 /**
  * Resposta do endpoint publico da carteirinha. E uma projecao MINIMA de

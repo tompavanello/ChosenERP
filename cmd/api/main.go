@@ -15,6 +15,7 @@ import (
 	"chosenerp/internal/benefactors"
 	"chosenerp/internal/cargos"
 	"chosenerp/internal/config"
+	"chosenerp/internal/cultos"
 	"chosenerp/internal/delivery"
 	"chosenerp/internal/documents"
 	"chosenerp/internal/events"
@@ -82,7 +83,7 @@ func main() {
 		&members.Repo{}, finRepo, &audit.Repo{}, docRepo,
 		&families.Repo{}, &visitors.Repo{}, &benefactors.Repo{}, &suppliers.Repo{},
 		&ministries.Repo{}, &groups.Repo{}, &announcements.Repo{},
-		&cargos.Repo{}, &users.Repo{}, &events.Repo{}, &lgpd.Repo{}, &governance.Repo{}, &org.Repo{}, &rosters.Repo{}, &kids.Repo{}, &memberevents.Repo{}, dispatcher)
+		&cargos.Repo{}, &cultos.Repo{}, &users.Repo{}, &events.Repo{}, &lgpd.Repo{}, &governance.Repo{}, &org.Repo{}, &rosters.Repo{}, &kids.Repo{}, &memberevents.Repo{}, dispatcher)
 
 	// Worker da outbox de envio (retry de pendentes/falhos)
 	worker := &delivery.Worker{
