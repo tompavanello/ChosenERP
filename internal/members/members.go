@@ -190,47 +190,37 @@ func (r *Repo) Get(ctx context.Context, tx pgx.Tx, id string) (*Member, error) {
 }
 
 type UpdateInput struct {
-	FirstName        *string  `json:"first_name"`
-	LastName         *string  `json:"last_name"`
-	Nickname         *string  `json:"nickname"`
-	Email            *string  `json:"email"`
-	Phone            *string  `json:"phone"`
-	Whatsapp         *string  `json:"whatsapp"`
-	BirthDate        *string  `json:"birth_date"`
-	Gender           *string  `json:"gender"`
-	MaritalStatus    *string  `json:"marital_status"`
-	Profession       *string  `json:"profession"`
-	Office           *string  `json:"office"` // legado: mantido para nao quebrar clientes antigos (readJSON rejeita campo desconhecido)
-	Nationality      *string  `json:"nationality"`
-	Education        *string  `json:"education"`
-	Notes            *string  `json:"notes"`
-	MembershipStatus *string  `json:"membership_status"`
-	CPF              *string  `json:"cpf"`
-	RG               *string  `json:"rg"`
-	BaptismDate      *string  `json:"baptism_date"`
-	BaptismLocation  *string  `json:"baptism_location"`
-	JoinedAt         *string  `json:"joined_at"`
-	Address          *Address `json:"address"`
-	ExitReason       *string  `json:"exit_reason"`
-	ExitedAt         *string  `json:"exited_at"`
-	MarriageDate     *string  `json:"marriage_date"`
-	// photo_url NAO e aceito aqui de proposito: so o endpoint de upload pode
-	// gravar a foto, senao o cliente poderia apontar para javascript:, para um
-	// host de terceiros ou para arquivo de outro tenant.
+	FirstName     *string  `json:"first_name"`
+	LastName      *string  `json:"last_name"`
+	Nickname      *string  `json:"nickname"`
+	Email         *string  `json:"email"`
+	Phone         *string  `json:"phone"`
+	Whatsapp      *string  `json:"whatsapp"`
+	BirthDate     *string  `json:"birth_date"`
+	Gender        *string  `json:"gender"`
+	MaritalStatus *string  `json:"marital_status"`
+	Profession    *string  `json:"profession"`
+	Office        *string  `json:"office"` // legado: mantido para nao quebrar clientes antigos (readJSON rejeita campo desconhecido)
+	Nationality   *string  `json:"nationality"`
+	Education     *string  `json:"education"`
+	Notes         *string  `json:"notes"`
+	CPF           *string  `json:"cpf"`
+	RG            *string  `json:"rg"`
+	Address       *Address `json:"address"`
+	// A vida eclesiastica (membership_status, exit_reason, exited_at,
+	// baptism_date, baptism_location, joined_at, marriage_date) NAO e aceita
+	// aqui: e DERIVADA do historico e so muda ao registrar um evento
+	// (POST /members/{id}/history). Ver migracao 000067.
+	//
+	// photo_url tambem nao entra: so o upload pode gravar a foto.
 }
 
-// Update edita campos do perfil do membro.
+// Update edita o PERFIL do membro (dados pessoais/contato/endereco).
 // Semantica de PATCH: campo nil (ausente no JSON) mantem o valor atual.
 //
-// Quando a situacao muda, grava automaticamente uma entrada no historico
-// eclesiastico (requisito 1.8) - o historico e consequencia, nao digitacao.
+// A vida eclesiastica nao e editada aqui de proposito: quem move a fase do
+// membro e o historico (eventos), que ja mantem o hash-chain auditavel.
 func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput, actorID string) (*Member, error) {
-	var oldStatus string
-	if err := tx.QueryRow(ctx,
-		`SELECT membership_status FROM members WHERE id = $1::uuid`, id).Scan(&oldStatus); err != nil {
-		return nil, err
-	}
-
 	// O UPDATE devolve so o id e a leitura completa vem do Get: `RETURNING` com
 	// subquery (cargos/card_ref) enxerga o snapshot ANTERIOR a escrita, entao
 	// devolveria cargos desatualizados.
@@ -250,60 +240,22 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput,
 			marital_status = COALESCE($10, m.marital_status),
 			profession = COALESCE($11, m.profession),
 			office = COALESCE($12, m.office),
-			nationality = COALESCE($23, m.nationality),
-			education = COALESCE($24, m.education),
-			notes = COALESCE($25, m.notes),
-			membership_status = COALESCE($13, m.membership_status),
-			cpf = COALESCE($14, m.cpf),
-			rg = COALESCE($15, m.rg),
-			baptism_date = COALESCE($16::date, m.baptism_date),
-			baptism_location = COALESCE($17, m.baptism_location),
-			joined_at = COALESCE($18::date, m.joined_at),
-			address = COALESCE($19::jsonb, m.address),
-			exit_reason = CASE
-				WHEN btrim(COALESCE($20::text,'')) <> '' THEN btrim($20::text)
-				WHEN COALESCE($13, m.membership_status) = 'inactive' THEN COALESCE(m.exit_reason, 'outro')
-				WHEN COALESCE($13, m.membership_status) IN ('active','member') THEN NULL
-				ELSE m.exit_reason END,
-			exited_at = CASE
-				WHEN COALESCE($13, m.membership_status) = 'inactive' THEN COALESCE($21::date, m.exited_at, now()::date)
-				WHEN COALESCE($13, m.membership_status) IN ('active','member') THEN NULL
-				ELSE COALESCE($21::date, m.exited_at) END,
-			marriage_date = COALESCE($22::date, m.marriage_date),
+			nationality = COALESCE($13, m.nationality),
+			education = COALESCE($14, m.education),
+			notes = COALESCE($15, m.notes),
+			cpf = COALESCE($16, m.cpf),
+			rg = COALESCE($17, m.rg),
+			address = COALESCE($18::jsonb, m.address),
 			updated_at = now()
 		WHERE m.id = $1::uuid
 		RETURNING m.id::text`,
 		id, in.FirstName, in.LastName, in.Nickname, in.Email, in.Phone, in.Whatsapp,
 		in.BirthDate, in.Gender, in.MaritalStatus, in.Profession, in.Office,
-		in.MembershipStatus, in.CPF, in.RG, in.BaptismDate, in.BaptismLocation,
-		in.JoinedAt, in.Address, in.ExitReason, in.ExitedAt, in.MarriageDate,
-		in.Nationality, in.Education, in.Notes).Scan(&updatedID)
+		in.Nationality, in.Education, in.Notes, in.CPF, in.RG, in.Address).Scan(&updatedID)
 	if err != nil {
 		return nil, err
 	}
-
-	newStatus := oldStatus
-	if in.MembershipStatus != nil && *in.MembershipStatus != "" {
-		newStatus = *in.MembershipStatus
-	}
-	m, err := r.Get(ctx, tx, updatedID)
-	if err != nil {
-		return nil, err
-	}
-	if newStatus != oldStatus {
-		reason := ""
-		if m.ExitReason != nil {
-			reason = *m.ExitReason
-		}
-		notes := "Situacao alterada de '" + oldStatus + "' para '" + newStatus + "'"
-		if reason != "" {
-			notes += " (motivo: " + reason + ")"
-		}
-		if err := insertHistory(ctx, tx, id, historyKindForStatus(newStatus, reason), notes, actorID); err != nil {
-			return nil, err
-		}
-	}
-	return m, nil
+	return r.Get(ctx, tx, updatedID)
 }
 
 // SetPhoto grava a foto do membro. Chamado apenas pelo endpoint de upload, que
@@ -351,32 +303,22 @@ type CreateInput struct {
 	MembershipStatus string   `json:"membership_status"`
 	CPF              *string  `json:"cpf"`
 	RG               *string  `json:"rg"`
-	BaptismDate      *string  `json:"baptism_date"`
-	BaptismLocation  *string  `json:"baptism_location"`
-	JoinedAt         *string  `json:"joined_at"`
 	Address          *Address `json:"address"`
-	MarriageDate     *string  `json:"marriage_date"`
-	// Motivo/data da inatividade (so fazem sentido com status 'inactive').
-	ExitReason *string `json:"exit_reason"`
-	ExitedAt   *string `json:"exited_at"`
-	// photo_url fica de fora: so o upload grava a foto (ver UpdateInput).
+	// Datas e motivo de saida NÃO entram: a vida eclesiastica e derivada do
+	// historico (registre um evento depois de criar). A situacao inicial aceita
+	// apenas 'active'/'member'. Ver UpdateInput e migracao 000067.
+	// photo_url fica de fora: so o upload grava a foto.
 }
 
 // Create insere um membro. O branch_id vem da sessao RLS (nao do client).
+//
+// O membro nasce com uma situacao inicial (default 'member'); qualquer fase
+// seguinte (batismo, profissao de fe, saida...) e registrada como evento no
+// historico, que passa a ser a fonte da verdade.
 func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string, in CreateInput, actorID string) (*Member, error) {
 	status := in.MembershipStatus
-	if status == "" {
+	if status != "active" && status != "member" {
 		status = "member"
-	}
-	// Inativo sempre tem motivo; as demais situacoes nao carregam motivo.
-	exitReason := in.ExitReason
-	if status == "inactive" {
-		if exitReason == nil || strings.TrimSpace(*exitReason) == "" {
-			fallback := "outro"
-			exitReason = &fallback
-		}
-	} else {
-		exitReason = nil
 	}
 	full := strings.TrimSpace(in.FirstName + " " + in.LastName)
 	var newID string
@@ -385,20 +327,15 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 			(tenant_id, branch_id, first_name, last_name, full_name,
 			 nickname, email, phone, whatsapp, birth_date, gender,
 			 marital_status, profession, office, membership_status,
-			 cpf, rg, baptism_date, baptism_location, joined_at, address, marriage_date,
-			 nationality, education, notes, exit_reason, exited_at)
+			 cpf, rg, address, nationality, education, notes)
 		VALUES
 			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date, $11,
-			 $12, $13, $14, $15, $16, $17, $18::date, $19, $20::date, $21::jsonb, $22::date,
-			 $23, $24, $25, $26,
-			 CASE WHEN $15 = 'inactive' THEN COALESCE($27::date, now()::date) ELSE NULL END)
+			 $12, $13, $14, $15, $16, $17, $18::jsonb, $19, $20, $21)
 		RETURNING id::text`,
 		tenantID, branchID, in.FirstName, in.LastName, full,
 		in.Nickname, in.Email, in.Phone, in.Whatsapp, in.BirthDate, in.Gender,
 		in.MaritalStatus, in.Profession, in.Office, status,
-		in.CPF, in.RG, in.BaptismDate, in.BaptismLocation, in.JoinedAt,
-		in.Address, in.MarriageDate, in.Nationality, in.Education, in.Notes,
-		exitReason, in.ExitedAt).Scan(&newID)
+		in.CPF, in.RG, in.Address, in.Nationality, in.Education, in.Notes).Scan(&newID)
 	if err != nil {
 		return nil, err
 	}

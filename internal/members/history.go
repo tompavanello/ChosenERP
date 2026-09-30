@@ -26,29 +26,6 @@ type HistoryEntry struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-// historyKindForStatus mapeia a nova situacao (e, quando inativo, o motivo) para
-// o slug do evento do catalogo (migracao 000065). Os slugs abaixo sao os
-// canonicos do seed.
-func historyKindForStatus(status, exitReason string) string {
-	switch status {
-	case "active":
-		return "reativacao"
-	case "inactive":
-		switch exitReason {
-		case "transferencia":
-			return "saida_transferencia"
-		case "falecimento":
-			return "saida_falecimento"
-		case "ausencia", "abandono":
-			return "abandono_atividades"
-		default:
-			return "baixa_rol"
-		}
-	default:
-		return "status"
-	}
-}
-
 // Rótulos legíveis usados no resumo do efeito gravado no historico.
 var statusLabel = map[string]string{
 	"active": "Ativo Professo", "member": "Ativo Nao Professo", "inactive": "Inativo",
@@ -69,9 +46,9 @@ func nullStr(s string) any {
 
 // insertHistory grava um evento derivando tenant/branch do proprio membro (o
 // INSERT..SELECT garante que o RLS WITH CHECK do historico passe e evita que o
-// chamador precise carregar o contexto). Usado pelos fluxos automaticos
-// (cadastro e mudanca de situacao), que NAO reaplicam efeitos - a coluna do
-// membro ja foi alterada pelo fluxo. O event_kind_id e resolvido pelo slug.
+// chamador precise carregar o contexto). Usado pelo fluxo automatico de
+// cadastro, que NAO reaplica efeitos - a coluna do membro ja nasceu com a
+// situacao inicial. O event_kind_id e resolvido pelo slug.
 func insertHistory(ctx context.Context, tx pgx.Tx, memberID, kind, notes, actorID string) error {
 	_, err := tx.Exec(ctx, `
 		INSERT INTO member_history (tenant_id, branch_id, member_id, kind, event_kind_id, notes, created_by)
@@ -98,11 +75,12 @@ func resolveEventKind(ctx context.Context, tx pgx.Tx, id, slug string) (*membere
 // applyEventEffects aplica no membro o que o evento declarou movimentar e
 // devolve o resumo legivel do que mudou (para gravar no historico). Roda na
 // mesma transacao do lancamento do historico.
+//
+// Simplificado pela 000067: o tipo so declara situacao resultante, motivo da
+// baixa e uma data a registrar. Voltar para ativo/membro limpa a saida
+// automaticamente (nao ha mais o efeito `clears_exit`).
 func applyEventEffects(ctx context.Context, tx pgx.Tx, memberID string, k *memberevents.EventKind, occurredAt, baptismLocation string) ([]string, error) {
 	var effects []string
-	if k.ClearsExit {
-		effects = append(effects, "saida reaberta (motivo/data limpos)")
-	}
 	if k.SetsStatus != nil && *k.SetsStatus != "" {
 		if label, ok := statusLabel[*k.SetsStatus]; ok {
 			effects = append(effects, "situacao -> "+label)
@@ -117,18 +95,17 @@ func applyEventEffects(ctx context.Context, tx pgx.Tx, memberID string, k *membe
 			effects = append(effects, "motivo da inatividade -> "+*k.SetsExitReason)
 		}
 	}
-	if k.SetsBaptism {
+	switch k.SetsDateField {
+	case "baptism":
 		effects = append(effects, "batismo registrado")
-	}
-	if k.SetsDateField == "joined_at" {
+	case "joined_at":
 		effects = append(effects, "membro desde atualizado")
-	}
-	if k.SetsDateField == "marriage_date" {
+	case "marriage_date":
 		effects = append(effects, "data de casamento atualizada")
 	}
 
-	// Sem nenhum efeito relevante, evita um UPDATE inutil.
-	if len(effects) == 0 && !k.SetsBaptism {
+	// Sem nenhum efeito relevante, evita um UPDATE inutil (evento so de registro).
+	if len(effects) == 0 {
 		return effects, nil
 	}
 
@@ -136,25 +113,27 @@ func applyEventEffects(ctx context.Context, tx pgx.Tx, memberID string, k *membe
 		UPDATE members SET
 			membership_status = COALESCE($2::text, membership_status),
 			exit_reason = CASE
-				WHEN btrim(COALESCE($4::text,'')) <> '' THEN btrim($4::text)
+				WHEN btrim(COALESCE($3::text,'')) <> '' THEN btrim($3::text)
 				WHEN $2::text = 'inactive' THEN COALESCE(exit_reason, 'outro')
 				WHEN $2::text IN ('active','member') THEN NULL
-				WHEN $3::boolean THEN NULL
 				ELSE exit_reason END,
 			exited_at = CASE
-				WHEN $2::text = 'inactive' THEN COALESCE(exited_at, $5::timestamptz, now())::date
+				WHEN $2::text = 'inactive' THEN COALESCE(exited_at, $4::timestamptz, now())::date
 				WHEN $2::text IN ('active','member') THEN NULL
-				WHEN $3::boolean THEN NULL
-				WHEN btrim(COALESCE($4::text,'')) <> '' THEN COALESCE($5::timestamptz, now())::date
+				WHEN btrim(COALESCE($3::text,'')) <> '' THEN COALESCE($4::timestamptz, now())::date
 				ELSE exited_at END,
-			baptism_date = CASE WHEN $6::boolean THEN COALESCE($5::timestamptz, now())::date ELSE baptism_date END,
-			baptism_location = CASE WHEN $6::boolean AND btrim(COALESCE($7,'')) <> '' THEN btrim($7) ELSE baptism_location END,
-			joined_at = CASE WHEN $8::text = 'joined_at' THEN COALESCE($5::timestamptz, now())::date ELSE joined_at END,
-			marriage_date = CASE WHEN $8::text = 'marriage_date' THEN COALESCE($5::timestamptz, now())::date ELSE marriage_date END,
+			baptism_date = CASE WHEN $5::text = 'baptism'
+				THEN COALESCE($4::timestamptz, now())::date ELSE baptism_date END,
+			baptism_location = CASE WHEN $5::text = 'baptism' AND btrim(COALESCE($6,'')) <> ''
+				THEN btrim($6) ELSE baptism_location END,
+			joined_at = CASE WHEN $5::text = 'joined_at'
+				THEN COALESCE($4::timestamptz, now())::date ELSE joined_at END,
+			marriage_date = CASE WHEN $5::text = 'marriage_date'
+				THEN COALESCE($4::timestamptz, now())::date ELSE marriage_date END,
 			updated_at = now()
 		WHERE id = $1::uuid`,
-		memberID, k.SetsStatus, k.ClearsExit, k.SetsExitReason,
-		nullStr(occurredAt), k.SetsBaptism, baptismLocation, k.SetsDateField)
+		memberID, k.SetsStatus, k.SetsExitReason, nullStr(occurredAt),
+		k.SetsDateField, baptismLocation)
 	if err != nil {
 		return nil, err
 	}

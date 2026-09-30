@@ -193,7 +193,9 @@ export interface MemberHistory {
   created_at: string;
 }
 
-/** Tipo de evento do catalogo configuravel da igreja (migracao 000065). */
+/** Tipo de evento do catalogo configuravel da igreja (migracao 000065).
+ *  O efeito e simplificado (000067): situacao resultante, motivo da baixa e
+ *  uma data a registrar. O estado do membro e DERIVADO do historico. */
 export interface MemberEventKind {
   id: string;
   name: string;
@@ -202,8 +204,6 @@ export interface MemberEventKind {
   tone: string;
   sets_status?: string;
   sets_exit_reason?: string;
-  clears_exit: boolean;
-  sets_baptism: boolean;
   sets_date_field: string;
   is_active: boolean;
   sort_order: number;

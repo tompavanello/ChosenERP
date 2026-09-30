@@ -71,9 +71,10 @@ export const EVENT_CATEGORY: Record<string, { label: string; order: number }> = 
   outro: { label: "Outros", order: 9 },
 };
 
-/** Campos de data que um evento pode atualizar. */
+/** Datas que um evento pode registrar (migracao 000067). */
 export const EVENT_DATE_FIELDS: Record<string, string> = {
   none: "Nao atualiza data",
+  baptism: "Data do batismo",
   joined_at: "Membro desde",
   marriage_date: "Data de casamento",
 };

@@ -1,12 +1,15 @@
 // Package memberevents gerencia o catalogo CONFIGURAVEL de eventos da vida
 // eclesiastica do membro (migracao 000065).
 //
-// Cada tipo declara o que "movimenta" no membro quando e lancado no historico:
-// nova situacao, motivo da baixa, reativacao (limpa saida), registro de
-// batismo e gravacao de datas (membro desde / casamento).
+// Cada tipo declara EXATAMENTE o que "movimenta" no membro quando e lancado no
+// historico (simplificado pela 000067):
+//   - sets_status      -> situacao resultante (ativo/membro/inativo; NULL = nao mexe);
+//   - sets_exit_reason -> motivo da baixa (so quando a situacao resultante e inativo);
+//   - sets_date_field  -> data registrada (none/baptism/joined_at/marriage_date).
 //
-// O catalogo e global do tenant (branch_id sempre NULL) e substitui a lista
-// fixa que existia no frontend e os 15 tipos do cadastro legado `cadorg`.
+// Na pratica o estado do membro e DERIVADO do historico: o cadastro nao edita
+// esses campos, so registra eventos. O catalogo e global do tenant (branch_id
+// sempre NULL) e substitui a lista fixa que existia no frontend.
 package memberevents
 
 import (
@@ -26,8 +29,6 @@ type EventKind struct {
 	Tone           string    `json:"tone"`
 	SetsStatus     *string   `json:"sets_status,omitempty"`
 	SetsExitReason *string   `json:"sets_exit_reason,omitempty"`
-	ClearsExit     bool      `json:"clears_exit"`
-	SetsBaptism    bool      `json:"sets_baptism"`
 	SetsDateField  string    `json:"sets_date_field"`
 	IsActive       bool      `json:"is_active"`
 	SortOrder      int       `json:"sort_order"`
@@ -40,8 +41,6 @@ type CreateInput struct {
 	Tone           string `json:"tone"`
 	SetsStatus     string `json:"sets_status"`
 	SetsExitReason string `json:"sets_exit_reason"`
-	ClearsExit     bool   `json:"clears_exit"`
-	SetsBaptism    bool   `json:"sets_baptism"`
 	SetsDateField  string `json:"sets_date_field"`
 	SortOrder      *int   `json:"sort_order"`
 }
@@ -52,8 +51,6 @@ type UpdateInput struct {
 	Tone           *string `json:"tone"`
 	SetsStatus     *string `json:"sets_status"`
 	SetsExitReason *string `json:"sets_exit_reason"`
-	ClearsExit     *bool   `json:"clears_exit"`
-	SetsBaptism    *bool   `json:"sets_baptism"`
 	SetsDateField  *string `json:"sets_date_field"`
 	IsActive       *bool   `json:"is_active"`
 	SortOrder      *int    `json:"sort_order"`
@@ -78,7 +75,9 @@ var ExitReasons = map[string]bool{
 }
 
 // DateFields validos para sets_date_field.
-var DateFields = map[string]bool{"none": true, "joined_at": true, "marriage_date": true}
+var DateFields = map[string]bool{
+	"none": true, "baptism": true, "joined_at": true, "marriage_date": true,
+}
 
 // Tones aceitos pelo Badge do design system.
 var Tones = map[string]bool{
@@ -89,13 +88,12 @@ var Tones = map[string]bool{
 type Repo struct{}
 
 const cols = `id::text, name, slug, category, tone, sets_status, sets_exit_reason,
-	clears_exit, sets_baptism, sets_date_field, is_active, sort_order, created_at`
+	sets_date_field, is_active, sort_order, created_at`
 
 func scan(row pgx.Row) (*EventKind, error) {
 	var k EventKind
 	err := row.Scan(&k.ID, &k.Name, &k.Slug, &k.Category, &k.Tone, &k.SetsStatus,
-		&k.SetsExitReason, &k.ClearsExit, &k.SetsBaptism, &k.SetsDateField,
-		&k.IsActive, &k.SortOrder, &k.CreatedAt)
+		&k.SetsExitReason, &k.SetsDateField, &k.IsActive, &k.SortOrder, &k.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -151,12 +149,11 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID string, in Create
 	return scan(tx.QueryRow(ctx, `
 		INSERT INTO member_event_kinds
 			(tenant_id, name, slug, category, tone, sets_status, sets_exit_reason,
-			 clears_exit, sets_baptism, sets_date_field, sort_order)
-		VALUES ($1, $2, $3, $4, $5, NULLIF(btrim($6),''), NULLIF(btrim($7),''),
-			$8, $9, $10, $11)
+			 sets_date_field, sort_order)
+		VALUES ($1, $2, $3, $4, $5, NULLIF(btrim($6),''), NULLIF(btrim($7),''), $8, $9)
 		RETURNING `+cols,
 		tenantID, strings.TrimSpace(in.Name), slugify(in.Name), category, tone,
-		in.SetsStatus, in.SetsExitReason, in.ClearsExit, in.SetsBaptism, dateField, order))
+		in.SetsStatus, in.SetsExitReason, dateField, order))
 }
 
 // Update edita o tipo. O slug NAO e recalculado ao renomear: ele e a chave
@@ -180,15 +177,13 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput)
 			sets_exit_reason = CASE WHEN $6::text IS NULL THEN sets_exit_reason
 			                        WHEN btrim($6::text) = '' THEN NULL
 			                        ELSE $6::text END,
-			clears_exit      = COALESCE($7, clears_exit),
-			sets_baptism     = COALESCE($8, sets_baptism),
-			sets_date_field  = COALESCE($9, sets_date_field),
-			is_active        = COALESCE($10, is_active),
-			sort_order       = COALESCE($11, sort_order)
+			sets_date_field  = COALESCE($7, sets_date_field),
+			is_active        = COALESCE($8, is_active),
+			sort_order       = COALESCE($9, sort_order)
 		WHERE id = $1::uuid
 		RETURNING `+cols,
 		id, name, in.Category, in.Tone, in.SetsStatus, in.SetsExitReason,
-		in.ClearsExit, in.SetsBaptism, in.SetsDateField, in.IsActive, in.SortOrder))
+		in.SetsDateField, in.IsActive, in.SortOrder))
 }
 
 // InUse conta lancamentos do historico vinculados ao tipo.

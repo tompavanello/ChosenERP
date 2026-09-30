@@ -101,19 +101,30 @@ function SubField({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
-function toPayload(r: MemberRow): Record<string, unknown> {
+/** Campo derivado (somente leitura) da vida eclesiastica. */
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-1">
+      <span className="block text-[11px] font-medium uppercase tracking-wide text-zinc-500">{label}</span>
+      <span className="block text-xs text-zinc-700 dark:text-zinc-300">{value || "-"}</span>
+    </div>
+  );
+}
+
+function toPayload(r: MemberRow, isCreate: boolean): Record<string, unknown> {
   const flat: Record<string, string> = {
     first_name: r.first_name, last_name: r.last_name, phone: r.phone, email: r.email,
-    membership_status: r.membership_status, nickname: r.nickname, birth_date: r.birth_date,
+    nickname: r.nickname, birth_date: r.birth_date,
     gender: r.gender, marital_status: r.marital_status, cpf: r.cpf, rg: r.rg,
     profession: r.profession, nationality: r.nationality, education: r.education,
     address_zip_code: r.address_zip_code, address_street: r.address_street,
     address_number: r.address_number, address_complement: r.address_complement,
     address_district: r.address_district, address_city: r.address_city, address_state: r.address_state,
-    baptism_date: r.baptism_date, baptism_location: r.baptism_location,
-    marriage_date: r.marriage_date, joined_at: r.joined_at,
-    exit_reason: r.exit_reason, exited_at: r.exited_at, notes: r.notes,
+    notes: r.notes,
   };
+  // A situacao inicial so vale na criacao: depois, a fase so muda por evento
+  // (o UPDATE recusa os campos da vida eclesiastica - migracao 000067).
+  if (isCreate) flat.membership_status = r.membership_status;
   // compactPersonForm descarta vazios (evita ''::date no backend) e junta o
   // endereco aninhado em `address`; depois removemos as chaves flat.
   const data = compactPersonForm(flat);
@@ -123,10 +134,6 @@ function toPayload(r: MemberRow): Record<string, unknown> {
   }
   for (const k of Object.keys(data)) if (k.startsWith("address_")) delete data[k];
   if (Object.keys(address).length) data.address = address;
-  if (!EXIT_STATUSES.includes(r.membership_status)) {
-    delete data.exit_reason;
-    delete data.exited_at;
-  }
   return data;
 }
 
@@ -258,10 +265,10 @@ export function MemberBulkGrid({
       }
       try {
         if (r.id) {
-          await updateMember(r.id, toPayload(r));
+          await updateMember(r.id, toPayload(r, false));
           await syncMemberCargos(r.id, r.cargoIds);
         } else {
-          const novo = await createMember(toPayload(r));
+          const novo = await createMember(toPayload(r, true));
           await syncMemberCargos(novo.id, r.cargoIds);
         }
         successKeys.add(r.key);
@@ -330,9 +337,17 @@ export function MemberBulkGrid({
                     <Input type="email" className="h-8 text-xs" placeholder="email@exemplo.com" value={r.email} onChange={(e) => update(r.key, { email: e.target.value })} />
                   </td>
                   <td className="px-2 py-1">
-                    <Select className="h-8 text-xs" value={r.membership_status} onChange={(e) => update(r.key, { membership_status: e.target.value })}>
-                      {Object.entries(MEMBERSHIP_STATUS).map(([k, v]) => (<option key={k} value={k}>{v.label}</option>))}
-                    </Select>
+                    {isEdit ? (
+                      <span className="text-xs text-zinc-600 dark:text-zinc-300">
+                        {MEMBERSHIP_STATUS[r.membership_status]?.label ?? r.membership_status}
+                      </span>
+                    ) : (
+                      <Select className="h-8 text-xs" value={r.membership_status} onChange={(e) => update(r.key, { membership_status: e.target.value })}>
+                        {Object.entries(MEMBERSHIP_STATUS)
+                          .filter(([k]) => k !== "inactive")
+                          .map(([k, v]) => (<option key={k} value={k}>{v.label}</option>))}
+                      </Select>
+                    )}
                   </td>
                   <td className="px-2 py-1">
                     <div className="flex items-center justify-center gap-0.5">
@@ -410,23 +425,33 @@ export function MemberBulkGrid({
                       </div>
 
                       <p className="mb-2 mt-3 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Vida eclesiastica</p>
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        <SubField label="Data do batismo"><Input type="date" className="h-8 text-xs" value={r.baptism_date} onChange={(e) => update(r.key, { baptism_date: e.target.value })} /></SubField>
-                        <SubField label="Local do batismo"><Input className="h-8 text-xs" value={r.baptism_location} onChange={(e) => update(r.key, { baptism_location: e.target.value })} /></SubField>
-                        <SubField label="Data de casamento"><Input type="date" className="h-8 text-xs" value={r.marriage_date} onChange={(e) => update(r.key, { marriage_date: e.target.value })} /></SubField>
-                        <SubField label="Membro desde"><Input type="date" className="h-8 text-xs" value={r.joined_at} onChange={(e) => update(r.key, { joined_at: e.target.value })} /></SubField>
-                        {EXIT_STATUSES.includes(r.membership_status) && (
-                          <>
-                            <SubField label="Motivo da inatividade">
-                              <Select className="h-8 text-xs" value={r.exit_reason} onChange={(e) => update(r.key, { exit_reason: e.target.value })}>
-                                <option value="">-</option>
-                                {Object.entries(EXIT_REASONS).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
-                              </Select>
-                            </SubField>
-                            <SubField label="Data de inatividade"><Input type="date" className="h-8 text-xs" value={r.exited_at} onChange={(e) => update(r.key, { exited_at: e.target.value })} /></SubField>
-                          </>
-                        )}
-                      </div>
+                      {r.id ? (
+                        <>
+                          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                            <ReadOnlyField label="Situacao" value={MEMBERSHIP_STATUS[r.membership_status]?.label ?? r.membership_status} />
+                            <ReadOnlyField label="Data do batismo" value={r.baptism_date} />
+                            <ReadOnlyField label="Local do batismo" value={r.baptism_location} />
+                            <ReadOnlyField label="Data de casamento" value={r.marriage_date} />
+                            <ReadOnlyField label="Membro desde" value={r.joined_at} />
+                            {EXIT_STATUSES.includes(r.membership_status) && (
+                              <>
+                                <ReadOnlyField label="Motivo da inatividade" value={EXIT_REASONS[r.exit_reason] ?? r.exit_reason} />
+                                <ReadOnlyField label="Data de inatividade" value={r.exited_at} />
+                              </>
+                            )}
+                          </div>
+                          <p className="mt-2 text-xs text-zinc-400">
+                            Estes dados sao derivados do historico. Para alterar, abra o membro e registre um
+                            evento na aba <span className="font-medium">Vida eclesiastica</span>.
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-zinc-400">
+                          A vida eclesiastica (batismo, profissao de fe, recepcao, saida...) e registrada
+                          depois de salvar, na aba <span className="font-medium">Vida eclesiastica</span> do membro.
+                          O novo membro nasce como <span className="font-medium">Ativo Nao Professo</span>.
+                        </p>
+                      )}
 
                       {cargos.length > 0 && (
                         <div className="mt-3">

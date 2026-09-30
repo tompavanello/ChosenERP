@@ -17,8 +17,8 @@ import { Field, Select } from "@/components/ui/input";
 import { SkeletonRows, EmptyState } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
-import { MemberBulkGrid } from "@/components/members/member-bulk-grid";
-import { PhotoField } from "@/components/people/photo-field";
+import { MemberForm } from "@/components/members/member-form";
+import { Drawer } from "@/components/ui/modal";
 import { CardCell } from "@/components/members/card-cell";
 import { CargosSection } from "@/components/members/cargos-section";
 import { FamilySection } from "@/components/members/family-section";
@@ -27,6 +27,7 @@ import { FrequencySection } from "@/components/members/frequency-section";
 import { LgpdSection } from "@/components/members/lgpd-section";
 import {
   getMember, getMemberTree, addRelationship, listMembers, assetURL,
+  updateMember,
   type Member, type MemberAddress, type Relationship,
 } from "@/lib/api";
 import { useBranches } from "@/lib/swr-hooks";
@@ -45,6 +46,7 @@ export default function MemberDetailPage() {
   const [others, setOthers] = useState<Member[]>([]);
   const [tab, setTab] = useState("dados");
   const [editando, setEditando] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [rel, setRel] = useState({ relate_member_id: "", kind: "spouse" });
   const [loading, setLoading] = useState(true);
 
@@ -175,32 +177,6 @@ export default function MemberDetailPage() {
           </div>
         </div>
       </Card>
-
-      {editando && canWrite && (
-        <Card className="mb-4 p-4">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Pencil className="h-4 w-4 text-sky-600" />
-            <h3 className="text-sm font-semibold text-zinc-700">Editar cadastro</h3>
-            <span className="text-xs text-zinc-400">
-              Altere os campos e salve; o complemento traz documentos, endereco (CEP automatico), cargos e mais
-            </span>
-          </div>
-          <div className="mb-4">
-            <PhotoField
-              memberId={member.id}
-              name={member.full_name}
-              photoUrl={member.photo_url}
-              onChange={(url) => setMember((m) => (m ? { ...m, photo_url: url } : m))}
-            />
-          </div>
-          <MemberBulkGrid
-            mode="edit"
-            members={[member]}
-            focusId={member.id}
-            onSaved={async () => { setEditando(false); await load(); }}
-          />
-        </Card>
-      )}
 
       <Tabs
         tabs={[
@@ -394,6 +370,36 @@ export default function MemberDetailPage() {
       )}
 
       {tab === "lgpd" && <LgpdSection memberId={member.id} canWrite={canWrite} isAdmin={isAdmin} />}
+
+      <Drawer
+        open={editando}
+        onClose={() => setEditando(false)}
+        title="Editar membro"
+        size="lg"
+      >
+        <MemberForm
+          key={member.id}
+          memberId={member.id}
+          initial={member}
+          saving={saving}
+          submitLabel="Salvar alteracoes"
+          onPhotoChange={(url) => setMember((m) => (m ? { ...m, photo_url: url } : m))}
+          onSubmit={async (data) => {
+            setSaving(true);
+            try {
+              await updateMember(member.id, data);
+              toast("Membro atualizado.");
+              setEditando(false);
+              await load();
+            } catch (err) {
+              toast(err instanceof Error ? err.message : "Erro ao salvar", "error");
+            } finally {
+              setSaving(false);
+            }
+          }}
+          onCancel={() => setEditando(false)}
+        />
+      </Drawer>
     </div>
   );
 }

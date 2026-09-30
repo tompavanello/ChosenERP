@@ -21,10 +21,9 @@ const AUTO_CATEGORIES = new Set(["sistema"]);
 /** Resumo legivel do que o evento movimenta, mostrado antes de lancar. */
 function effectSummary(k: MemberEventKind): string {
   const parts: string[] = [];
-  if (k.clears_exit) parts.push("limpa a saida (reativacao)");
   if (k.sets_status) parts.push(`situacao -> ${MEMBERSHIP_STATUS[k.sets_status]?.label ?? k.sets_status}`);
   if (k.sets_exit_reason) parts.push(`motivo -> ${EXIT_REASONS[k.sets_exit_reason] ?? k.sets_exit_reason}`);
-  if (k.sets_baptism) parts.push("grava a data do batismo");
+  if (k.sets_date_field === "baptism") parts.push("grava a data do batismo");
   if (k.sets_date_field === "joined_at") parts.push("atualiza 'membro desde'");
   if (k.sets_date_field === "marriage_date") parts.push("atualiza data de casamento");
   return parts.join("; ");
@@ -127,7 +126,7 @@ export function HistorySection({
                 onChange={(e) => setForm({ ...form, occurred_at: e.target.value })}
               />
             </Field>
-            {selected?.sets_baptism && (
+            {selected?.sets_date_field === "baptism" && (
               <Field label="Local do batismo">
                 <Input
                   className="h-8 text-sm"

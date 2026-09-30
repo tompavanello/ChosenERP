@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Field, Input, Select, MaskedInput, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/components/ui/modal";
 import { Combobox } from "@/components/ui/combobox";
 import { CargoPicker } from "@/components/people/cargo-picker";
 import { PhotoField } from "@/components/people/photo-field";
-import { GENDER, MARITAL_STATUS, MEMBERSHIP_STATUS, VISITOR_SOURCES, EXIT_REASONS, EXIT_STATUSES } from "@/lib/constants";
-import { listMemberCargos, type Person } from "@/lib/api";
+import { GENDER, MARITAL_STATUS, MEMBERSHIP_STATUS, VISITOR_SOURCES } from "@/lib/constants";
+import { type Person } from "@/lib/api";
 
 export type PersonFormState = Record<string, string>;
 
@@ -150,15 +150,6 @@ export function PersonForm({
     setForm((f) => ({ ...f, first_name: first, last_name: parts.join(" ") }));
   }
 
-  // Cargos atuais do membro: so os ATIVOS entram marcados. Os encerrados vivem
-  // na aba Cargos do detalhe, que e onde o historico completo faz sentido.
-  useEffect(() => {
-    if (entityType !== "member" || !memberId) return;
-    listMemberCargos(memberId)
-      .then((r) => setCargoIds(r.cargos.filter((c) => c.status === "ativo").map((c) => c.cargo_id)))
-      .catch(() => setCargoIds([]));
-  }, [entityType, memberId]);
-
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const data = compactPersonForm(form);
@@ -172,19 +163,20 @@ export function PersonForm({
       if (k.startsWith("address_")) delete data[k];
     }
     if (Object.keys(address).length) data.address = address;
-    // Motivo/data de saida so valem para situacoes de baixa.
-    if (!EXIT_STATUSES.includes(form.membership_status)) {
-      delete data.exit_reason;
-      delete data.exited_at;
-    }
     if (entityType === "benefactor") {
       data.name = `${form.first_name} ${form.last_name}`.trim() || form.nickname;
     }
-    // Inativo exige o motivo da inatividade (a subdivisao do status).
-    if (isMember && form.membership_status === "inactive" && !form.exit_reason) {
-      setTab("igreja");
-      setFormError("Informe o motivo da inatividade.");
-      return;
+    if (isMember) {
+      // A vida eclesiastica e derivada do historico: datas e motivo de saida
+      // nunca vao no payload do membro (migracao 000067).
+      delete data.baptism_date;
+      delete data.baptism_location;
+      delete data.marriage_date;
+      delete data.joined_at;
+      delete data.exit_reason;
+      delete data.exited_at;
+      // A situacao so e definida na criacao; depois, so por evento.
+      if (memberId) delete data.membership_status;
     }
     setFormError(null);
     await onSubmit(data, { cargoIds });
@@ -193,11 +185,10 @@ export function PersonForm({
   const isMember = entityType === "member";
   const isVisitor = entityType === "visitor";
   const isBenefactor = entityType === "benefactor";
-  const isExit = isMember && EXIT_STATUSES.includes(form.membership_status);
 
   return (
     <form onSubmit={submit} className="space-y-3">
-      {isMember && (
+      {isMember && !memberId && (
         <div className="mb-1 flex gap-1 border-b border-zinc-200 dark:border-zinc-800">
           <button
             type="button"
@@ -349,45 +340,39 @@ export function PersonForm({
       )}
       </div>
 
-      {isMember && (
+      {isMember && !memberId && (
         <div className={tab === "igreja" ? undefined : "hidden"}>
-        <Section title="Vida eclesiastica">
-          <Field label="Situacao">
-            <Combobox
-              value={form.membership_status}
-              placeholder="Selecione..."
-              options={Object.entries(MEMBERSHIP_STATUS).map(([k, v]) => ({ value: k, label: v.label }))}
-              onChange={(val) => set("membership_status", val)}
-            />
-          </Field>
+        <Section
+          title="Vida eclesiastica"
+          hint="Batismo, profissao de fe, recepcao, ordenacao e saida viram eventos no historico do membro."
+        >
+          {memberId ? (
+            <Field label="Situacao" className="sm:col-span-2">
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                {MEMBERSHIP_STATUS[form.membership_status]?.label ?? form.membership_status}
+              </span>
+            </Field>
+          ) : (
+            <Field label="Situacao inicial" hint="A fase seguinte (batismo, profissao de fe...) e registrada como evento depois.">
+              <Combobox
+                value={form.membership_status}
+                placeholder="Selecione..."
+                options={Object.entries(MEMBERSHIP_STATUS)
+                  .filter(([k]) => k !== "inactive")
+                  .map(([k, v]) => ({ value: k, label: v.label }))}
+                onChange={(val) => set("membership_status", val)}
+              />
+            </Field>
+          )}
           <Field label="Cargos" className="sm:col-span-2" hint="Um membro pode exercer mais de um cargo.">
             <CargoPicker value={cargoIds} onChange={setCargoIds} />
           </Field>
-          {isExit && (
-            <>
-              <Field label="Motivo da inatividade *" hint="Requisito 1.7 - subdivisao do status Inativo.">
-                <Select className="h-8 text-sm" value={form.exit_reason} onChange={(e) => set("exit_reason", e.target.value)}>
-                  <option value="">-</option>
-                  {Object.entries(EXIT_REASONS).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
-                </Select>
-              </Field>
-              <Field label="Data de inatividade">
-                <Input type="date" className="h-8 text-sm" value={form.exited_at} onChange={(e) => set("exited_at", e.target.value)} />
-              </Field>
-            </>
+          {memberId && (
+            <p className="text-xs text-zinc-400 sm:col-span-2">
+              Batismo, casamento, &quot;membro desde&quot; e motivo de inatividade sao derivados do historico.
+              Registre um evento na aba <span className="font-medium">Vida eclesiastica</span> do membro.
+            </p>
           )}
-          <Field label="Data do batismo">
-            <Input type="date" className="h-8 text-sm" value={form.baptism_date} onChange={(e) => set("baptism_date", e.target.value)} />
-          </Field>
-          <Field label="Local do batismo">
-            <Input className="h-8 text-sm" value={form.baptism_location} onChange={(e) => set("baptism_location", e.target.value)} placeholder="Ex: Igreja Sede Matriz" />
-          </Field>
-          <Field label="Data de casamento" hint="Usada nos aniversarios de casamento.">
-            <Input type="date" className="h-8 text-sm" value={form.marriage_date} onChange={(e) => set("marriage_date", e.target.value)} />
-          </Field>
-          <Field label="Membro desde">
-            <Input type="date" className="h-8 text-sm" value={form.joined_at} onChange={(e) => set("joined_at", e.target.value)} />
-          </Field>
         </Section>
 
         <Section title="Observacoes">

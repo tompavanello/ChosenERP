@@ -20,10 +20,8 @@ import {
 
 function effectSummary(k: MemberEventKind): string {
   const parts: string[] = [];
-  if (k.clears_exit) parts.push("limpa a saida (reativacao)");
   if (k.sets_status) parts.push(`situacao -> ${MEMBERSHIP_STATUS[k.sets_status]?.label ?? k.sets_status}`);
   if (k.sets_exit_reason) parts.push(`motivo -> ${EXIT_REASONS[k.sets_exit_reason] ?? k.sets_exit_reason}`);
-  if (k.sets_baptism) parts.push("grava batismo");
   if (k.sets_date_field && k.sets_date_field !== "none") {
     parts.push(EVENT_DATE_FIELDS[k.sets_date_field] ?? k.sets_date_field);
   }
@@ -36,8 +34,6 @@ type Form = {
   tone: string;
   sets_status: string;
   sets_exit_reason: string;
-  clears_exit: boolean;
-  sets_baptism: boolean;
   sets_date_field: string;
   is_active: boolean;
   sort_order: string;
@@ -45,7 +41,7 @@ type Form = {
 
 const EMPTY: Form = {
   name: "", category: "outro", tone: "zinc", sets_status: "", sets_exit_reason: "",
-  clears_exit: false, sets_baptism: false, sets_date_field: "none", is_active: true, sort_order: "0",
+  sets_date_field: "none", is_active: true, sort_order: "0",
 };
 
 export function EventKindsSection({ canWrite }: { canWrite: boolean }) {
@@ -82,7 +78,6 @@ export function EventKindsSection({ canWrite }: { canWrite: boolean }) {
     setForm({
       name: k.name, category: k.category, tone: k.tone,
       sets_status: k.sets_status ?? "", sets_exit_reason: k.sets_exit_reason ?? "",
-      clears_exit: k.clears_exit, sets_baptism: k.sets_baptism,
       sets_date_field: k.sets_date_field || "none",
       is_active: k.is_active, sort_order: String(k.sort_order),
     });
@@ -103,8 +98,6 @@ export function EventKindsSection({ canWrite }: { canWrite: boolean }) {
       tone: form.tone,
       sets_status: form.sets_status,
       sets_exit_reason: form.sets_exit_reason,
-      clears_exit: form.clears_exit,
-      sets_baptism: form.sets_baptism,
       sets_date_field: form.sets_date_field,
       is_active: form.is_active,
       sort_order: Number(form.sort_order) || 0,
@@ -250,17 +243,13 @@ export function EventKindsSection({ canWrite }: { canWrite: boolean }) {
           </Field>
 
           <label className="flex items-center gap-2 text-sm sm:col-span-2">
-            <input type="checkbox" checked={form.sets_baptism} onChange={(e) => setForm({ ...form, sets_baptism: e.target.checked })} />
-            Grava a data do batismo (e o local, se informado)
-          </label>
-          <label className="flex items-center gap-2 text-sm sm:col-span-2">
-            <input type="checkbox" checked={form.clears_exit} onChange={(e) => setForm({ ...form, clears_exit: e.target.checked })} />
-            Limpa motivo/data de saida (reativacao)
-          </label>
-          <label className="flex items-center gap-2 text-sm sm:col-span-2">
             <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
             Evento ativo (disponivel para lancamento)
           </label>
+          <p className="text-xs text-zinc-400 sm:col-span-2">
+            A reativacao e um evento com a situacao resultante <span className="font-medium">Ativo Professo</span> ou
+            <span className="font-medium"> Ativo Nao Professo</span>: o sistema limpa o motivo/data de saida sozinho.
+          </p>
 
           <div className="flex justify-end gap-2 sm:col-span-2">
             <Button type="button" variant="outline" className="h-8 text-sm" onClick={() => setDrawer({ open: false })}>Cancelar</Button>

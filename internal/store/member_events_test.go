@@ -23,11 +23,6 @@ func TestMemberEventKind_AppliesEffects(t *testing.T) {
 			fixTenantX); err != nil {
 			return err
 		}
-		// Reativacao limpa a saida (efeito clears_exit).
-		if _, err := tx.Exec(testCtx,
-			`UPDATE member_event_kinds SET clears_exit = true WHERE slug = 'teste_reativa'`); err != nil {
-			return err
-		}
 
 		repo := &members.Repo{}
 
