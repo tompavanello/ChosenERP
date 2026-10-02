@@ -19,11 +19,13 @@ import {
   listMinistryMembers, addMinistryMember, removeMinistryMember,
   listGroups, createGroup, updateGroup, deleteGroup,
   checkIn, listAttendance,
-  listMembers, type Ministry, type SmallGroup, type MinistryMember, type AttendanceCheckin, type Member,
+  listGroupMembers, addGroupMember, removeGroupMember,
+  listMembers, type Ministry, type SmallGroup, type MinistryMember, type AttendanceCheckin, type GroupMember, type Member,
 } from "@/lib/api";
 import { dateTimePt } from "@/lib/format";
 
 const GROUP_KIND: Record<string, string> = { cell: "Celula", ebd: "EBD", family: "Familia" };
+const GROUP_ROLE: Record<string, string> = { member: "Membro", host: "Anfitriao", secretary: "Secretario", leader: "Lider" };
 const WEEKDAYS = ["Domingo", "Segunda", "Terca", "Quarta", "Quinta", "Sexta", "Sabado"];
 
 const EMPTY_MINISTRY = { name: "", description: "", leader_id: "", is_active: "true" };
@@ -53,6 +55,11 @@ export default function MinistriesPage() {
   const [ciForm, setCiForm] = useState({ member_id: "", present: true });
   const [attendance, setAttendance] = useState<AttendanceCheckin[]>([]);
   const [attGroup, setAttGroup] = useState<SmallGroup | null>(null);
+
+  const [groupMembers, setGroupMembers] = useState<SmallGroup | null>(null);
+  const [gmList, setGmList] = useState<GroupMember[]>([]);
+  const [selectedGm, setSelectedGm] = useState<string[]>([]);
+  const [gmForm, setGmForm] = useState({ role: "member" });
 
   const reload = async () => {
     setMinistries(await listMinistries().then((r) => r.ministries).catch(() => []));
@@ -169,6 +176,33 @@ export default function MinistriesPage() {
     try { setAttendance((await listAttendance(g.id)).attendance); } catch { setAttendance([]); }
   }
 
+  // ---- Membros do grupo ----
+  async function openMembers(g: SmallGroup) {
+    setGroupMembers(g);
+    setSelectedGm([]);
+    setGmForm({ role: "member" });
+    try { setGmList((await listGroupMembers(g.id)).members); } catch { setGmList([]); }
+  }
+  async function addGm(e: React.FormEvent) {
+    e.preventDefault();
+    if (!groupMembers || selectedGm.length === 0) return;
+    try {
+      for (const memberId of selectedGm) await addGroupMember(groupMembers.id, memberId, gmForm.role);
+      toast(`${selectedGm.length} membro(s) adicionado(s).`);
+      setSelectedGm([]);
+      setGmForm({ role: "member" });
+      setGmList((await listGroupMembers(groupMembers.id)).members);
+    } catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
+  }
+  async function removeGm(memberId: string) {
+    if (!groupMembers) return;
+    try {
+      await removeGroupMember(groupMembers.id, memberId);
+      toast("Membro removido.");
+      setGmList((await listGroupMembers(groupMembers.id)).members);
+    } catch (err) { toast(err instanceof Error ? err.message : "Erro", "error"); }
+  }
+
   const memberOptions = members.map((m) => ({ value: m.id, label: m.full_name }));
 
   return (
@@ -244,6 +278,7 @@ export default function MinistriesPage() {
                       </TD>
                       <TD className="text-right">
                         <Button variant="ghost" size="sm" onClick={() => setCheckin(g)}><CheckSquare className="h-3.5 w-3.5" /> Check-in</Button>
+                        <Button variant="ghost" size="sm" onClick={() => openMembers(g)}><Users className="h-3.5 w-3.5" /> Membros</Button>
                         <Button variant="ghost" size="sm" onClick={() => openAttendance(g)}>Frequencia</Button>
                         {canWrite && <Button variant="ghost" size="sm" title="Editar" onClick={() => openGroupEdit(g)}><Pencil className="h-3.5 w-3.5" /></Button>}
                         {canWrite && <Button variant="ghost" size="sm" title="Excluir" onClick={() => removeGroup(g)}><Trash2 className="h-3.5 w-3.5 text-red-500" /></Button>}
@@ -412,6 +447,65 @@ export default function MinistriesPage() {
             ))}
           </ul>
         )}
+      </Modal>
+
+      <Modal open={!!groupMembers} onClose={() => setGroupMembers(null)} title={`Membros - ${groupMembers?.name ?? ""}`}>
+        <form onSubmit={addGm} className="space-y-3">
+          <Field label="Membros (selecao multipla)">
+            <div className="space-y-1">
+              {members.map((m) => {
+                const isSelected = selectedGm.includes(m.id);
+                const alreadyAdded = gmList.some((v) => v.member_id === m.id);
+                return (
+                  <label key={m.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={alreadyAdded}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedGm([...selectedGm, m.id]);
+                        else setSelectedGm(selectedGm.filter((id) => id !== m.id));
+                      }}
+                      className="rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
+                    />
+                    <span className={alreadyAdded ? "text-zinc-400" : ""}>{m.full_name}</span>
+                    {alreadyAdded && <Badge tone="green" className="text-[10px]">No grupo</Badge>}
+                  </label>
+                );
+              })}
+            </div>
+          </Field>
+          <Field label="Papel no grupo">
+            <Select className="h-8 text-sm" value={gmForm.role} onChange={(e) => setGmForm({ ...gmForm, role: e.target.value })}>
+              <option value="member">Membro</option>
+              <option value="host">Anfitriao</option>
+              <option value="secretary">Secretario</option>
+              <option value="leader">Lider</option>
+            </Select>
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button type="submit" disabled={selectedGm.length === 0} className="h-8 text-sm">
+              Adicionar {selectedGm.length > 0 && `(${selectedGm.length})`}
+            </Button>
+          </div>
+        </form>
+        <div className="mt-4 border-t pt-3">
+          {gmList.length === 0 ? (
+            <p className="py-4 text-center text-sm text-zinc-400">Nenhum membro ainda.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {gmList.map((v) => (
+                <li key={v.member_id} className="flex items-center justify-between">
+                  <span className="font-medium">{v.member_name}</span>
+                  <div className="flex items-center gap-2">
+                    <Badge tone="sky">{GROUP_ROLE[v.role] ?? v.role}</Badge>
+                    <Button variant="ghost" size="sm" onClick={() => removeGm(v.member_id)} title="Remover"><Trash2 className="h-3.5 w-3.5 text-red-500" /></Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </Modal>
     </div>
   );

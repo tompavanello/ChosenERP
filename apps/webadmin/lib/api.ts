@@ -1857,6 +1857,66 @@ export const checkIn = (groupId: string, data: Record<string, unknown>) =>
 export const listAttendance = (groupId: string) =>
   api<{ attendance: AttendanceCheckin[] }>(`/api/v1/groups/${groupId}/attendance`);
 
+// ---- Participantes de grupos/celulas ----
+export interface GroupMember {
+  group_id: string;
+  member_id: string;
+  member_name: string;
+  role: string;
+  joined_at?: string;
+}
+export const listGroupMembers = (groupId: string) =>
+  api<{ members: GroupMember[] }>(`/api/v1/groups/${groupId}/members`);
+export const addGroupMember = (groupId: string, memberId: string, role: string) =>
+  api<{ ok: boolean }>(`/api/v1/groups/${groupId}/members`, {
+    method: "POST",
+    body: JSON.stringify({ member_id: memberId, role }),
+  });
+export const removeGroupMember = (groupId: string, memberId: string) =>
+  api<{ ok: boolean }>(`/api/v1/groups/${groupId}/members/${memberId}`, { method: "DELETE" });
+
+// ---- Materiais de estudo (arquivo/link) ----
+export interface StudyMaterial {
+  id: string;
+  branch_id: string;
+  group_id?: string | null;
+  group_name?: string | null;
+  ministry_id?: string | null;
+  title: string;
+  description?: string | null;
+  kind: "file" | "link";
+  url?: string | null;
+  file_name?: string | null;
+  file_size?: number | null;
+  mime_type?: string | null;
+  is_published: boolean;
+  created_at: string;
+}
+export const listMaterials = (groupId?: string) =>
+  api<{ materials: StudyMaterial[] }>(
+    `/api/v1/materials${groupId ? `?group_id=${encodeURIComponent(groupId)}` : ""}`,
+  );
+export const deleteMaterial = (id: string) =>
+  api<{ ok: boolean }>(`/api/v1/materials/${id}`, { method: "DELETE" });
+export async function uploadMaterial(form: FormData): Promise<StudyMaterial> {
+  const res = await apiRaw("/api/v1/materials", { method: "POST", body: form });
+  return (await res.json()) as StudyMaterial;
+}
+export const createMaterialLink = (data: Record<string, unknown>) =>
+  api<StudyMaterial>("/api/v1/materials", { method: "POST", body: JSON.stringify(data) });
+export async function downloadMaterial(id: string, filename: string) {
+  const res = await apiRaw(`/api/v1/materials/${id}/file`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ---- Avisos ----
 export interface Announcement {
   id: string;

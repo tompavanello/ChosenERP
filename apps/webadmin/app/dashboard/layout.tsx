@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Church, LayoutDashboard, Users, Wallet, LogOut, HeartHandshake, DoorOpen,
-  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, CalendarCheck, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight, Globe, Layers,
+  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, CalendarCheck, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight, Globe, Layers, BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -58,6 +58,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
     title: "Organizacao",
     items: [
       { key: "ministries", href: "/dashboard/ministries", label: "Ministerios", icon: Church, perms: ["ministries.read"], feature: "ministries" },
+      { key: "materials", href: "/dashboard/materials", label: "Materiais", icon: BookOpen, perms: ["ministries.read"], feature: "ministries" },
       { key: "rosters", href: "/dashboard/rosters", label: "Escalas", icon: CalendarClock, perms: ["ministries.read"], feature: "rosters" },
       { key: "kids", href: "/dashboard/kids", label: "Kids", icon: Baby, perms: ["members.read"], feature: "kids" },
       { key: "events", href: "/dashboard/events", label: "Eventos", icon: CalendarDays, perms: ["members.read"], feature: "events" },

@@ -125,6 +125,13 @@ docker compose -f infra/docker-compose.yml up -d member
   (`/me/ministries`) e Contribuir com Pix + historico (`/me/contributions`). O
   Pix da igreja vive em `tenants.pix_key`/`pix_name` (`000080`) e sai no
   `public_tenant`; edite em Configuracoes -> Igreja.
+- **Grupos / GD (`000081`)**: `group_members` vincula membro <-> grupo com papel
+  (member/host/secretary/leader); `GET /me/groups` alimenta a tela "Meu GD".
+  Participantes geridos em Ministerios -> aba Grupos -> **Membros**.
+- **Materiais de estudo (`000082`)**: `study_materials` (arquivo em disco com nome
+  opaco ou link), geral (sem grupo) ou por grupo; upload/lista/exclusao em
+  Materiais (permissoes `ministries.*`), membro ve os gerais + dos seus grupos em
+  `/me/materials` e baixa por `/me/materials/{id}/file` (autenticado).
 - **Build args do Compose:** `API_ORIGIN`, `NEXT_PUBLIC_BASE_DOMAIN`.
 - **Acesso do membro:** a Sede cria o acesso em Membros -> aba **Acesso**, que
   grava a identidade + senha provisoria e linka `memberships.member_id` via
@@ -358,6 +365,8 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | GET  | `/api/v1/me/birthdays?month=` | Bearer | Aniversariantes de nascimento e casamento do mes |
 | GET  | `/api/v1/me/ministries` | Bearer | Ministerios dos quais o membro participa |
 | GET  | `/api/v1/me/contributions?year=` | Bearer | Contribuicoes (entradas) do proprio membro no ano |
+| GET  | `/api/v1/me/groups` | Bearer | Grupos/celulas do membro (participantes e papeis) |
+| GET  | `/api/v1/me/materials` | Bearer | Materiais de estudo publicados (gerais + dos meus grupos) |
 | GET/POST | `/api/v1/me/prayer-requests` | Bearer | Meus pedidos de oracao / criar pedido |
 | GET  | `/api/v1/me/prayer-wall` | Bearer | Mural publico (visibilidade `igreja`) |
 | POST | `/api/v1/me/prayer-requests/{id}/react` | Bearer | "Estou orando" (reacao anonima) |
@@ -465,6 +474,12 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | DELETE | `/api/v1/ministries/{id}` | Bearer | Exclui ministerio |
 | PATCH | `/api/v1/groups/{id}` | Bearer | Edita grupo/celula |
 | DELETE | `/api/v1/groups/{id}` | Bearer | Exclui grupo/celula |
+| GET/POST | `/api/v1/groups/{id}/members` | Bearer | Lista/vincula participantes do grupo (papel: member/host/secretary/leader) |
+| DELETE | `/api/v1/groups/{id}/members/{memberId}` | Bearer | Desvincula participante do grupo |
+| GET/POST | `/api/v1/materials` | Bearer (`ministries.read`/`write`) | Lista/cria material de estudo (multipart arquivo ou JSON link) |
+| DELETE | `/api/v1/materials/{id}` | Bearer (`ministries.write`) | Exclui o material e o arquivo |
+| GET | `/api/v1/materials/{id}/file` | Bearer (`ministries.read`) | Download autenticado do arquivo (staff) |
+| GET | `/api/v1/me/materials/{id}/file` | Bearer | Download autenticado pelo membro (core, RLS) |
 | GET/POST | `/api/v1/rosters` | Bearer | Lista/cria escalas (evento ou tipo; `create_event` gera o evento na grade) |
 | GET | `/api/v1/rosters/suggestions?ministry_id=&starts_at=` | Bearer | Sugere voluntarios (marca conflito) |
 | GET/PATCH/DELETE | `/api/v1/rosters/{id}` | Bearer | Le/edita/exclui escala (`DELETE ?delete_event=true` remove o evento gerado) |

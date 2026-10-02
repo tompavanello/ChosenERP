@@ -380,3 +380,71 @@ func (a *App) handleListAttendance(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"attendance": out})
 }
+
+// ---- Participantes de grupos/celulas ----
+
+func (a *App) handleListGroupMembers(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	id := r.PathValue("id")
+	b := boundsFromClaims(claims)
+	var out []groups.GroupMember
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var err error
+		out, err = a.Groups.ListMembers(r.Context(), tx, id)
+		return err
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"members": out})
+}
+
+func (a *App) handleAddGroupMember(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	id := r.PathValue("id")
+	var in struct {
+		MemberID string `json:"member_id"`
+		Role     string `json:"role"`
+	}
+	if err := readJSON(r, &in); err != nil || in.MemberID == "" {
+		writeErr(w, http.StatusBadRequest, "member_id required")
+		return
+	}
+	b := boundsFromClaims(claims)
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		return a.Groups.AddMember(r.Context(), tx, id, in.MemberID, in.Role)
+	})
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *App) handleRemoveGroupMember(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	groupID := r.PathValue("id")
+	memberID := r.PathValue("memberId")
+	b := boundsFromClaims(claims)
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		return a.Groups.RemoveMember(r.Context(), tx, groupID, memberID)
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}

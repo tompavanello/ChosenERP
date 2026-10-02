@@ -179,13 +179,17 @@ App do membro
       `plan_feature_disabled`) e **quotas** de membros/filiais/usuarios/storage
       (403 `limite do plano atingido`). Editor de modulos em Planos e override
       por igreja. Modulos core e app do membro nunca bloqueados.
-- [ ] V2 (GD, escalas, frequencia) e Web Push (notificacoes no navegador).
+- [ ] V2 (escalas, frequencia) e Web Push (notificacoes no navegador).
   > V1 ampliada (02/10/2026): aniversariantes/casamentos (`/me/birthdays`),
   > ministerios do membro (`/me/ministries`) e Contribuir com Pix + historico
   > (`/me/contributions`, `tenants.pix_key`/`pix_name` - `000080`). PWA
   > instalavel: service worker (`public/sw.js`), tela `/offline`, icones PNG
   > (192/512/maskable/apple-touch), `beforeinstallprompt` + dica iOS e manifest
   > por igreja com shortcuts.
+  > **GD + materiais (02/10/2026):** `group_members` (`000081`) e telas "Meu GD"
+  > (`/me/groups`); `study_materials` (`000082`) com arquivo (disco, nome opaco)
+  > ou link, geral ou por grupo, tela "Materiais" no app (`/me/materials` +
+  > download autenticado) e gestao no webadmin (Materiais, participantes do grupo).
 - [ ] Enforcement de limites de plano (hoje so gerencia/exibe).
 - [ ] O item "App do membro - versao basica" do PRD era atendido apenas como
       **pagina publica** de carteirinha + avisos (sem login); agora ha app PWA

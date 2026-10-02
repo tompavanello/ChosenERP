@@ -17,6 +17,7 @@ import (
 	"chosenerp/internal/groups"
 	"chosenerp/internal/kids"
 	"chosenerp/internal/lgpd"
+	"chosenerp/internal/materials"
 	"chosenerp/internal/memberevents"
 	"chosenerp/internal/members"
 	"chosenerp/internal/ministries"
@@ -57,13 +58,14 @@ type App struct {
 	Kids          *kids.Repo
 	MemberEvents  *memberevents.Repo
 	Prayers       *prayer.Repo
+	Materials     *materials.Repo
 	Dispatch      *delivery.Dispatcher
 	// Limitador protege as rotas /api/v1/public/* (sem auth).
 	Limitador *limitadorPublico
 }
 
 // NewRouter monta o gateway HTTP e suas rotas.
-func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo *members.Repo, finRepo *finance.Repo, auditRepo *audit.Repo, docRepo *documents.Repo, famRepo *families.Repo, visitRepo *visitors.Repo, benefRepo *benefactors.Repo, suppliersRepo *suppliers.Repo, ministRepo *ministries.Repo, groupsRepo *groups.Repo, annRepo *announcements.Repo, cargosRepo *cargos.Repo, programacaoRepo *programacao.Repo, usersRepo *users.Repo, eventsRepo *events.Repo, lgpdRepo *lgpd.Repo, govRepo *governance.Repo, orgRepo *org.Repo, rostersRepo *rosters.Repo, kidsRepo *kids.Repo, memberEventsRepo *memberevents.Repo, prayerRepo *prayer.Repo, dispatcher *delivery.Dispatcher) http.Handler {
+func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo *members.Repo, finRepo *finance.Repo, auditRepo *audit.Repo, docRepo *documents.Repo, famRepo *families.Repo, visitRepo *visitors.Repo, benefRepo *benefactors.Repo, suppliersRepo *suppliers.Repo, ministRepo *ministries.Repo, groupsRepo *groups.Repo, annRepo *announcements.Repo, cargosRepo *cargos.Repo, programacaoRepo *programacao.Repo, usersRepo *users.Repo, eventsRepo *events.Repo, lgpdRepo *lgpd.Repo, govRepo *governance.Repo, orgRepo *org.Repo, rostersRepo *rosters.Repo, kidsRepo *kids.Repo, memberEventsRepo *memberevents.Repo, prayerRepo *prayer.Repo, materialsRepo *materials.Repo, dispatcher *delivery.Dispatcher) http.Handler {
 	app := &App{
 		Config:        cfg,
 		Store:         st,
@@ -90,6 +92,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 		Kids:          kidsRepo,
 		MemberEvents:  memberEventsRepo,
 		Prayers:       prayerRepo,
+		Materials:     materialsRepo,
 		Dispatch:      dispatcher,
 		Limitador:     newLimitadorPublico(),
 	}
@@ -125,6 +128,9 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/me/birthdays", authed(http.HandlerFunc(app.handleMeBirthdays)))
 	mux.Handle("GET /api/v1/me/ministries", authed(http.HandlerFunc(app.handleMeMinistries)))
 	mux.Handle("GET /api/v1/me/contributions", authed(http.HandlerFunc(app.handleMeContributions)))
+	mux.Handle("GET /api/v1/me/groups", authed(http.HandlerFunc(app.handleMeGroups)))
+	mux.Handle("GET /api/v1/me/materials", authed(http.HandlerFunc(app.handleListMyMaterials)))
+	mux.Handle("GET /api/v1/me/materials/{id}/file", authed(http.HandlerFunc(app.handleDownloadMaterial)))
 	mux.Handle("GET /api/v1/me/prayer-requests", authed(http.HandlerFunc(app.handleListMyPrayers)))
 	mux.Handle("POST /api/v1/me/prayer-requests", authed(http.HandlerFunc(app.handleCreatePrayer)))
 	mux.Handle("GET /api/v1/me/prayer-wall", authed(http.HandlerFunc(app.handlePrayerWall)))
@@ -331,6 +337,15 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("DELETE /api/v1/groups/{id}", authed(http.HandlerFunc(app.handleDeleteGroup)))
 	mux.Handle("POST /api/v1/groups/{id}/attendance", authed(http.HandlerFunc(app.handleCheckIn)))
 	mux.Handle("GET /api/v1/groups/{id}/attendance", authed(http.HandlerFunc(app.handleListEventAttendance)))
+	mux.Handle("GET /api/v1/groups/{id}/members", authed(http.HandlerFunc(app.handleListGroupMembers)))
+	mux.Handle("POST /api/v1/groups/{id}/members", authed(http.HandlerFunc(app.handleAddGroupMember)))
+	mux.Handle("DELETE /api/v1/groups/{id}/members/{memberId}", authed(http.HandlerFunc(app.handleRemoveGroupMember)))
+
+	// ---- Materiais de estudo (arquivo/link) ----
+	mux.Handle("GET /api/v1/materials", authed(app.perm("ministries.read", app.handleListMaterials)))
+	mux.Handle("POST /api/v1/materials", authed(app.perm("ministries.write", app.handleCreateMaterial)))
+	mux.Handle("DELETE /api/v1/materials/{id}", authed(app.perm("ministries.write", app.handleDeleteMaterial)))
+	mux.Handle("GET /api/v1/materials/{id}/file", authed(app.perm("ministries.read", app.handleDownloadMaterial)))
 
 	// Avisos (app do membro) - gestao + disparo
 	mux.Handle("GET /api/v1/announcements", authed(http.HandlerFunc(app.handleListAnnouncements)))

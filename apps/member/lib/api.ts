@@ -186,6 +186,38 @@ export interface Contribution {
   description?: string | null;
   occurred_at: string;
 }
+export interface GroupMember {
+  group_id: string;
+  member_id: string;
+  member_name: string;
+  role: string;
+  joined_at?: string | null;
+}
+export interface MyGroup {
+  id: string;
+  name: string;
+  kind: string;
+  leader_name?: string | null;
+  address?: string;
+  weekday?: number | null;
+  meeting_time?: string | null;
+  my_role: string;
+  members: GroupMember[];
+}
+export interface StudyMaterial {
+  id: string;
+  group_id?: string | null;
+  group_name?: string | null;
+  title: string;
+  description?: string | null;
+  kind: "file" | "link";
+  url?: string | null;
+  file_name?: string | null;
+  file_size?: number | null;
+  mime_type?: string | null;
+  is_published: boolean;
+  created_at: string;
+}
 
 export interface Tokens {
   access_token: string;
@@ -368,6 +400,36 @@ export async function getMeContributions(year?: number): Promise<{
 }> {
   const qs = year ? `?year=${year}` : "";
   return api(`/api/v1/me/contributions${qs}`);
+}
+
+export async function getMeGroups(): Promise<MyGroup[]> {
+  const data = await api<{ groups: MyGroup[] }>("/api/v1/me/groups");
+  return data.groups ?? [];
+}
+
+export async function getMeMaterials(): Promise<StudyMaterial[]> {
+  const data = await api<{ materials: StudyMaterial[] }>("/api/v1/me/materials");
+  return data.materials ?? [];
+}
+
+/** Baixa o arquivo do material com o token da sessao e dispara o download. */
+export async function downloadMaterial(id: string, filename: string): Promise<void> {
+  const headers = new Headers();
+  const token = getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const slug = tenantSlugFromHost();
+  if (slug) headers.set("X-Tenant-Slug", slug);
+  const res = await fetch(`/api/v1/me/materials/${id}/file`, { headers });
+  if (!res.ok) throw new Error("nao foi possivel baixar o material");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // ---- Formatação ----

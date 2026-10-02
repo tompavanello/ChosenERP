@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, Cake, Calendar, HandCoins, Heart, User, Users } from "lucide-react";
+import { Bell, BookOpen, Cake, Calendar, HandCoins, Heart, User, Users, UsersRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import {
@@ -125,10 +125,22 @@ export default function HomePage() {
             <span className="text-sm font-medium">Ministérios</span>
           </Card>
         </Link>
+        <Link href="/gd">
+          <Card className="flex h-full flex-col items-center justify-center gap-1 py-5 text-center">
+            <UsersRound className="h-5 w-5 text-[var(--brand)]" />
+            <span className="text-sm font-medium">Meu GD</span>
+          </Card>
+        </Link>
         <Link href="/contribuir">
           <Card className="flex h-full flex-col items-center justify-center gap-1 py-5 text-center">
             <HandCoins className="h-5 w-5 text-[var(--brand)]" />
             <span className="text-sm font-medium">Contribuir</span>
+          </Card>
+        </Link>
+        <Link href="/materiais">
+          <Card className="flex h-full flex-col items-center justify-center gap-1 py-5 text-center">
+            <BookOpen className="h-5 w-5 text-[var(--brand)]" />
+            <span className="text-sm font-medium">Materiais</span>
           </Card>
         </Link>
         <Link href="/perfil" className="col-span-2">

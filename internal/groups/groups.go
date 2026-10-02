@@ -207,6 +207,109 @@ func (r *Repo) ListAttendance(ctx context.Context, tx pgx.Tx, groupID string) ([
 	return out, rows.Err()
 }
 
+// GroupMember e o vinculo de um membro com um grupo/celula.
+type GroupMember struct {
+	GroupID    string  `json:"group_id"`
+	MemberID   string  `json:"member_id"`
+	MemberName string  `json:"member_name"`
+	Role       string  `json:"role"`
+	JoinedAt   *string `json:"joined_at,omitempty"`
+}
+
+// MyGroup e o grupo sob a otica do membro (com papeis e participantes).
+type MyGroup struct {
+	ID          string        `json:"id"`
+	Name        string        `json:"name"`
+	Kind        string        `json:"kind"`
+	LeaderName  *string       `json:"leader_name,omitempty"`
+	Address     string        `json:"address,omitempty"`
+	Weekday     *int          `json:"weekday,omitempty"`
+	MeetingTime *string       `json:"meeting_time,omitempty"`
+	MyRole      string        `json:"my_role"`
+	Members     []GroupMember `json:"members"`
+}
+
+// ListMembers retorna os participantes de um grupo.
+func (r *Repo) ListMembers(ctx context.Context, tx pgx.Tx, groupID string) ([]GroupMember, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT gm.group_id::text, gm.member_id::text, mb.full_name, gm.role, gm.joined_at::text
+		FROM group_members gm
+		JOIN members mb ON mb.id = gm.member_id
+		WHERE gm.group_id = $1::uuid
+		ORDER BY mb.full_name`, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []GroupMember{}
+	for rows.Next() {
+		var m GroupMember
+		if err := rows.Scan(&m.GroupID, &m.MemberID, &m.MemberName, &m.Role, &m.JoinedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// AddMember vincula um membro a um grupo (upsert do papel).
+func (r *Repo) AddMember(ctx context.Context, tx pgx.Tx, groupID, memberID, role string) error {
+	if role == "" {
+		role = "member"
+	}
+	_, err := tx.Exec(ctx, `
+		INSERT INTO group_members (group_id, member_id, role)
+		VALUES ($1::uuid, $2::uuid, $3)
+		ON CONFLICT (group_id, member_id) DO UPDATE SET role = EXCLUDED.role`,
+		groupID, memberID, role)
+	return err
+}
+
+// RemoveMember desvincula um membro de um grupo.
+func (r *Repo) RemoveMember(ctx context.Context, tx pgx.Tx, groupID, memberID string) error {
+	_, err := tx.Exec(ctx, `
+		DELETE FROM group_members
+		WHERE group_id = $1::uuid AND member_id = $2::uuid`, groupID, memberID)
+	return err
+}
+
+// ListForMember lista os grupos ativos dos quais o membro participa, com os
+// participantes de cada um (base do "Meu GD" no app do membro).
+func (r *Repo) ListForMember(ctx context.Context, tx pgx.Tx, memberID string) ([]MyGroup, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT g.id::text, g.name, g.kind, lm.full_name, COALESCE(g.address->>'text',''),
+		       g.weekday, g.meeting_time::text, gm.role
+		FROM group_members gm
+		JOIN small_groups g ON g.id = gm.group_id
+		LEFT JOIN members lm ON lm.id = g.leader_id
+		WHERE gm.member_id = $1::uuid AND g.is_active
+		ORDER BY g.name`, memberID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MyGroup{}
+	for rows.Next() {
+		var g MyGroup
+		if err := rows.Scan(&g.ID, &g.Name, &g.Kind, &g.LeaderName, &g.Address,
+			&g.Weekday, &g.MeetingTime, &g.MyRole); err != nil {
+			return nil, err
+		}
+		out = append(out, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range out {
+		members, err := r.ListMembers(ctx, tx, out[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		out[i].Members = members
+	}
+	return out, nil
+}
+
 func nullStr(s *string) *string {
 	if s != nil && *s == "" {
 		return nil

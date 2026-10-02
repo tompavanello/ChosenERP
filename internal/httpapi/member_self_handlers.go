@@ -11,6 +11,7 @@ import (
 	"chosenerp/internal/events"
 	"chosenerp/internal/families"
 	"chosenerp/internal/finance"
+	"chosenerp/internal/groups"
 	"chosenerp/internal/members"
 	"chosenerp/internal/ministries"
 )
@@ -244,4 +245,30 @@ func (a *App) handleMeContributions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"year": year, "contributions": out, "total": total,
 	})
+}
+
+// handleMeGroups lista os grupos/celulas dos quais o membro participa.
+func (a *App) handleMeGroups(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var out []groups.MyGroup
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		m, e := a.memberForClaims(r.Context(), tx, claims)
+		if e != nil {
+			return e
+		}
+		out, e = a.Groups.ListForMember(r.Context(), tx, m.ID)
+		return e
+	})
+	if err != nil {
+		writeMemberErr(w, err)
+		return
+	}
+	if out == nil {
+		out = []groups.MyGroup{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"groups": out})
 }
