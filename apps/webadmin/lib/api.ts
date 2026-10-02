@@ -1230,6 +1230,71 @@ export const getBirthdays = (month?: number) =>
   api<BirthdaysResult>(`/api/v1/reports/birthdays${month ? `?month=${month}` : ""}`);
 export const getDemographics = () => api<Demographics>("/api/v1/reports/demographics");
 
+// ---- Relatorio de participantes por evento (comparativo ano anterior) ----
+export interface AttendancePeriod {
+  from: string;
+  to: string;
+}
+export interface AttendanceSummary {
+  events: number;
+  participants: number;
+  avg_per_event: number;
+  invited: number;
+  prev_events: number;
+  prev_participants: number;
+  prev_avg_per_event: number;
+  delta_participants_pct: number;
+  delta_events_pct: number;
+  delta_avg_pct: number;
+}
+export interface AttendanceKindRow {
+  kind_id: string;
+  kind_name: string;
+  events: number;
+  participants: number;
+  avg_per_event: number;
+  prev_events: number;
+  prev_participants: number;
+  delta_pct: number;
+}
+export interface AttendanceEventRow {
+  id: string;
+  title: string;
+  kind_id: string;
+  kind_name: string;
+  branch_id: string;
+  branch_name: string;
+  starts_at: string;
+  participants: number;
+  attendance_count: number;
+  attendance_mode: "nominal" | "count";
+  invited_count: number;
+}
+export interface AttendanceMonthRow {
+  month: string;
+  events: number;
+  participants: number;
+  prev_events: number;
+  prev_participants: number;
+}
+export interface AttendanceReport {
+  period: AttendancePeriod;
+  prev_period: AttendancePeriod;
+  summary: AttendanceSummary;
+  by_kind: AttendanceKindRow[];
+  monthly: AttendanceMonthRow[];
+  top_events: AttendanceEventRow[];
+  events: AttendanceEventRow[];
+}
+export const getAttendanceReport = (params: { from?: string; to?: string; kind?: string } = {}) => {
+  const q = new URLSearchParams();
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  if (params.kind) q.set("kind", params.kind);
+  const qs = q.toString();
+  return api<AttendanceReport>(`/api/v1/reports/attendance${qs ? `?${qs}` : ""}`);
+};
+
 // ---- Demonstrativo Mensal (regime de caixa) ----
 export interface WeekRange {
   label: string;

@@ -245,6 +245,8 @@ mux.Handle("DELETE /api/v1/finance/bank-imports/{id}", authed(http.HandlerFunc(a
 	mux.Handle("GET /api/v1/reports/consolidated", authed(http.HandlerFunc(app.handleConsolidatedReport)))
 	mux.Handle("GET /api/v1/reports/assembly", authed(http.HandlerFunc(app.handleAssemblyReport)))
 	mux.Handle("GET /api/v1/reports/assembly/export", authed(http.HandlerFunc(app.handleExportAssembly)))
+	mux.Handle("GET /api/v1/reports/attendance", authed(http.HandlerFunc(app.handleAttendanceReport)))
+	mux.Handle("GET /api/v1/reports/attendance/export", authed(http.HandlerFunc(app.handleExportAttendance)))
 
 	// Branches (selecao de filial em repasses) + configuracao do tenant
 	mux.Handle("GET /api/v1/branches", authed(http.HandlerFunc(app.handleListBranches)))

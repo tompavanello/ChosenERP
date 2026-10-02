@@ -10,6 +10,7 @@ import (
 
 	"chosenerp/internal/delivery"
 	"chosenerp/internal/documents"
+	"chosenerp/internal/events"
 	"chosenerp/internal/finance"
 	"chosenerp/internal/members"
 	"chosenerp/internal/store"
@@ -628,4 +629,98 @@ func (a *App) handleExportAssembly(w http.ResponseWriter, r *http.Request) {
 	writeReport(w, "demonstrativo-assembleia-"+from+"-"+to,
 		"Demonstrativo financeiro para assembleia", "Periodo: "+from+" a "+to, format,
 		assemblySections(bal, months, from, to))
+}
+
+// ---- Participantes por evento (com comparativo ano anterior) ----
+
+func (a *App) handleAttendanceReport(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	q := r.URL.Query()
+	b := boundsFromClaims(claims)
+	var rep events.AttendanceReport
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var err error
+		rep, err = a.Events.BuildAttendanceReport(r.Context(), tx, q.Get("from"), q.Get("to"), q.Get("kind"))
+		return err
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, rep)
+}
+
+var attendanceModeLabels = map[string]string{"nominal": "Chamada", "count": "Contagem"}
+
+func attendanceModeLabel(m string) string {
+	if v, ok := attendanceModeLabels[m]; ok {
+		return v
+	}
+	return m
+}
+
+func (a *App) handleExportAttendance(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	q := r.URL.Query()
+	format := first(q["format"])
+	b := boundsFromClaims(claims)
+	var rep events.AttendanceReport
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var err error
+		rep, err = a.Events.BuildAttendanceReport(r.Context(), tx, q.Get("from"), q.Get("to"), q.Get("kind"))
+		return err
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s := rep.Summary
+	resumo := [][]string{
+		{"Eventos", strconv.Itoa(s.Events), strconv.Itoa(s.PrevEvents), fmt.Sprintf("%.1f%%", s.DeltaEventsPct)},
+		{"Participantes", strconv.Itoa(s.Participants), strconv.Itoa(s.PrevParticipants), fmt.Sprintf("%.1f%%", s.DeltaParticipantsPct)},
+		{"Media por evento", fmt.Sprintf("%.1f", s.AvgPerEvent), fmt.Sprintf("%.1f", s.PrevAvgPerEvent), fmt.Sprintf("%.1f%%", s.DeltaAvgPct)},
+		{"Convidados", strconv.Itoa(s.Invited), "", ""},
+	}
+	byKind := make([][]string, 0, len(rep.ByKind))
+	for _, k := range rep.ByKind {
+		byKind = append(byKind, []string{
+			k.KindName, strconv.Itoa(k.Events), strconv.Itoa(k.Participants), fmt.Sprintf("%.1f", k.AvgPerEvent),
+			strconv.Itoa(k.PrevEvents), strconv.Itoa(k.PrevParticipants), fmt.Sprintf("%.1f%%", k.DeltaPct),
+		})
+	}
+	monthly := make([][]string, 0, len(rep.Monthly))
+	for _, m := range rep.Monthly {
+		monthly = append(monthly, []string{
+			m.Month, strconv.Itoa(m.Events), strconv.Itoa(m.Participants),
+			strconv.Itoa(m.PrevEvents), strconv.Itoa(m.PrevParticipants),
+		})
+	}
+	rowsFor := func(list []events.AttendanceEventRow) [][]string {
+		out := make([][]string, 0, len(list))
+		for _, e := range list {
+			out = append(out, []string{
+				e.StartsAt.Format("02/01/2006 15:04"), e.Title, e.KindName, e.BranchName,
+				strconv.Itoa(e.Participants), strconv.Itoa(e.InvitedCount), attendanceModeLabel(e.AttendanceMode),
+			})
+		}
+		return out
+	}
+	eventHeaders := []string{"Data", "Evento", "Tipo", "Filial", "Participantes", "Convidados", "Modo"}
+	writeReport(w, "participantes-por-evento-"+rep.Period.From+"-"+rep.Period.To,
+		"Participantes por evento", "Periodo: "+rep.Period.From+" a "+rep.Period.To+" (vs. "+rep.PrevPeriod.From+" a "+rep.PrevPeriod.To+")", format,
+		[]exportSection{
+			{Title: "Resumo", Headers: []string{"Indicador", "Periodo atual", "Ano anterior", "Variacao"}, Rows: resumo},
+			{Title: "Por tipo de evento", Headers: []string{"Tipo", "Eventos", "Participantes", "Media", "Eventos (ano anterior)", "Participantes (ano anterior)", "Variacao"}, Rows: byKind},
+			{Title: "Evolucao mensal", Headers: []string{"Mes", "Eventos", "Participantes", "Eventos (ano anterior)", "Participantes (ano anterior)"}, Rows: monthly},
+			{Title: "Eventos com mais participantes", Headers: eventHeaders, Rows: rowsFor(rep.TopEvents)},
+			{Title: "Todos os eventos", Headers: eventHeaders, Rows: rowsFor(rep.Events)},
+		})
 }

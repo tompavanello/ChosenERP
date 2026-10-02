@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Church, LayoutDashboard, Users, Wallet, LogOut, HeartHandshake, DoorOpen,
-  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight,
+  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, CalendarCheck, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -75,6 +75,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
       { key: "rep-consolidated", href: "/dashboard/reports/consolidated", label: "Consolidado Sede > Filiais", icon: Building2, perms: ["finance.read"] },
       { key: "rep-birthdays", href: "/dashboard/reports/birthdays", label: "Aniversariantes", icon: Cake, perms: ["members.read"] },
       { key: "rep-demographics", href: "/dashboard/reports/demographics", label: "Demograficos", icon: PieChart, perms: ["members.read"] },
+      { key: "rep-attendance", href: "/dashboard/reports/attendance", label: "Participantes por evento", icon: CalendarCheck, perms: ["members.read"] },
     ],
   },
 ];
