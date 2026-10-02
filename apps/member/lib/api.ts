@@ -432,6 +432,53 @@ export async function downloadMaterial(id: string, filename: string): Promise<vo
   URL.revokeObjectURL(url);
 }
 
+export interface MyRoster {
+  assignment_id: string;
+  role?: string | null;
+  status: string;
+  notes?: string | null;
+  roster_id: string;
+  title: string;
+  ministry_name?: string | null;
+  starts_at: string;
+  ends_at?: string | null;
+  location?: string | null;
+}
+
+export interface FrequencyEntry {
+  id: string;
+  member_id: string;
+  frequency: string;
+  started_at: string;
+  ended_at?: string | null;
+  notes?: string | null;
+}
+
+export async function getMeRosters(from?: string, to?: string): Promise<MyRoster[]> {
+  const qs = new URLSearchParams();
+  if (from) qs.set("from", from);
+  if (to) qs.set("to", to);
+  const q = qs.toString();
+  const data = await api<{ rosters: MyRoster[] }>(`/api/v1/me/rosters${q ? `?${q}` : ""}`);
+  return data.rosters ?? [];
+}
+
+export async function respondRoster(
+  assignmentId: string,
+  status: "confirmado" | "recusado",
+  notes?: string,
+): Promise<void> {
+  await api(`/api/v1/me/rosters/assignments/${assignmentId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status, notes }),
+  });
+}
+
+export async function getMeFrequency(): Promise<FrequencyEntry[]> {
+  const data = await api<{ frequency: FrequencyEntry[] }>("/api/v1/me/frequency");
+  return data.frequency ?? [];
+}
+
 // ---- Formatação ----
 export function datePt(iso?: string | null): string {
   if (!iso) return "";

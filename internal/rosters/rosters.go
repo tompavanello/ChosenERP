@@ -188,6 +188,69 @@ func (r *Repo) ListAssignments(ctx context.Context, tx pgx.Tx, rosterID string) 
 	return out, rows.Err()
 }
 
+// MyRoster e uma escala sob a otica do membro escalado (app do membro).
+type MyRoster struct {
+	AssignmentID string     `json:"assignment_id"`
+	Role         *string    `json:"role,omitempty"`
+	Status       string     `json:"status"`
+	Notes        *string    `json:"notes,omitempty"`
+	RosterID     string     `json:"roster_id"`
+	Title        string     `json:"title"`
+	MinistryName *string    `json:"ministry_name,omitempty"`
+	StartsAt     time.Time  `json:"starts_at"`
+	EndsAt       *time.Time `json:"ends_at,omitempty"`
+	Location     *string    `json:"location,omitempty"`
+}
+
+// ListForMember lista as escalas (nao canceladas) em que o membro foi escalado,
+// com filtro opcional de periodo.
+func (r *Repo) ListForMember(ctx context.Context, tx pgx.Tx, memberID, from, to string) ([]MyRoster, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT a.id::text, a.role, a.status, a.notes,
+		       r.id::text, r.title, mi.name, r.starts_at, r.ends_at, r.location
+		FROM roster_assignments a
+		JOIN rosters r ON r.id = a.roster_id
+		LEFT JOIN ministries mi ON mi.id = r.ministry_id
+		WHERE a.member_id = $1::uuid
+		  AND r.status <> 'cancelada'
+		  AND ($2 = '' OR r.starts_at::date >= $2::date)
+		  AND ($3 = '' OR r.starts_at::date <= $3::date)
+		ORDER BY r.starts_at`, memberID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MyRoster{}
+	for rows.Next() {
+		var m MyRoster
+		if err := rows.Scan(&m.AssignmentID, &m.Role, &m.Status, &m.Notes,
+			&m.RosterID, &m.Title, &m.MinistryName, &m.StartsAt, &m.EndsAt, &m.Location); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// RespondAsMember registra a confirmacao/recusa do PROPRIO membro. O filtro por
+// member_id garante que ninguem responda por outro escalado.
+func (r *Repo) RespondAsMember(ctx context.Context, tx pgx.Tx, memberID, assignmentID, status string, notes *string) (*Assignment, error) {
+	if status != "confirmado" && status != "recusado" {
+		return nil, ErrInvalidStatus
+	}
+	var a Assignment
+	err := tx.QueryRow(ctx, `
+		UPDATE roster_assignments SET
+			status = $3,
+			responded_at = now(),
+			notes = COALESCE($4, notes)
+		WHERE id = $1::uuid AND member_id = $2::uuid
+		RETURNING id::text, roster_id::text, member_id::text,
+			(SELECT full_name FROM members WHERE id = member_id), role, status, responded_at, notes`,
+		assignmentID, memberID, status, notes).Scan(&a.ID, &a.RosterID, &a.MemberID, &a.MemberName, &a.Role, &a.Status, &a.RespondedAt, &a.Notes)
+	return &a, err
+}
+
 // Create insere a escala (e, opcionalmente, ja os escalados).
 func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID, actorID string, in CreateInput) (*Roster, error) {
 	starts, err := parseTime(in.StartsAt)

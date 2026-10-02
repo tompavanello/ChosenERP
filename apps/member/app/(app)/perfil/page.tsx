@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Save } from "lucide-react";
+import Link from "next/link";
+import { Activity, ChevronRight, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/input";
@@ -160,6 +161,15 @@ export default function PerfilPage() {
           </ul>
         )}
       </Card>
+
+      <Link href="/frequencia" className="block">
+        <Card className="flex items-center justify-between">
+          <span className="flex items-center gap-2 text-sm font-medium">
+            <Activity className="h-4 w-4 text-[var(--brand)]" /> Minha frequência
+          </span>
+          <ChevronRight className="h-4 w-4 text-[var(--muted)]" />
+        </Card>
+      </Link>
     </div>
   );
 }

@@ -132,6 +132,10 @@ docker compose -f infra/docker-compose.yml up -d member
   opaco ou link), geral (sem grupo) ou por grupo; upload/lista/exclusao em
   Materiais (permissoes `ministries.*`), membro ve os gerais + dos seus grupos em
   `/me/materials` e baixa por `/me/materials/{id}/file` (autenticado).
+- **Escalas do membro:** `GET /me/rosters` (escalas em que foi escalado) e
+  `PATCH /me/rosters/assignments/{id}` para confirmar/recusar a propria presenca
+  (so o proprio `member_id`); tela "Minhas escalas". Frequencia propria em
+  `GET /me/frequency` (aba "Minha frequencia" no Perfil).
 - **Build args do Compose:** `API_ORIGIN`, `NEXT_PUBLIC_BASE_DOMAIN`.
 - **Acesso do membro:** a Sede cria o acesso em Membros -> aba **Acesso**, que
   grava a identidade + senha provisoria e linka `memberships.member_id` via
@@ -367,6 +371,9 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | GET  | `/api/v1/me/contributions?year=` | Bearer | Contribuicoes (entradas) do proprio membro no ano |
 | GET  | `/api/v1/me/groups` | Bearer | Grupos/celulas do membro (participantes e papeis) |
 | GET  | `/api/v1/me/materials` | Bearer | Materiais de estudo publicados (gerais + dos meus grupos) |
+| GET  | `/api/v1/me/rosters` | Bearer | Escalas em que o membro foi escalado (confirmacao/recusa) |
+| PATCH | `/api/v1/me/rosters/assignments/{assignmentId}` | Bearer | Confirma/recusa a propria presenca na escala |
+| GET  | `/api/v1/me/frequency` | Bearer | Historico de frequencia do proprio membro |
 | GET/POST | `/api/v1/me/prayer-requests` | Bearer | Meus pedidos de oracao / criar pedido |
 | GET  | `/api/v1/me/prayer-wall` | Bearer | Mural publico (visibilidade `igreja`) |
 | POST | `/api/v1/me/prayer-requests/{id}/react` | Bearer | "Estou orando" (reacao anonima) |

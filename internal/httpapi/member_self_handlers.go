@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"chosenerp/internal/groups"
 	"chosenerp/internal/members"
 	"chosenerp/internal/ministries"
+	"chosenerp/internal/rosters"
 )
 
 // handleMeMember devolve o cadastro de membro vinculado a identidade.
@@ -271,4 +273,94 @@ func (a *App) handleMeGroups(w http.ResponseWriter, r *http.Request) {
 		out = []groups.MyGroup{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"groups": out})
+}
+
+// handleMeRosters lista as escalas em que o membro foi escalado.
+func (a *App) handleMeRosters(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	from := r.URL.Query().Get("from")
+	to := r.URL.Query().Get("to")
+	var out []rosters.MyRoster
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		m, e := a.memberForClaims(r.Context(), tx, claims)
+		if e != nil {
+			return e
+		}
+		out, e = a.Rosters.ListForMember(r.Context(), tx, m.ID, from, to)
+		return e
+	})
+	if err != nil {
+		writeMemberErr(w, err)
+		return
+	}
+	if out == nil {
+		out = []rosters.MyRoster{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"rosters": out})
+}
+
+// handleMeRespondRoster confirma/recusa a propria presenca numa escala.
+func (a *App) handleMeRespondRoster(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	assignmentID := r.PathValue("assignmentId")
+	var in struct {
+		Status string  `json:"status"`
+		Notes  *string `json:"notes"`
+	}
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	var out *rosters.Assignment
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		m, e := a.memberForClaims(r.Context(), tx, claims)
+		if e != nil {
+			return e
+		}
+		out, e = a.Rosters.RespondAsMember(r.Context(), tx, m.ID, assignmentID, in.Status, in.Notes)
+		return e
+	})
+	if err != nil {
+		if errors.Is(err, rosters.ErrInvalidStatus) {
+			writeErr(w, http.StatusBadRequest, "status invalido (use confirmado ou recusado)")
+			return
+		}
+		writeMemberErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"assignment": out})
+}
+
+// handleMeFrequency lista o historico de frequencia do proprio membro.
+func (a *App) handleMeFrequency(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var out []events.Frequency
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		m, e := a.memberForClaims(r.Context(), tx, claims)
+		if e != nil {
+			return e
+		}
+		out, e = a.Events.ListFrequency(r.Context(), tx, m.ID)
+		return e
+	})
+	if err != nil {
+		writeMemberErr(w, err)
+		return
+	}
+	if out == nil {
+		out = []events.Frequency{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"frequency": out})
 }
