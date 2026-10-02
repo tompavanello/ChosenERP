@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -43,10 +44,18 @@ func profilePayload(p *auth.Profile) map[string]any {
 	if perms == nil {
 		perms = []string{}
 	}
+	feats := p.Features
+	if feats == nil {
+		feats = []string{}
+	}
 	return map[string]any{
 		"id": p.UserID, "user_id": p.UserID, "email": p.Email, "full_name": p.FullName,
 		"tenant_id": p.TenantID, "branch_id": p.BranchID, "role": p.Role,
-		"permissions": perms, "mfa_enabled": p.MFAEnabled, "memberships": ms,
+		"member_id": p.MemberID, "phone": p.Phone,
+		"must_change_password": p.MustChangePassword,
+		"is_platform_admin":    p.IsPlatformAdmin,
+		"permissions":          perms, "features": feats,
+		"mfa_enabled": p.MFAEnabled, "memberships": ms,
 	}
 }
 
@@ -72,6 +81,7 @@ func (a *App) writeBranchID(ctx context.Context, tx pgx.Tx, c *auth.Claims) (str
 func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Email      string `json:"email"`
+		Identifier string `json:"identifier"` // e-mail OU telefone (app do membro)
 		Password   string `json:"password"`
 		Code       string `json:"code"` // codigo TOTP quando o usuario tem MFA
 		TenantSlug string `json:"tenant_slug"`
@@ -80,7 +90,11 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	res, err := a.Auth.Login(r.Context(), in.Email, in.Password, in.Code, in.TenantSlug)
+	identifier := strings.TrimSpace(in.Identifier)
+	if identifier == "" {
+		identifier = strings.TrimSpace(in.Email)
+	}
+	res, err := a.Auth.Login(r.Context(), identifier, in.Password, in.Code, in.TenantSlug)
 	if err != nil {
 		switch {
 		case errors.Is(err, auth.ErrMFARequired):
@@ -243,6 +257,9 @@ func (a *App) handleCreateMember(w http.ResponseWriter, r *http.Request) {
 	b := boundsFromClaims(claims)
 	var created *members.Member
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		if err := a.enforceQuota(r.Context(), tx, claims.TenantID, "members", 0); err != nil {
+			return err
+		}
 		branchID, err := a.writeBranchID(r.Context(), tx, claims)
 		if err != nil {
 			return err
@@ -259,6 +276,9 @@ func (a *App) handleCreateMember(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
+		if writeQuotaErr(w, err) {
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}

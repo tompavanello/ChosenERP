@@ -21,6 +21,7 @@ import (
 	"chosenerp/internal/members"
 	"chosenerp/internal/ministries"
 	"chosenerp/internal/org"
+	"chosenerp/internal/prayer"
 	"chosenerp/internal/programacao"
 	"chosenerp/internal/rosters"
 	"chosenerp/internal/store"
@@ -55,13 +56,14 @@ type App struct {
 	Rosters       *rosters.Repo
 	Kids          *kids.Repo
 	MemberEvents  *memberevents.Repo
+	Prayers       *prayer.Repo
 	Dispatch      *delivery.Dispatcher
 	// Limitador protege as rotas /api/v1/public/* (sem auth).
 	Limitador *limitadorPublico
 }
 
 // NewRouter monta o gateway HTTP e suas rotas.
-func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo *members.Repo, finRepo *finance.Repo, auditRepo *audit.Repo, docRepo *documents.Repo, famRepo *families.Repo, visitRepo *visitors.Repo, benefRepo *benefactors.Repo, suppliersRepo *suppliers.Repo, ministRepo *ministries.Repo, groupsRepo *groups.Repo, annRepo *announcements.Repo, cargosRepo *cargos.Repo, programacaoRepo *programacao.Repo, usersRepo *users.Repo, eventsRepo *events.Repo, lgpdRepo *lgpd.Repo, govRepo *governance.Repo, orgRepo *org.Repo, rostersRepo *rosters.Repo, kidsRepo *kids.Repo, memberEventsRepo *memberevents.Repo, dispatcher *delivery.Dispatcher) http.Handler {
+func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo *members.Repo, finRepo *finance.Repo, auditRepo *audit.Repo, docRepo *documents.Repo, famRepo *families.Repo, visitRepo *visitors.Repo, benefRepo *benefactors.Repo, suppliersRepo *suppliers.Repo, ministRepo *ministries.Repo, groupsRepo *groups.Repo, annRepo *announcements.Repo, cargosRepo *cargos.Repo, programacaoRepo *programacao.Repo, usersRepo *users.Repo, eventsRepo *events.Repo, lgpdRepo *lgpd.Repo, govRepo *governance.Repo, orgRepo *org.Repo, rostersRepo *rosters.Repo, kidsRepo *kids.Repo, memberEventsRepo *memberevents.Repo, prayerRepo *prayer.Repo, dispatcher *delivery.Dispatcher) http.Handler {
 	app := &App{
 		Config:        cfg,
 		Store:         st,
@@ -87,6 +89,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 		Rosters:       rostersRepo,
 		Kids:          kidsRepo,
 		MemberEvents:  memberEventsRepo,
+		Prayers:       prayerRepo,
 		Dispatch:      dispatcher,
 		Limitador:     newLimitadorPublico(),
 	}
@@ -103,12 +106,33 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	// Formulario de contato do site institucional (grava marketing_leads).
 	mux.Handle("POST /api/v1/public/leads", app.publico(app.handleCreateLead))
 
-	// Autenticado
-	authed := app.Authenticator
+	// Autenticado + entitlement do plano (modulos fora do plano => 403).
+	authed := func(h http.Handler) http.Handler {
+		return app.Authenticator(app.featureHandler(h))
+	}
 	mux.Handle("GET /api/v1/me", authed(http.HandlerFunc(app.handleMe)))
 	mux.Handle("GET /api/v1/me/tenants", authed(http.HandlerFunc(app.handleMeTenants)))
 	mux.Handle("PATCH /api/v1/me", authed(http.HandlerFunc(app.handleUpdateProfile)))
 	mux.Handle("POST /api/v1/me/password", authed(http.HandlerFunc(app.handleChangePassword)))
+
+	// App do membro (escopo self): o membro e resolvido pelo vinculo da
+	// identidade (memberships.member_id), nunca por id do cliente.
+	mux.Handle("GET /api/v1/me/member", authed(http.HandlerFunc(app.handleMeMember)))
+	mux.Handle("PATCH /api/v1/me/member", authed(http.HandlerFunc(app.handleUpdateMeMember)))
+	mux.Handle("GET /api/v1/me/family", authed(http.HandlerFunc(app.handleMeFamily)))
+	mux.Handle("GET /api/v1/me/events", authed(http.HandlerFunc(app.handleMeEvents)))
+	mux.Handle("GET /api/v1/me/announcements", authed(http.HandlerFunc(app.handleMeAnnouncements)))
+	mux.Handle("GET /api/v1/me/birthdays", authed(http.HandlerFunc(app.handleMeBirthdays)))
+	mux.Handle("GET /api/v1/me/ministries", authed(http.HandlerFunc(app.handleMeMinistries)))
+	mux.Handle("GET /api/v1/me/contributions", authed(http.HandlerFunc(app.handleMeContributions)))
+	mux.Handle("GET /api/v1/me/prayer-requests", authed(http.HandlerFunc(app.handleListMyPrayers)))
+	mux.Handle("POST /api/v1/me/prayer-requests", authed(http.HandlerFunc(app.handleCreatePrayer)))
+	mux.Handle("GET /api/v1/me/prayer-wall", authed(http.HandlerFunc(app.handlePrayerWall)))
+	mux.Handle("POST /api/v1/me/prayer-requests/{id}/react", authed(http.HandlerFunc(app.handleReactPrayer)))
+
+	// Moderacao pastoral dos pedidos de oracao.
+	mux.Handle("GET /api/v1/prayer-requests", authed(app.perm("prayer.read", app.handleListPrayersModeration)))
+	mux.Handle("PATCH /api/v1/prayer-requests/{id}", authed(app.perm("prayer.moderate", app.handleUpdatePrayer)))
 	mux.Handle("POST /api/v1/auth/switch-tenant", authed(http.HandlerFunc(app.handleSwitchTenant)))
 	mux.Handle("GET /api/v1/members", authed(http.HandlerFunc(app.handleListMembers)))
 	mux.Handle("POST /api/v1/members", authed(http.HandlerFunc(app.handleCreateMember)))
@@ -122,6 +146,13 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/members/{id}/photo", authed(http.HandlerFunc(app.handleUploadMemberPhoto)))
 	mux.Handle("DELETE /api/v1/members/{id}/photo", authed(http.HandlerFunc(app.handleDeleteMemberPhoto)))
 	mux.Handle("GET /api/v1/members/{id}/families", authed(http.HandlerFunc(app.handleMemberFamilies)))
+
+	// Acesso do membro ao app (Sede): criar/redefinir senha provisoria, editar
+	// identificador e ativar/desativar.
+	mux.Handle("GET /api/v1/members/{id}/access", authed(http.HandlerFunc(app.handleGetMemberAccess)))
+	mux.Handle("POST /api/v1/members/{id}/access", authed(http.HandlerFunc(app.handleCreateMemberAccess)))
+	mux.Handle("PATCH /api/v1/members/{id}/access", authed(http.HandlerFunc(app.handleUpdateMemberAccess)))
+	mux.Handle("POST /api/v1/members/{id}/access/password", authed(http.HandlerFunc(app.handleResetMemberAccessPassword)))
 
 	// Historico eclesiastico do membro (requisito 1.8)
 	mux.Handle("GET /api/v1/members/{id}/history", authed(http.HandlerFunc(app.handleListMemberHistory)))
@@ -205,20 +236,20 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/finance/audits/{id}/export", authed(http.HandlerFunc(app.handleExportAudit)))
 	mux.Handle("DELETE /api/v1/finance/audits/{id}", authed(http.HandlerFunc(app.handleDeleteAudit)))
 
-// Conciliacao financeira (trava o periodo ao conciliar)
-mux.Handle("GET /api/v1/finance/reconciliations", authed(http.HandlerFunc(app.handleListReconciliations)))
-mux.Handle("POST /api/v1/finance/reconciliations", authed(http.HandlerFunc(app.handleCreateReconciliation)))
-mux.Handle("GET /api/v1/finance/reconciliations/{id}", authed(http.HandlerFunc(app.handleGetReconciliation)))
-mux.Handle("POST /api/v1/finance/reconciliations/{id}/conciliate", authed(http.HandlerFunc(app.handleConciliateReconciliation)))
-mux.Handle("DELETE /api/v1/finance/reconciliations/{id}", authed(http.HandlerFunc(app.handleDeleteReconciliation)))
+	// Conciliacao financeira (trava o periodo ao conciliar)
+	mux.Handle("GET /api/v1/finance/reconciliations", authed(http.HandlerFunc(app.handleListReconciliations)))
+	mux.Handle("POST /api/v1/finance/reconciliations", authed(http.HandlerFunc(app.handleCreateReconciliation)))
+	mux.Handle("GET /api/v1/finance/reconciliations/{id}", authed(http.HandlerFunc(app.handleGetReconciliation)))
+	mux.Handle("POST /api/v1/finance/reconciliations/{id}/conciliate", authed(http.HandlerFunc(app.handleConciliateReconciliation)))
+	mux.Handle("DELETE /api/v1/finance/reconciliations/{id}", authed(http.HandlerFunc(app.handleDeleteReconciliation)))
 
-// Conciliacao BANCARIA (importa extrato OFX/CSV e casa com os lancamentos)
-mux.Handle("GET /api/v1/finance/bank-imports", authed(http.HandlerFunc(app.handleListBankImports)))
-mux.Handle("POST /api/v1/finance/bank-imports", authed(http.HandlerFunc(app.handleImportBankStatement)))
-mux.Handle("GET /api/v1/finance/bank-imports/{id}", authed(http.HandlerFunc(app.handleGetBankImport)))
-mux.Handle("POST /api/v1/finance/bank-imports/{id}/entries/{entryId}/ignore", authed(http.HandlerFunc(app.handleIgnoreBankEntry)))
-mux.Handle("POST /api/v1/finance/bank-imports/{id}/entries/{entryId}/generate", authed(http.HandlerFunc(app.handleGenerateBankEntry)))
-mux.Handle("DELETE /api/v1/finance/bank-imports/{id}", authed(http.HandlerFunc(app.handleDeleteBankImport)))
+	// Conciliacao BANCARIA (importa extrato OFX/CSV e casa com os lancamentos)
+	mux.Handle("GET /api/v1/finance/bank-imports", authed(http.HandlerFunc(app.handleListBankImports)))
+	mux.Handle("POST /api/v1/finance/bank-imports", authed(http.HandlerFunc(app.handleImportBankStatement)))
+	mux.Handle("GET /api/v1/finance/bank-imports/{id}", authed(http.HandlerFunc(app.handleGetBankImport)))
+	mux.Handle("POST /api/v1/finance/bank-imports/{id}/entries/{entryId}/ignore", authed(http.HandlerFunc(app.handleIgnoreBankEntry)))
+	mux.Handle("POST /api/v1/finance/bank-imports/{id}/entries/{entryId}/generate", authed(http.HandlerFunc(app.handleGenerateBankEntry)))
+	mux.Handle("DELETE /api/v1/finance/bank-imports/{id}", authed(http.HandlerFunc(app.handleDeleteBankImport)))
 
 	// Download de anexos (arquivo por nome - opaco, nao requer auth)
 	mux.Handle("GET /api/v1/attachments/{filename}", http.HandlerFunc(app.handleDownloadAttachment))
@@ -327,11 +358,29 @@ mux.Handle("DELETE /api/v1/finance/bank-imports/{id}", authed(http.HandlerFunc(a
 	mux.Handle("GET /api/v1/roles", authed(http.HandlerFunc(app.handleListRoles)))
 	mux.Handle("GET /api/v1/permissions", authed(http.HandlerFunc(app.handleListPermissions)))
 
-	// Reset operacional (super_admin): limpa os dados de teste mantendo a base.
+	// Reset operacional (platform admin): limpa os dados de teste mantendo a base.
 	mux.Handle("POST /api/v1/admin/reset-data", authed(http.HandlerFunc(app.handleResetData)))
-	// Igrejas (onboarding, super_admin): listar e criar igreja + admin.
+	// Igrejas (console da plataforma): listar e criar igreja + admin.
 	mux.Handle("GET /api/v1/admin/tenants", authed(http.HandlerFunc(app.handleListTenants)))
 	mux.Handle("POST /api/v1/admin/tenants", authed(http.HandlerFunc(app.handleCreateTenant)))
+	mux.Handle("GET /api/v1/admin/tenants/{id}", authed(http.HandlerFunc(app.handleAdminGetTenant)))
+	mux.Handle("PATCH /api/v1/admin/tenants/{id}", authed(http.HandlerFunc(app.handleAdminUpdateTenant)))
+	mux.Handle("GET /api/v1/admin/tenants/{id}/usage", authed(http.HandlerFunc(app.handleAdminTenantUsage)))
+	// Acessos de uma igreja (support da plataforma): usuarios, papeis e filiais.
+	mux.Handle("GET /api/v1/admin/tenants/{id}/users", authed(http.HandlerFunc(app.handleAdminListTenantUsers)))
+	mux.Handle("POST /api/v1/admin/tenants/{id}/users", authed(http.HandlerFunc(app.handleAdminCreateTenantUser)))
+	mux.Handle("PATCH /api/v1/admin/tenants/{id}/users/{userId}", authed(http.HandlerFunc(app.handleAdminUpdateTenantUser)))
+	mux.Handle("POST /api/v1/admin/tenants/{id}/users/{userId}/password", authed(http.HandlerFunc(app.handleAdminResetTenantUserPassword)))
+	mux.Handle("GET /api/v1/admin/tenants/{id}/roles", authed(http.HandlerFunc(app.handleAdminListTenantRoles)))
+	mux.Handle("GET /api/v1/admin/tenants/{id}/branches", authed(http.HandlerFunc(app.handleAdminListTenantBranches)))
+	// Estatisticas gerais da plataforma
+	mux.Handle("GET /api/v1/admin/stats", authed(http.HandlerFunc(app.handleAdminStats)))
+	// Catalogo de planos (platform admin)
+	mux.Handle("GET /api/v1/admin/plans", authed(http.HandlerFunc(app.handleListPlans)))
+	mux.Handle("POST /api/v1/admin/plans", authed(http.HandlerFunc(app.handleCreatePlan)))
+	mux.Handle("PATCH /api/v1/admin/plans/{key}", authed(http.HandlerFunc(app.handleUpdatePlan)))
+	// Catalogo de modulos gateaveis (features)
+	mux.Handle("GET /api/v1/admin/features", authed(http.HandlerFunc(app.handleListFeatures)))
 
 	// MFA (TOTP) do proprio usuario
 	mux.Handle("GET /api/v1/auth/mfa", authed(http.HandlerFunc(app.handleMFAStatus)))

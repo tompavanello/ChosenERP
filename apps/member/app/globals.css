@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+/* O app do membro e mobile-first e usa sempre o tema claro (alto contraste em
+   ambiente de igreja). O brand vem de --brand (customizavel por igreja via
+   branding no futuro). */
+:root {
+  --ink: #0f172a;
+  --paper: #f6f8fb;
+  --card: #ffffff;
+  --line: #e2e8f0;
+  --muted: #64748b;
+  --brand: #0284c7;
+  --brand-strong: #0369a1;
+  --brand-soft: #e0f2fe;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  color: var(--ink);
+  background: var(--paper);
+  font-family: Inter, "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system,
+    "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
+}

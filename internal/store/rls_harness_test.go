@@ -122,6 +122,7 @@ const (
 	fixRoleXSuper = "0a000000-0000-4000-8000-000000000001" // tenant X, super_admin
 	fixRoleXSec   = "0a000000-0000-4000-8000-000000000002" // tenant X, secretario
 	fixRoleYSuper = "0a000000-0000-4000-8000-000000000003" // tenant Y, super_admin
+	fixRoleXMemb  = "0a000000-0000-4000-8000-000000000004" // tenant X, membro
 	fixUserX      = "0b000000-0000-4000-8000-000000000001" // so tenant X (filial A)
 	fixUserY      = "0b000000-0000-4000-8000-000000000002" // so tenant Y
 	fixUserBoth   = "0b000000-0000-4000-8000-000000000003" // tenant X (Sede) + tenant Y
@@ -421,6 +422,7 @@ func seedFixtures(migrateDSN string) error {
 		`INSERT INTO roles (id, tenant_id, key, name, is_system) VALUES
 			('` + fixRoleXSuper + `', '` + fixTenantX + `', 'super_admin', 'Super Admin X', true),
 			('` + fixRoleXSec + `', '` + fixTenantX + `', 'secretario', 'Secretario X', true),
+			('` + fixRoleXMemb + `', '` + fixTenantX + `', 'membro', 'Membro X', true),
 			('` + fixRoleYSuper + `', '` + fixTenantY + `', 'super_admin', 'Super Admin Y', true)`,
 
 		`INSERT INTO users (id, email, password_hash, full_name, is_active) VALUES
@@ -428,11 +430,11 @@ func seedFixtures(migrateDSN string) error {
 			('` + fixUserY + `', 'user.y@rls.local', 'x', 'User Y', true),
 			('` + fixUserBoth + `', 'user.both@rls.local', 'x', 'User Both', true)`,
 
-		`INSERT INTO memberships (id, user_id, tenant_id, role_id, branch_id, is_active) VALUES
-			('` + fixMemX + `', '` + fixUserX + `', '` + fixTenantX + `', '` + fixRoleXSec + `', '` + fixBranchA + `', true),
-			('` + fixMemY + `', '` + fixUserY + `', '` + fixTenantY + `', '` + fixRoleYSuper + `', '` + fixBranchY + `', true),
-			('` + fixMemBothX + `', '` + fixUserBoth + `', '` + fixTenantX + `', '` + fixRoleXSuper + `', NULL, true),
-			('` + fixMemBothY + `', '` + fixUserBoth + `', '` + fixTenantY + `', '` + fixRoleYSuper + `', '` + fixBranchY + `', true)`,
+		`INSERT INTO memberships (id, user_id, tenant_id, role_id, branch_id, is_active, member_id) VALUES
+			('` + fixMemX + `', '` + fixUserX + `', '` + fixTenantX + `', '` + fixRoleXSec + `', '` + fixBranchA + `', true, '` + fixMemberA1 + `'),
+			('` + fixMemY + `', '` + fixUserY + `', '` + fixTenantY + `', '` + fixRoleYSuper + `', '` + fixBranchY + `', true, NULL),
+			('` + fixMemBothX + `', '` + fixUserBoth + `', '` + fixTenantX + `', '` + fixRoleXSuper + `', NULL, true, NULL),
+			('` + fixMemBothY + `', '` + fixUserBoth + `', '` + fixTenantY + `', '` + fixRoleYSuper + `', '` + fixBranchY + `', true, NULL)`,
 	}
 
 	for _, s := range stmts {

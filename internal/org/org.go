@@ -285,20 +285,29 @@ func (r *Repo) DeleteBranch(ctx context.Context, tx pgx.Tx, id string) error {
 
 // Tenant sao os dados cadastrais do tenant (igreja), incluindo o branding.
 type Tenant struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Slug         string    `json:"slug"`
-	LegalName    *string   `json:"legal_name,omitempty"`
-	CNPJ         *string   `json:"cnpj,omitempty"`
-	Plan         string    `json:"plan"`
-	Locale       string    `json:"locale"`
-	Timezone     string    `json:"timezone"`
-	LogoURL      *string   `json:"logo_url,omitempty"`
-	BrandColor   *string   `json:"brand_color,omitempty"`
-	FaviconURL   *string   `json:"favicon_url,omitempty"`
-	CustomDomain *string   `json:"custom_domain,omitempty"`
-	IsActive     bool      `json:"is_active"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Slug         string  `json:"slug"`
+	LegalName    *string `json:"legal_name,omitempty"`
+	CNPJ         *string `json:"cnpj,omitempty"`
+	Plan         string  `json:"plan"`
+	Locale       string  `json:"locale"`
+	Timezone     string  `json:"timezone"`
+	LogoURL      *string `json:"logo_url,omitempty"`
+	BrandColor   *string `json:"brand_color,omitempty"`
+	FaviconURL   *string `json:"favicon_url,omitempty"`
+	CustomDomain *string `json:"custom_domain,omitempty"`
+	// Pix da igreja para a tela "Contribuir" do app do membro. Dado publico
+	// (e a chave usada para doar), por isso aparece tambem no public_tenant.
+	PixKey  *string `json:"pix_key,omitempty"`
+	PixName *string `json:"pix_name,omitempty"`
+	// Limits sao overrides por igreja (jsonb) usados pelo console da plataforma;
+	// NULL => usa os limites do plano.
+	Limits json.RawMessage `json:"limits,omitempty"`
+	// Features sao overrides de modulo por igreja (jsonb); NULL => usa o plano.
+	Features  json.RawMessage `json:"features,omitempty"`
+	IsActive  bool            `json:"is_active"`
+	UpdatedAt time.Time       `json:"updated_at"`
 }
 
 // TenantInput e o corpo de edicao do tenant.
@@ -314,6 +323,8 @@ type TenantInput struct {
 	BrandColor   *string `json:"brand_color"`
 	FaviconURL   *string `json:"favicon_url"`
 	CustomDomain *string `json:"custom_domain"`
+	PixKey       *string `json:"pix_key"`
+	PixName      *string `json:"pix_name"`
 }
 
 // Erros de validacao do slug (subdominio da igreja).
@@ -353,12 +364,18 @@ func validTenantSlug(s string) (string, error) {
 // GetTenant devolve o tenant do contexto.
 func (r *Repo) GetTenant(ctx context.Context, tx pgx.Tx) (*Tenant, error) {
 	var t Tenant
+	var limits string
 	err := tx.QueryRow(ctx, `
 		SELECT id::text, name, slug, legal_name, cnpj, plan, locale, timezone,
-		       logo_url, brand_color, favicon_url, custom_domain, is_active, updated_at
+		       logo_url, brand_color, favicon_url, custom_domain, pix_key, pix_name,
+		       COALESCE(limits::text,''), is_active, updated_at
 		FROM tenants WHERE id = current_tenant()`).
 		Scan(&t.ID, &t.Name, &t.Slug, &t.LegalName, &t.CNPJ, &t.Plan, &t.Locale, &t.Timezone,
-			&t.LogoURL, &t.BrandColor, &t.FaviconURL, &t.CustomDomain, &t.IsActive, &t.UpdatedAt)
+			&t.LogoURL, &t.BrandColor, &t.FaviconURL, &t.CustomDomain, &t.PixKey, &t.PixName,
+			&limits, &t.IsActive, &t.UpdatedAt)
+	if limits != "" {
+		t.Limits = json.RawMessage(limits)
+	}
 	return &t, err
 }
 
@@ -387,10 +404,12 @@ func (r *Repo) UpdateTenant(ctx context.Context, tx pgx.Tx, in TenantInput) (*Te
 			brand_color = COALESCE($9, brand_color),
 			favicon_url = COALESCE($10, favicon_url),
 			custom_domain = COALESCE($11, custom_domain),
+			pix_key = COALESCE($12, pix_key),
+			pix_name = COALESCE($13, pix_name),
 			updated_at = now()
 		WHERE id = current_tenant()`,
 		in.Name, slugArg, in.LegalName, in.CNPJ, in.Plan, in.Locale, in.Timezone,
-		in.LogoURL, in.BrandColor, in.FaviconURL, in.CustomDomain)
+		in.LogoURL, in.BrandColor, in.FaviconURL, in.CustomDomain, in.PixKey, in.PixName)
 	if err != nil {
 		return nil, err
 	}

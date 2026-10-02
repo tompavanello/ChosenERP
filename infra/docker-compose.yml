@@ -70,6 +70,8 @@ services:
         condition: service_started
       webadmin:
         condition: service_started
+      member:
+        condition: service_started
       marketing:
         condition: service_started
     ports:
@@ -166,7 +168,8 @@ services:
       - "${WEBADMIN_PORT:-33000}:33000"
 
   ### Site institucional (Next.js 15) - landing no dominio central (apex/www).
-  ### O painel continua nos subdominios de igreja e em app.erpchosen.com.br.
+  ### O painel admin fica em app.erpchosen.com.br e o app do membro nos
+  ### subdominios de igreja.
   marketing:
     build:
       context: ../apps/marketing
@@ -188,6 +191,26 @@ services:
       API_ORIGIN: http://api:8080
     ports:
       - "${MARKETING_PORT:-33010}:33000"
+
+  ### App do Membro (Next.js 15 PWA) - servido nos subdominios de igreja
+  ### ({slug}.erpchosen.com.br). Backend unico (mesma API/RLS do webadmin).
+  member:
+    build:
+      context: ../apps/member
+      dockerfile: Dockerfile
+      args:
+        API_ORIGIN: http://api:8080
+        NEXT_PUBLIC_BASE_DOMAIN: ${PUBLIC_BASE_DOMAIN:-erpchosen.com.br}
+    image: chosenerp/member:local
+    container_name: chosen-member
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      API_ORIGIN: http://api:8080
+    ports:
+      - "${MEMBER_PORT:-33020}:33000"
 
   redis:
     image: redis:7-alpine

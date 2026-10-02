@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"chosenerp/internal/org"
 	"chosenerp/internal/store"
 	"github.com/jackc/pgx/v5"
 )
@@ -36,6 +37,10 @@ type Membership struct {
 	Role       string `json:"role"`
 	BranchID   string `json:"branch_id"`
 	IsActive   bool   `json:"is_active"`
+	// MemberID e o registro em `members` desta pessoa NESTA igreja (vazio quando
+	// a identidade nao e um membro, ex.: staff/visitante). Liga o app do membro
+	// ao proprio cadastro.
+	MemberID string `json:"member_id"`
 }
 
 // TenantOption e uma igreja oferecida no seletor apos o login.
@@ -68,6 +73,17 @@ type Profile struct {
 	Permissions  []string
 	MFAEnabled   bool
 	MFASecret    string
+	// Phone e o telefone de login (app do membro), quando houver.
+	Phone string
+	// MustChangePassword indica senha provisoria definida pela secretaria.
+	MustChangePassword bool
+	// IsPlatformAdmin indica o operador do SaaS (console de igrejas/planos).
+	IsPlatformAdmin bool
+	// Features sao os modulos habilitados pelo plano da igreja ativa.
+	Features []string
+	// MemberID e o registro em `members` vinculado nesta igreja (para o app do
+	// membro); vazio para identidades sem cadastro de membro.
+	MemberID string
 	// Memberships lista todas as igrejas da identidade (para o seletor).
 	Memberships []Membership
 }
@@ -91,28 +107,32 @@ func NewService(st *store.Store, secret string, accessTTL, refreshTTL time.Durat
 	return &Service{store: st, secret: secret, accessTTL: accessTTL, refreshTTL: refreshTTL}
 }
 
-// identityRow e a projecao da identidade (auth_lookup_user / auth_identity).
+// identityRow e a projecao da identidade (auth_lookup_identity / auth_identity).
 type identityRow struct {
-	UserID       string
-	FullName     string
-	Email        string
-	PasswordHash string
-	MFAEnabled   bool
-	MFASecret    string
-	IsActive     bool
+	UserID             string
+	FullName           string
+	Email              string
+	PasswordHash       string
+	MFAEnabled         bool
+	MFASecret          string
+	IsActive           bool
+	Phone              string
+	MustChangePassword bool
+	IsPlatformAdmin    bool
 }
 
 func scanIdentity(row pgx.Row) (*identityRow, error) {
 	var id identityRow
 	err := row.Scan(&id.UserID, &id.FullName, &id.Email, &id.PasswordHash,
-		&id.MFAEnabled, &id.MFASecret, &id.IsActive)
+		&id.MFAEnabled, &id.MFASecret, &id.IsActive, &id.Phone,
+		&id.MustChangePassword, &id.IsPlatformAdmin)
 	return &id, err
 }
 
-// findIdentityByEmail carrega a identidade via SECURITY DEFINER (fora do RLS),
-// pois o tenant ainda nao e conhecido na etapa de login.
-func (s *Service) findIdentityByEmail(ctx context.Context, email string) (*identityRow, error) {
-	id, err := scanIdentity(s.store.Pool().QueryRow(ctx, `SELECT * FROM auth_lookup_user($1)`, email))
+// findIdentityByIdentifier carrega a identidade por e-mail OU telefone via
+// SECURITY DEFINER (fora do RLS), pois o tenant ainda nao e conhecido no login.
+func (s *Service) findIdentityByIdentifier(ctx context.Context, identifier string) (*identityRow, error) {
+	id, err := scanIdentity(s.store.Pool().QueryRow(ctx, `SELECT * FROM auth_lookup_identity($1)`, identifier))
 	if err != nil {
 		if store.IsNotFound(err) {
 			return nil, errUnauthorized
@@ -137,7 +157,8 @@ func (s *Service) findIdentityByID(ctx context.Context, userID string) (*identit
 // pode ser chamada na selecao de igreja (sem tenant) e no middleware.
 func (s *Service) Memberships(ctx context.Context, userID string) ([]Membership, error) {
 	rows, err := s.store.Pool().Query(ctx, `
-		SELECT tenant_id, tenant_name, tenant_slug, role_key, COALESCE(branch_id,''), is_active
+		SELECT tenant_id, tenant_name, tenant_slug, role_key, COALESCE(branch_id,''), is_active,
+		       COALESCE(member_id, '')
 		FROM auth_memberships($1::uuid)`, userID)
 	if err != nil {
 		return nil, err
@@ -146,7 +167,7 @@ func (s *Service) Memberships(ctx context.Context, userID string) ([]Membership,
 	out := []Membership{}
 	for rows.Next() {
 		var m Membership
-		if err := rows.Scan(&m.TenantID, &m.TenantName, &m.TenantSlug, &m.Role, &m.BranchID, &m.IsActive); err != nil {
+		if err := rows.Scan(&m.TenantID, &m.TenantName, &m.TenantSlug, &m.Role, &m.BranchID, &m.IsActive, &m.MemberID); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -183,10 +204,11 @@ func findMembership(ms []Membership, tenantID string) (Membership, bool) {
 
 // Login valida credenciais e resolve a igreja ativa.
 //
+//   - identifier: e-mail OU telefone (auth_lookup_identity).
 //   - tenantSlug informado (subdominio): exige membership ativa naquela igreja.
 //   - sem slug: 1 membership entra direto; >1 exige selecao (token curto + lista).
-func (s *Service) Login(ctx context.Context, email, password, code, tenantSlug string) (*LoginResult, error) {
-	id, err := s.findIdentityByEmail(ctx, email)
+func (s *Service) Login(ctx context.Context, identifier, password, code, tenantSlug string) (*LoginResult, error) {
+	id, err := s.findIdentityByIdentifier(ctx, identifier)
 	if err != nil {
 		return nil, err
 	}
@@ -213,6 +235,11 @@ func (s *Service) Login(ctx context.Context, email, password, code, tenantSlug s
 	}
 	active := activeMemberships(all)
 	if len(active) == 0 {
+		// Admin de plataforma nao tem igreja: entra no console (sem tenant),
+		// desde que nao esteja tentando acessar um subdominio de igreja.
+		if id.IsPlatformAdmin && tenantSlug == "" {
+			return s.issuePlatformAdmin(ctx, id, all)
+		}
 		return nil, ErrTenantForbidden
 	}
 
@@ -243,14 +270,17 @@ func (s *Service) Login(ctx context.Context, email, password, code, tenantSlug s
 // issueForMembership monta o perfil e emite o par de tokens para a igreja escolhida.
 func (s *Service) issueForMembership(ctx context.Context, id *identityRow, all []Membership, m Membership) (*LoginResult, error) {
 	prof := &Profile{
-		UserID:      id.UserID,
-		Email:       id.Email,
-		FullName:    id.FullName,
-		TenantID:    m.TenantID,
-		BranchID:    m.BranchID,
-		Role:        m.Role,
-		MFAEnabled:  id.MFAEnabled,
-		Memberships: all,
+		UserID:             id.UserID,
+		Email:              id.Email,
+		FullName:           id.FullName,
+		TenantID:           m.TenantID,
+		BranchID:           m.BranchID,
+		Role:               m.Role,
+		MFAEnabled:         id.MFAEnabled,
+		Phone:              id.Phone,
+		MustChangePassword: id.MustChangePassword,
+		MemberID:           m.MemberID,
+		Memberships:        all,
 	}
 	err := s.store.WithTenant(ctx, store.Bounds{
 		TenantID: m.TenantID, BranchID: m.BranchID, Role: m.Role, UserID: id.UserID,
@@ -263,7 +293,14 @@ func (s *Service) issueForMembership(ctx context.Context, id *identityRow, all [
 			perms = []string{}
 		}
 		prof.Permissions = perms
+		if ent, e := org.EffectiveForTenant(ctx, tx, m.TenantID); e == nil {
+			prof.Features = ent.Features
+		} else {
+			prof.Features = []string{}
+		}
 		_, _ = tx.Exec(ctx, `UPDATE users SET last_login_at = now() WHERE id = $1::uuid`, id.UserID)
+		_ = tx.QueryRow(ctx, `SELECT is_platform_admin FROM users WHERE id = $1::uuid`, id.UserID).
+			Scan(&prof.IsPlatformAdmin)
 		return nil
 	})
 	if err != nil {
@@ -279,6 +316,42 @@ func (s *Service) issueForMembership(ctx context.Context, id *identityRow, all [
 	refresh, err := NewToken(s.secret, Claims{
 		UserID: id.UserID, TenantID: m.TenantID, BranchID: m.BranchID,
 		Role: m.Role, Type: RefreshTokenType,
+	}, s.refreshTTL)
+	if err != nil {
+		return nil, err
+	}
+	return &LoginResult{
+		Profile: prof,
+		Tokens:  &Tokens{Access: access, Refresh: refresh, ExpiresIn: int64(s.accessTTL.Seconds())},
+	}, nil
+}
+
+// issuePlatformAdmin emite tokens SEM tenant para o operador do SaaS (papel
+// platform_admin). O RLS, com tenant vazio, nao devolve dados operacionais de
+// nenhuma igreja; o console usa as rotas /admin/* (WithSystem).
+func (s *Service) issuePlatformAdmin(ctx context.Context, id *identityRow, all []Membership) (*LoginResult, error) {
+	prof := &Profile{
+		UserID: id.UserID, Email: id.Email, FullName: id.FullName,
+		Role: "platform_admin", MFAEnabled: id.MFAEnabled,
+		Phone: id.Phone, MustChangePassword: id.MustChangePassword,
+		IsPlatformAdmin: true, Permissions: []string{}, Memberships: all,
+	}
+	err := s.store.WithTenant(ctx, store.Bounds{UserID: id.UserID, Role: "platform_admin"},
+		func(tx pgx.Tx) error {
+			_, _ = tx.Exec(ctx, `UPDATE users SET last_login_at = now() WHERE id = $1::uuid`, id.UserID)
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+	access, err := NewToken(s.secret, Claims{
+		UserID: id.UserID, Role: "platform_admin", Type: AccessTokenType,
+	}, s.accessTTL)
+	if err != nil {
+		return nil, err
+	}
+	refresh, err := NewToken(s.secret, Claims{
+		UserID: id.UserID, Role: "platform_admin", Type: RefreshTokenType,
 	}, s.refreshTTL)
 	if err != nil {
 		return nil, err
@@ -337,10 +410,12 @@ func (s *Service) Me(ctx context.Context, userID, tenantID, branchID, role strin
 		TenantID: tenantID, BranchID: branchID, Role: role, UserID: userID,
 	}, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `
-			SELECT u.id::text, u.email, u.full_name, u.mfa_enabled
+			SELECT u.id::text, u.email, u.full_name, u.mfa_enabled,
+			       COALESCE(u.phone,''), u.must_change_password, u.is_platform_admin
 			FROM users u
 			WHERE u.id = $1::uuid`, userID).
-			Scan(&prof.UserID, &prof.Email, &prof.FullName, &prof.MFAEnabled); err != nil {
+			Scan(&prof.UserID, &prof.Email, &prof.FullName, &prof.MFAEnabled,
+				&prof.Phone, &prof.MustChangePassword, &prof.IsPlatformAdmin); err != nil {
 			return err
 		}
 		perms, err := s.rolePermissions(ctx, tx, role, tenantID)
@@ -351,6 +426,14 @@ func (s *Service) Me(ctx context.Context, userID, tenantID, branchID, role strin
 			perms = []string{}
 		}
 		prof.Permissions = perms
+		if tenantID != "" {
+			if ent, e := org.EffectiveForTenant(ctx, tx, tenantID); e == nil {
+				prof.Features = ent.Features
+			}
+		}
+		if prof.Features == nil {
+			prof.Features = []string{}
+		}
 		return nil
 	})
 	if err != nil {
@@ -361,6 +444,10 @@ func (s *Service) Me(ctx context.Context, userID, tenantID, branchID, role strin
 		prof.Memberships = ms
 	} else {
 		prof.Memberships = []Membership{}
+	}
+	// Resolve o cadastro de membro da igreja ativa (app do membro).
+	if m, ok := findMembership(prof.Memberships, tenantID); ok {
+		prof.MemberID = m.MemberID
 	}
 	return prof, nil
 }
@@ -513,7 +600,7 @@ func (s *Service) ChangePassword(ctx context.Context, b store.Bounds, userID, cu
 		if e != nil {
 			return e
 		}
-		_, e = tx.Exec(ctx, `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1::uuid`, userID, newHash)
+		_, e = tx.Exec(ctx, `UPDATE users SET password_hash = $2, must_change_password = false, updated_at = now() WHERE id = $1::uuid`, userID, newHash)
 		return e
 	})
 }

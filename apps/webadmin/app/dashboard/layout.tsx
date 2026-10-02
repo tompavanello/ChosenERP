@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Church, LayoutDashboard, Users, Wallet, LogOut, HeartHandshake, DoorOpen,
-  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, CalendarCheck, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight,
+  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, CalendarCheck, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight, Globe, Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -21,6 +21,10 @@ type NavItem = {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   perms: string[];
+  /** Modulo exigido no plano da igreja (ausente = core). */
+  feature?: string;
+  /** Visivel apenas para o administrador da plataforma. */
+  platformOnly?: boolean;
 };
 
 // Secoes do menu. "Familias" saiu daqui: a gestao de familia passou a viver
@@ -44,38 +48,46 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
   {
     title: "Financeiro",
     items: [
-      { key: "finance", href: "/dashboard/finance", label: "Financeiro", icon: Wallet, perms: ["finance.read"] },
-      { key: "reconciliation", href: "/dashboard/finance/reconciliation", label: "Conciliacao", icon: ClipboardCheck, perms: ["finance.read"] },
-      { key: "audit", href: "/dashboard/reports/audit", label: "Auditoria financeira", icon: ShieldCheck, perms: ["finance.read"] },
-      { key: "transfers", href: "/dashboard/transfers", label: "Repasses", icon: ArrowLeftRight, perms: ["finance.write"] },
+      { key: "finance", href: "/dashboard/finance", label: "Financeiro", icon: Wallet, perms: ["finance.read"], feature: "finance" },
+      { key: "reconciliation", href: "/dashboard/finance/reconciliation", label: "Conciliacao", icon: ClipboardCheck, perms: ["finance.read"], feature: "finance" },
+      { key: "audit", href: "/dashboard/reports/audit", label: "Auditoria financeira", icon: ShieldCheck, perms: ["finance.read"], feature: "finance" },
+      { key: "transfers", href: "/dashboard/transfers", label: "Repasses", icon: ArrowLeftRight, perms: ["finance.write"], feature: "finance" },
     ],
   },
   {
     title: "Organizacao",
     items: [
-      { key: "ministries", href: "/dashboard/ministries", label: "Ministerios", icon: Church, perms: ["ministries.read"] },
-      { key: "rosters", href: "/dashboard/rosters", label: "Escalas", icon: CalendarClock, perms: ["ministries.read"] },
-      { key: "kids", href: "/dashboard/kids", label: "Kids", icon: Baby, perms: ["members.read"] },
-      { key: "events", href: "/dashboard/events", label: "Eventos", icon: CalendarDays, perms: ["members.read"] },
-      { key: "programacao", href: "/dashboard/programacao", label: "Programacao", icon: CalendarHeart, perms: ["members.read"] },
-      { key: "governance", href: "/dashboard/governance", label: "Governanca", icon: Gavel, perms: ["governance.read"] },
+      { key: "ministries", href: "/dashboard/ministries", label: "Ministerios", icon: Church, perms: ["ministries.read"], feature: "ministries" },
+      { key: "rosters", href: "/dashboard/rosters", label: "Escalas", icon: CalendarClock, perms: ["ministries.read"], feature: "rosters" },
+      { key: "kids", href: "/dashboard/kids", label: "Kids", icon: Baby, perms: ["members.read"], feature: "kids" },
+      { key: "events", href: "/dashboard/events", label: "Eventos", icon: CalendarDays, perms: ["members.read"], feature: "events" },
+      { key: "programacao", href: "/dashboard/programacao", label: "Programacao", icon: CalendarHeart, perms: ["members.read"], feature: "events" },
+      { key: "governance", href: "/dashboard/governance", label: "Governanca", icon: Gavel, perms: ["governance.read"], feature: "governance" },
       { key: "users", href: "/dashboard/users", label: "Usuarios", icon: UserCog, perms: ["users.read"] },
       { key: "settings", href: "/dashboard/settings", label: "Configuracoes", icon: Settings, perms: ["settings.read"] },
-      { key: "announcements", href: "/dashboard/announcements", label: "Comunicados", icon: Bell, perms: [] },
+      { key: "announcements", href: "/dashboard/announcements", label: "Comunicados", icon: Bell, perms: [], feature: "whatsapp" },
     ],
   },
   {
     title: "Relatorios",
     items: [
-      { key: "rep-balance", href: "/dashboard/reports/balance", label: "Balancete mensal", icon: BarChart3, perms: ["finance.read"] },
-      { key: "rep-dre", href: "/dashboard/reports/dre", label: "DRE", icon: TrendingUp, perms: ["finance.read"] },
-      { key: "rep-statement", href: "/dashboard/reports/monthly-statement", label: "Demonstrativo Mensal", icon: FileSpreadsheet, perms: ["finance.read"] },
-      { key: "rep-assembly", href: "/dashboard/reports/assembly", label: "Demonstrativo (Assembleia)", icon: FileSpreadsheet, perms: ["finance.read"] },
-      { key: "rep-inc-exp", href: "/dashboard/reports/income-expense", label: "Entradas x Saidas", icon: ArrowLeftRight, perms: ["finance.read"] },
-      { key: "rep-consolidated", href: "/dashboard/reports/consolidated", label: "Consolidado Sede > Filiais", icon: Building2, perms: ["finance.read"] },
-      { key: "rep-birthdays", href: "/dashboard/reports/birthdays", label: "Aniversariantes", icon: Cake, perms: ["members.read"] },
-      { key: "rep-demographics", href: "/dashboard/reports/demographics", label: "Demograficos", icon: PieChart, perms: ["members.read"] },
-      { key: "rep-attendance", href: "/dashboard/reports/attendance", label: "Participantes por evento", icon: CalendarCheck, perms: ["members.read"] },
+      { key: "rep-balance", href: "/dashboard/reports/balance", label: "Balancete mensal", icon: BarChart3, perms: ["finance.read"], feature: "reports" },
+      { key: "rep-dre", href: "/dashboard/reports/dre", label: "DRE", icon: TrendingUp, perms: ["finance.read"], feature: "reports" },
+      { key: "rep-statement", href: "/dashboard/reports/monthly-statement", label: "Demonstrativo Mensal", icon: FileSpreadsheet, perms: ["finance.read"], feature: "reports" },
+      { key: "rep-assembly", href: "/dashboard/reports/assembly", label: "Demonstrativo (Assembleia)", icon: FileSpreadsheet, perms: ["finance.read"], feature: "reports" },
+      { key: "rep-inc-exp", href: "/dashboard/reports/income-expense", label: "Entradas x Saidas", icon: ArrowLeftRight, perms: ["finance.read"], feature: "reports" },
+      { key: "rep-consolidated", href: "/dashboard/reports/consolidated", label: "Consolidado Sede > Filiais", icon: Building2, perms: ["finance.read"], feature: "reports" },
+      { key: "rep-birthdays", href: "/dashboard/reports/birthdays", label: "Aniversariantes", icon: Cake, perms: ["members.read"], feature: "reports" },
+      { key: "rep-demographics", href: "/dashboard/reports/demographics", label: "Demograficos", icon: PieChart, perms: ["members.read"], feature: "reports" },
+      { key: "rep-attendance", href: "/dashboard/reports/attendance", label: "Participantes por evento", icon: CalendarCheck, perms: ["members.read"], feature: "reports" },
+    ],
+  },
+  {
+    title: "Plataforma",
+    items: [
+      { key: "platform-overview", href: "/dashboard/platform", label: "Visao geral", icon: BarChart3, perms: [], platformOnly: true },
+      { key: "platform-churches", href: "/dashboard/platform/churches", label: "Igrejas", icon: Globe, perms: [], platformOnly: true },
+      { key: "platform-plans", href: "/dashboard/platform/plans", label: "Planos", icon: Layers, perms: [], platformOnly: true },
     ],
   },
 ];
@@ -83,7 +95,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, ready, logout, hasPerm, switchTenant } = useAuth();
+  const { user, ready, logout, hasPerm, hasFeature, switchTenant, isPlatformAdmin } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { data: branchData } = useBranches();
   const [branchCtx, setBranchCtx] = useState("");
@@ -91,6 +103,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isHQ = user?.role === "super_admin" || user?.role === "admin_sede";
   // Igrejas da identidade: o switcher so aparece quando ha mais de uma.
   const memberships = (user?.memberships ?? []).filter((m) => m.is_active);
+  // Admin de plataforma (sem igreja): so o console. Esconde o ERP operacional.
+  const platformOnly = user?.role === "platform_admin";
 
   // Secoes do menu recolhiveis (persistidas por navegador).
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -117,6 +131,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (ready && !user) router.replace("/");
   }, [ready, user, router]);
+
+  // O admin de plataforma nao tem painel operacional: manda para o console.
+  useEffect(() => {
+    if (ready && user && platformOnly && pathname === "/dashboard") {
+      router.replace("/dashboard/platform");
+    }
+  }, [ready, user, platformOnly, pathname, router]);
 
   useEffect(() => setMobileOpen(false), [pathname]);
 
@@ -149,9 +170,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <nav className="flex-1 overflow-y-auto px-2 pb-2">
         {NAV_SECTIONS.map((section, i) => {
-          const items = section.items.filter(
-            (n) => n.perms.length === 0 || n.perms.some((p) => hasPerm(p)),
-          );
+          if (platformOnly && section.title !== "Plataforma") return null;
+          const items = section.items.filter((n) => {
+            if (n.platformOnly) return isPlatformAdmin;
+            const allowed = n.perms.length === 0 || n.perms.some((p) => hasPerm(p));
+            return allowed && (!n.feature || hasFeature(n.feature));
+          });
           if (items.length === 0) return null;
           const open = !section.title || !collapsed[section.title];
           return (

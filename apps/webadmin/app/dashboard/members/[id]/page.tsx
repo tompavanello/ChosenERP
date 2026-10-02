@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
   ArrowLeft, Award, FileText, GitBranch, HeartHandshake, History, Link as LinkIcon, Pencil,
-  Phone, User, Users, Activity, ShieldCheck,
+  Phone, User, Users, Activity, ShieldCheck, KeyRound,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import { FamilySection } from "@/components/members/family-section";
 import { HistorySection } from "@/components/members/history-section";
 import { FrequencySection } from "@/components/members/frequency-section";
 import { LgpdSection } from "@/components/members/lgpd-section";
+import { AccessSection } from "@/components/members/access-section";
 import {
   getMember, getMemberTree, addRelationship, listMembers, assetURL,
   updateMember,
@@ -189,6 +190,9 @@ export default function MemberDetailPage() {
           { key: "hist", label: "Vida eclesiastica", icon: <History className="h-4 w-4" /> },
           { key: "docs", label: "Documentos", icon: <FileText className="h-4 w-4" /> },
           { key: "lgpd", label: "LGPD", icon: <ShieldCheck className="h-4 w-4" /> },
+          ...(isAdmin
+            ? [{ key: "acesso", label: "Acesso", icon: <KeyRound className="h-4 w-4" /> }]
+            : []),
         ]}
         active={tab}
         onChange={setTab}
@@ -370,6 +374,8 @@ export default function MemberDetailPage() {
       )}
 
       {tab === "lgpd" && <LgpdSection memberId={member.id} canWrite={canWrite} isAdmin={isAdmin} />}
+
+      {tab === "acesso" && isAdmin && <AccessSection member={member} canWrite={isAdmin} />}
 
       <Drawer
         open={editando}

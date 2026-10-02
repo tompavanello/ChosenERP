@@ -72,11 +72,17 @@ func (a *App) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	b := boundsFromClaims(claims)
 	var created *users.User
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		if e := a.enforceQuota(r.Context(), tx, claims.TenantID, "users", 0); e != nil {
+			return e
+		}
 		var err error
 		created, err = a.Users.Create(r.Context(), tx, claims.TenantID, in)
 		return err
 	})
 	if err != nil {
+		if writeQuotaErr(w, err) {
+			return
+		}
 		if store.IsNotFound(err) {
 			writeErr(w, http.StatusBadRequest, "perfil (role) invalido")
 			return

@@ -142,6 +142,39 @@ func (r *Repo) ListMembers(ctx context.Context, tx pgx.Tx, ministryID string) ([
 	return out, rows.Err()
 }
 
+// MemberMinistry e o vinculo de um membro com um ministerio (visao self).
+type MemberMinistry struct {
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	Role       string  `json:"role"`
+	LeaderName *string `json:"leader_name,omitempty"`
+	StartedAt  *string `json:"started_at,omitempty"`
+}
+
+// ListByMember lista os ministerios ativos dos quais o membro participa.
+func (r *Repo) ListByMember(ctx context.Context, tx pgx.Tx, memberID string) ([]MemberMinistry, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT m.id::text, m.name, mm.role, lm.full_name, mm.started_at::text
+		FROM ministry_members mm
+		JOIN ministries m ON m.id = mm.ministry_id
+		LEFT JOIN members lm ON lm.id = m.leader_id
+		WHERE mm.member_id = $1::uuid AND m.is_active
+		ORDER BY m.name`, memberID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MemberMinistry{}
+	for rows.Next() {
+		var m MemberMinistry
+		if err := rows.Scan(&m.ID, &m.Name, &m.Role, &m.LeaderName, &m.StartedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
 // AddMember vincula um voluntario a um ministerio.
 func (r *Repo) AddMember(ctx context.Context, tx pgx.Tx, tenantID, ministryID, memberID, role string) error {
 	_, err := tx.Exec(ctx, `

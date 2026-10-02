@@ -29,6 +29,7 @@ import (
 	"chosenerp/internal/members"
 	"chosenerp/internal/ministries"
 	"chosenerp/internal/org"
+	"chosenerp/internal/prayer"
 	"chosenerp/internal/programacao"
 	"chosenerp/internal/rosters"
 	"chosenerp/internal/store"
@@ -83,7 +84,7 @@ func main() {
 		&members.Repo{}, finRepo, &audit.Repo{}, docRepo,
 		&families.Repo{}, &visitors.Repo{}, &benefactors.Repo{}, &suppliers.Repo{},
 		&ministries.Repo{}, &groups.Repo{}, &announcements.Repo{},
-		&cargos.Repo{}, &programacao.Repo{}, &users.Repo{}, &events.Repo{}, &lgpd.Repo{}, &governance.Repo{}, &org.Repo{}, &rosters.Repo{}, &kids.Repo{}, &memberevents.Repo{}, dispatcher)
+		&cargos.Repo{}, &programacao.Repo{}, &users.Repo{}, &events.Repo{}, &lgpd.Repo{}, &governance.Repo{}, &org.Repo{}, &rosters.Repo{}, &kids.Repo{}, &memberevents.Repo{}, &prayer.Repo{}, dispatcher)
 
 	// Worker da outbox de envio (retry de pendentes/falhos)
 	worker := &delivery.Worker{

@@ -111,6 +111,36 @@ func TestRLS_UserAttachToTenant(t *testing.T) {
 	}
 }
 
+// auth_memberships devolve o member_id vinculado (migracao 000073). E o que
+// permite ao app do membro resolver o proprio cadastro a partir do JWT.
+func TestAuthMembershipsReturnsMemberID(t *testing.T) {
+	err := inSystem(t, func(tx pgx.Tx) error {
+		var memberID *string
+		if err := tx.QueryRow(testCtx,
+			`SELECT member_id FROM auth_memberships($1::uuid) WHERE tenant_id = $2`,
+			fixUserX, fixTenantX).Scan(&memberID); err != nil {
+			t.Fatalf("auth_memberships: %v", err)
+		}
+		if memberID == nil || *memberID != fixMemberA1 {
+			t.Errorf("member_id = %v, queria %s", memberID, fixMemberA1)
+		}
+
+		// Vinculo sem cadastro de membro continua devolvendo NULL.
+		if err := tx.QueryRow(testCtx,
+			`SELECT member_id FROM auth_memberships($1::uuid) WHERE tenant_id = $2`,
+			fixUserBoth, fixTenantX).Scan(&memberID); err != nil {
+			t.Fatalf("auth_memberships (both): %v", err)
+		}
+		if memberID != nil {
+			t.Errorf("membership sem membro devolveu member_id=%v, queria NULL", *memberID)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("WithSystem: %v", err)
+	}
+}
+
 // public_tenant() (000054) devolve o branding pelo slug, fora do RLS.
 func TestPublicTenantFunction(t *testing.T) {
 	err := inBounds(t, bounds("", "", "system"), func(tx pgx.Tx) error {

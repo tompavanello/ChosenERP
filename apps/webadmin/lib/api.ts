@@ -114,7 +114,15 @@ export interface User {
   // Opcional em runtime: o cache do localStorage pode ter sido gravado por uma
   // versao anterior do app. O backend sempre devolve o array no login e no /me.
   permissions?: string[];
+  /** Modulos habilitados pelo plano da igreja ativa. */
+  features?: string[];
   mfa_enabled?: boolean;
+  /** Telefone de login (app do membro), quando houver. */
+  phone?: string;
+  /** Senha provisoria definida pela secretaria (forca troca no 1o acesso). */
+  must_change_password?: boolean;
+  /** Dono da plataforma (console de igrejas/planos). */
+  is_platform_admin?: boolean;
   /** Igrejas da identidade (para o seletor/troca de igreja). */
   memberships?: Membership[];
 }
@@ -604,11 +612,25 @@ async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
     }
   }
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(body || `HTTP ${res.status}`);
+    throw new Error(await errorMessage(res));
   }
   const text = await res.text();
   return text ? (JSON.parse(text) as T) : ({} as T);
+}
+
+// errorMessage normaliza o corpo de erro da API e traduz o bloqueio de plano.
+async function errorMessage(res: Response): Promise<string> {
+  const raw = await res.text();
+  try {
+    const parsed = JSON.parse(raw) as { error?: string };
+    if (parsed?.error === "plan_feature_disabled") {
+      return "Este modulo nao esta incluido no plano da sua igreja.";
+    }
+    if (parsed?.error) return parsed.error;
+  } catch {
+    /* corpo nao-JSON */
+  }
+  return raw || `HTTP ${res.status}`;
 }
 
 // apiRaw e como api() mas devolve o Response RAW (sem fazer JSON.parse).
@@ -636,8 +658,7 @@ async function apiRaw(path: string, opts: RequestInit = {}): Promise<Response> {
     }
   }
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(body || `HTTP ${res.status}`);
+    throw new Error(await errorMessage(res));
   }
   return res;
 }
@@ -1446,6 +1467,9 @@ export interface Tenant {
   brand_color?: string | null;
   favicon_url?: string | null;
   custom_domain?: string | null;
+  /** Pix da igreja (tela "Contribuir" do app do membro). */
+  pix_key?: string | null;
+  pix_name?: string | null;
   is_active: boolean;
   updated_at: string;
 }
@@ -1501,6 +1525,37 @@ export const resetUserPassword = (id: string, password: string) =>
 export const listRoles = () => api<{ roles: RoleInfo[] }>("/api/v1/roles");
 export const listPermissions = () => api<{ permissions: PermissionInfo[] }>("/api/v1/permissions");
 
+// ---- Console da plataforma: acessos de uma igreja (suporte) ----
+export interface PlatformBranch {
+  id: string;
+  name: string;
+  kind: string;
+  is_active: boolean;
+}
+export interface PlatformUserInput {
+  email?: string;
+  full_name?: string;
+  role?: string;
+  branch_id?: string | null;
+  is_active?: boolean;
+  password?: string;
+}
+export const getAdminTenantUsers = (tenantId: string) =>
+  api<{ users: AdminUser[] }>(`/api/v1/admin/tenants/${tenantId}/users`);
+export const createAdminTenantUser = (tenantId: string, data: PlatformUserInput) =>
+  api<AdminUser>(`/api/v1/admin/tenants/${tenantId}/users`, { method: "POST", body: JSON.stringify(data) });
+export const updateAdminTenantUser = (tenantId: string, userId: string, data: PlatformUserInput) =>
+  api<AdminUser>(`/api/v1/admin/tenants/${tenantId}/users/${userId}`, { method: "PATCH", body: JSON.stringify(data) });
+export const resetAdminTenantUserPassword = (tenantId: string, userId: string, password: string) =>
+  api<{ ok: boolean }>(`/api/v1/admin/tenants/${tenantId}/users/${userId}/password`, {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+export const getAdminTenantRoles = (tenantId: string) =>
+  api<{ roles: RoleInfo[] }>(`/api/v1/admin/tenants/${tenantId}/roles`);
+export const getAdminTenantBranches = (tenantId: string) =>
+  api<{ branches: PlatformBranch[] }>(`/api/v1/admin/tenants/${tenantId}/branches`);
+
 // ---- Igrejas / onboarding (super_admin) ----
 export interface AdminTenant {
   id: string;
@@ -1529,6 +1584,142 @@ export interface CreateTenantResult {
 export const listAllTenants = () => api<{ tenants: AdminTenant[] }>("/api/v1/admin/tenants");
 export const createTenant = (data: CreateTenantInput) =>
   api<CreateTenantResult>("/api/v1/admin/tenants", { method: "POST", body: JSON.stringify(data) });
+
+// ---- Console da plataforma: detalhe/edicao de igreja e planos ----
+export interface TenantLimits {
+  max_members?: number;
+  max_branches?: number;
+  max_users?: number;
+  max_storage_mb?: number;
+}
+export interface AdminTenantDetail {
+  id: string;
+  name: string;
+  slug: string;
+  legal_name?: string | null;
+  cnpj?: string | null;
+  plan: string;
+  locale: string;
+  timezone: string;
+  logo_url?: string | null;
+  brand_color?: string | null;
+  favicon_url?: string | null;
+  custom_domain?: string | null;
+  limits?: TenantLimits | null;
+  /** Override de modulos por igreja (chave -> habilitado). Ausente = herda do plano. */
+  features?: Record<string, boolean> | null;
+  is_active: boolean;
+  updated_at: string;
+}
+export interface TenantUsage {
+  members: number;
+  branches: number;
+  users: number;
+  storage_bytes: number;
+}
+export interface FeatureInfo {
+  key: string;
+  label: string;
+  group: string;
+}
+export const getFeatures = () => api<{ features: FeatureInfo[] }>("/api/v1/admin/features");
+export interface AdminTenantInput {
+  name?: string;
+  slug?: string;
+  legal_name?: string;
+  cnpj?: string;
+  plan?: string;
+  locale?: string;
+  timezone?: string;
+  logo_url?: string;
+  brand_color?: string;
+  favicon_url?: string;
+  custom_domain?: string;
+  limits?: TenantLimits;
+  features?: Record<string, boolean>;
+  is_active?: boolean;
+}
+export interface Plan {
+  key: string;
+  name: string;
+  description?: string | null;
+  price_cents: number;
+  currency: string;
+  max_members?: number | null;
+  max_branches?: number | null;
+  max_users?: number | null;
+  max_storage_mb?: number | null;
+  features?: Record<string, boolean> | null;
+  is_active: boolean;
+  sort_order: number;
+  updated_at: string;
+}
+export interface PlanInput {
+  key: string;
+  name: string;
+  description?: string;
+  price_cents?: number;
+  currency?: string;
+  max_members?: number;
+  max_branches?: number;
+  max_users?: number;
+  max_storage_mb?: number;
+  features?: Record<string, boolean>;
+  is_active?: boolean;
+  sort_order?: number;
+}
+export const getAdminTenant = (id: string) =>
+  api<AdminTenantDetail>(`/api/v1/admin/tenants/${id}`);
+export const updateAdminTenant = (id: string, data: AdminTenantInput) =>
+  api<AdminTenantDetail>(`/api/v1/admin/tenants/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export const getAdminTenantUsage = (id: string) =>
+  api<TenantUsage>(`/api/v1/admin/tenants/${id}/usage`);
+export interface PlanCount {
+  plan: string;
+  count: number;
+}
+export interface PlatformStats {
+  tenants: number;
+  tenants_active: number;
+  members: number;
+  users: number;
+  branches: number;
+  storage_bytes: number;
+  by_plan: PlanCount[];
+  recent_tenants: AdminTenant[];
+}
+export const getAdminStats = () => api<PlatformStats>("/api/v1/admin/stats");
+export const listPlans = () => api<{ plans: Plan[] }>("/api/v1/admin/plans");
+export const createPlan = (data: PlanInput) =>
+  api<Plan>("/api/v1/admin/plans", { method: "POST", body: JSON.stringify(data) });
+export const updatePlan = (key: string, data: Partial<PlanInput>) =>
+  api<Plan>(`/api/v1/admin/plans/${key}`, { method: "PATCH", body: JSON.stringify(data) });
+
+// ---- Acesso do membro ao app ----
+export interface MemberAccess {
+  has_access: boolean;
+  user_id?: string;
+  email?: string;
+  phone?: string;
+  is_active?: boolean;
+  must_change_password?: boolean;
+  last_login_at?: string;
+}
+export const getMemberAccess = (memberId: string) =>
+  api<MemberAccess>(`/api/v1/members/${memberId}/access`);
+export const createMemberAccess = (
+  memberId: string,
+  data: { email: string; phone?: string; password: string },
+) => api<MemberAccess>(`/api/v1/members/${memberId}/access`, { method: "POST", body: JSON.stringify(data) });
+export const updateMemberAccess = (
+  memberId: string,
+  data: { email?: string; phone?: string; is_active?: boolean },
+) => api<MemberAccess>(`/api/v1/members/${memberId}/access`, { method: "PATCH", body: JSON.stringify(data) });
+export const resetMemberAccessPassword = (memberId: string, password: string) =>
+  api<{ ok: boolean }>(`/api/v1/members/${memberId}/access/password`, {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
 
 // ---- MFA (TOTP) do proprio usuario ----
 export const mfaStatus = () => api<{ enabled: boolean }>("/api/v1/auth/mfa");

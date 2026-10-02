@@ -152,8 +152,44 @@ Relatorios (Modulo 12)
   > total de visitantes e grafico mensal de saldo.
 
 App do membro
-- [ ] O item "App do membro - versao basica" do PRD foi atendido apenas como
-      **pagina publica** de carteirinha + avisos. Nao ha app nativo nem login de membro.
+- [x] **V1 (PWA) - `apps/member`**: login por subdominio, home, agenda, avisos,
+      perfil/familia e pedidos de oracao. O vinculo identidade <-> pessoa vive em
+      `memberships.member_id` (`000073`); as rotas `/api/v1/me/*` derivam o membro
+      do token. Pedidos de oracao em `000074` (visibilidade + reacao anonima).
+      Backfill: `go run ./cmd/link-members`. O admin passa a ser servido em
+      `app.erpchosen.com.br` e o membro nos subdominios de igreja.
+- [x] **Acesso do membro (`000076`)**: identidade vinculada ao cadastro
+      (`user_attach_member`), login por **e-mail ou telefone** (`users.phone`) e
+      senha provisoria com troca forca no 1o acesso (tela `/trocar-senha`). A
+      Sede cria/redefine em Membros -> aba **Acesso**.
+- [x] **Console da plataforma (`000075`/`000077`)**: `users.is_platform_admin`
+      distingue o operador do SaaS. Ele **nao tem vinculo de igreja**: loga sem
+      tenant (papel `platform_admin`) e o RLS nao devolve dados operacionais. Menu
+      **Plataforma** no webadmin: Visao geral com estatisticas gerais
+      (`GET /admin/stats`), Igrejas (dados/plano/limites/branding, suspender) e
+      Planos. Corrige o gate antigo (qualquer `super_admin` de igreja listava/criava
+      tenants).
+- [x] **Suporte a acessos por igreja**: no Gerenciar de cada igreja, aba
+      **Usuarios** — listar/criar acessos, definir perfis (administradores),
+      ativar/desativar e redefinir senha (`/admin/tenants/{id}/users*`, em
+      `WithSystem`, com registro em `audit_log`). Sem impersonation.
+- [x] **Modulos por plano (entitlements) (`000078`/`000079`)**: `plans.features`
+      + override `tenants.features` (ausente = habilitada); catalogo em
+      `internal/org/entitlements.go`. Enforcement no backend por rota (403
+      `plan_feature_disabled`) e **quotas** de membros/filiais/usuarios/storage
+      (403 `limite do plano atingido`). Editor de modulos em Planos e override
+      por igreja. Modulos core e app do membro nunca bloqueados.
+- [ ] V2 (GD, escalas, frequencia) e Web Push (notificacoes no navegador).
+  > V1 ampliada (02/10/2026): aniversariantes/casamentos (`/me/birthdays`),
+  > ministerios do membro (`/me/ministries`) e Contribuir com Pix + historico
+  > (`/me/contributions`, `tenants.pix_key`/`pix_name` - `000080`). PWA
+  > instalavel: service worker (`public/sw.js`), tela `/offline`, icones PNG
+  > (192/512/maskable/apple-touch), `beforeinstallprompt` + dica iOS e manifest
+  > por igreja com shortcuts.
+- [ ] Enforcement de limites de plano (hoje so gerencia/exibe).
+- [ ] O item "App do membro - versao basica" do PRD era atendido apenas como
+      **pagina publica** de carteirinha + avisos (sem login); agora ha app PWA
+      autenticado minimo, mas sem versao nativa publicada nas lojas.
 
 ## 4.5 Fase 2 - Multi-filial  (parcial - ver 4.6)
 - **Repasses entre filiais** (`finance/transfers` + migracao 000013 com policy de INSERT):

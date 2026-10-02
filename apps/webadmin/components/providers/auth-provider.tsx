@@ -31,6 +31,10 @@ interface AuthContextValue {
   switchTenant: (tenantId: string) => Promise<void>;
   logout: () => void;
   hasPerm: (perm: string) => boolean;
+  /** Modulo habilitado no plano da igreja ativa. */
+  hasFeature: (key: string) => boolean;
+  /** Dono da plataforma (acesso ao console de igrejas/planos). */
+  isPlatformAdmin: boolean;
   /** Recarrega o perfil (/me) e atualiza sessao + cache local. */
   refresh: () => Promise<void>;
 }
@@ -127,6 +131,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // do app), entao `permissions` e tratado como opcional em tempo de execucao.
   const hasPerm = useCallback((perm: string) => !!user && (user.permissions ?? []).includes(perm), [user]);
 
+  // Sem `features` no cache (versao antiga do app), nao esconde nada.
+  const hasFeature = useCallback(
+    (key: string) => !!user && (!user.features || user.features.includes(key)),
+    [user],
+  );
+
+  const isPlatformAdmin = !!user?.is_platform_admin;
+
   const refresh = useCallback(async () => {
     const me = await fetchMe();
     setUser(me);
@@ -135,8 +147,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, ready, pendingSelection, login, selectTenant, switchTenant, logout, hasPerm, refresh }),
-    [user, ready, pendingSelection, login, selectTenant, switchTenant, logout, hasPerm, refresh],
+    () => ({ user, ready, pendingSelection, login, selectTenant, switchTenant, logout, hasPerm, hasFeature, isPlatformAdmin, refresh }),
+    [user, ready, pendingSelection, login, selectTenant, switchTenant, logout, hasPerm, hasFeature, isPlatformAdmin, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

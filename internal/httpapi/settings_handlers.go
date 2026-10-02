@@ -149,6 +149,11 @@ func (a *App) handleUpdateTenant(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid body")
 		return
 	}
+	// O plano e definido pela PLATAFORMA (com os modulos/limites); um admin de
+	// igreja nao pode se auto-promover de plano por aqui.
+	if !a.isPlatformAdmin(r.Context(), claims) {
+		in.Plan = nil
+	}
 	b := boundsFromClaims(claims)
 	var t *org.Tenant
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
@@ -184,10 +189,12 @@ func (a *App) handlePublicTenant(w http.ResponseWriter, r *http.Request) {
 		LogoURL    *string
 		BrandColor *string
 		FaviconURL *string
+		PixKey     *string
+		PixName    *string
 	}
 	err := a.Store.Pool().QueryRow(r.Context(),
-		`SELECT name, slug, logo_url, brand_color, favicon_url FROM public_tenant($1)`, slug).
-		Scan(&t.Name, &t.Slug, &t.LogoURL, &t.BrandColor, &t.FaviconURL)
+		`SELECT name, slug, logo_url, brand_color, favicon_url, pix_key, pix_name FROM public_tenant($1)`, slug).
+		Scan(&t.Name, &t.Slug, &t.LogoURL, &t.BrandColor, &t.FaviconURL, &t.PixKey, &t.PixName)
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
@@ -195,6 +202,7 @@ func (a *App) handlePublicTenant(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name": t.Name, "slug": t.Slug, "logo_url": t.LogoURL,
 		"brand_color": t.BrandColor, "favicon_url": t.FaviconURL,
+		"pix_key": t.PixKey, "pix_name": t.PixName,
 	})
 }
 
@@ -213,11 +221,17 @@ func (a *App) handleCreateBranch(w http.ResponseWriter, r *http.Request) {
 	b := boundsFromClaims(claims)
 	var out *org.Branch
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		if e := a.enforceQuota(r.Context(), tx, claims.TenantID, "branches", 0); e != nil {
+			return e
+		}
 		var err error
 		out, err = a.Org.CreateBranch(r.Context(), tx, claims.TenantID, in)
 		return err
 	})
 	if err != nil {
+		if writeQuotaErr(w, err) {
+			return
+		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			writeErr(w, http.StatusConflict, "ja existe uma filial com este identificador (slug)")

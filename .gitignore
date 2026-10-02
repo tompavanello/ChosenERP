@@ -43,6 +43,12 @@ apps/webadmin/.env*
 # de nascimento, endereço, telefone e e-mail de pessoas físicas. Os scripts
 # ficam no disco para uso no ambiente local, mas NUNCA entram no índice.
 db/seed/
+# Exemplos/prints recebidos com dados reais de membros (mesma regra LGPD).
+Docs/exemplos/
+Docs/*.zip
+
+# Backups locais de config do cloudflared.
+infra/cloudflare/*.bak-*
 
 # IDE / SO
 .idea/

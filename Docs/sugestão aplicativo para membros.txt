@@ -1,0 +1,306 @@
+Eu dividiria assim:
+🏠 1. Início
+Uma tela simples com:
+- Próximo culto
+- Próximo evento
+- Avisos importantes
+- Versículo do dia
+- Botão "Pedido de oração"
+- Botão "Contribuir"
+- Botão "Minha igreja"
+📅 2. Agenda da Igreja
+Calendário com:
+- Cultos
+- Escola Bíblica
+- GD / pequenos grupos
+- Santa Ceia
+- Reuniões
+- Ensaios
+- Eventos especiais
+- Reuniões do Conselho
+- Eventos das sociedades/ministérios
+Ao clicar no evento:
+📅 28/09 – Culto de Celebração
+⏰ 19h30
+📍 Templo da IPI Lençóis Paulista
+👤 Responsável: Ministério de Liturgia
+
+E permitir "Adicionar à minha agenda".
+🙏 3. Pedidos de Oração
+Essa poderia ser uma das partes mais importantes.
+O membro poderia enviar:
+- Pedido de oração
+- Agradecimento
+- Pedido privado ao pastor
+- Pedido para a igreja
+Exemplo:
+🙏 Pedido de oração
+"Peço oração pela minha família."
+
+E escolher:
+- 🔒 Somente pastor
+- 🔒 Pastor + Conselho
+- 👥 Grupo de oração
+- ⛪ Igreja
+Também poderia existir o botão:
+"Estou orando por você" ❤️
+Assim a pessoa que fez o pedido recebe uma notificação sem necessariamente saber quem orou.
+📖 4. Palavra / Estudos
+- Sermões
+- Estudos bíblicos
+- Devocionais
+- Plano de leitura da Bíblia
+- Bíblia online
+- Esboços dos estudos
+- Áudios dos sermões
+- Vídeos dos cultos
+Você poderia inclusive criar:
+"Meu plano de leitura"
+☐ Gênesis 1–3
+☐ Gênesis 4–6
+☐ Mateus 1–2
+E mostrar o progresso do membro.
+👤 5. Meu Perfil
+Cada membro teria seu cadastro.
+Nome
+Foto
+Telefone
+E-mail
+Data de nascimento
+Endereço
+Data de batismo
+Data de profissão de fé
+Ministério que participa
+GD que participa
+E, principalmente, o membro poderia atualizar algumas informações sem precisar procurar o secretário.
+👥 6. Minha Família
+Essa eu acho muito interessante para uma igreja.
+Exemplo:
+Família Moretto
+👨 Tiago
+👩 Esposa
+👧 Camila
+👧 Filha
+Isso ajudaria inclusive na administração do rol.
+O secretário poderia enxergar:
+Família Moretto
+4 membros
+2 professos
+2 não professos
+
+❤️ 7. Ministérios
+Uma área mostrando todos os ministérios:
+- GD
+- Louvor
+- Coral
+- Escola Bíblica
+- Crianças
+- Jovens
+- Adolescentes
+- Diaconia
+- Ação Social
+- Oração
+- Missões etc.
+Ao entrar no ministério:
+Ministério de Louvor
+Próximos compromissos:
+- Ensaio – 26/09
+- Culto – 27/09
+- Ensaio – 03/10
+🏘️ 8. Pequenos Grupos / GD
+Como vocês estão estruturando o GD, o aplicativo poderia ficar muito bom nessa parte.
+O membro poderia ver:
+Meu GD
+GD Esperança
+Líder: João
+Anfitrião: Maria
+Secretário: Pedro
+12 participantes
+
+E:
+📅 Próximo encontro
+📍 Casa da família X
+⏰ Segunda-feira – 19h30
+Além disso:
+- Lista de presença
+- Pedido de oração do grupo
+- Estudo da semana
+- Comunicados
+- Aniversariantes
+- Histórico dos encontros
+E o líder teria uma área administrativa.
+💰 9. Contribuições
+Uma área financeira individual:
+Minhas contribuições
+2026
+Mês	Valor
+Janeiro	R$ 300
+Fevereiro	R$ 300
+Março	R$ 350
+
+
+Com:
+- Dízimos
+- Ofertas
+- Missões
+- Campanhas
+E geração de comprovante/recibo.
+Também poderia ter:
+💰 Quero contribuir
+
+Pix da igreja + QR Code.
+📢 10. Avisos
+Um mural oficial:
+📢 Comunicado do Conselho
+📢 Ensaio do Coral
+📢 Santa Ceia
+📢 Campanha de Missões
+E o Conselho/pastores poderiam publicar diretamente.
+🔔 11. Notificações
+Isso faria muita diferença.
+Exemplo:
+🔔 Lembrete
+Hoje às 19h30 temos encontro do seu GD.
+
+Ou:
+🔔 Santa Ceia
+Nossa próxima Santa Ceia será neste domingo às 19h.
+
+O administrador poderia enviar para:
+- Toda igreja
+- Professos
+- Não professos
+- Jovens
+- Líderes de GD
+- Coral
+- Conselho
+- Ministério específico
+🎂 12. Aniversariantes
+Uma tela:
+Aniversariantes de Setembro
+🎂 João – 25/09
+🎂 Maria – 27/09
+🎂 Pedro – 30/09
+E um botão:
+"Enviar parabéns"
+Isso pode gerar uma mensagem automática.
+📋 13. Escalas
+Muito útil para os ministérios.
+Exemplo:
+Escala deste domingo
+🎤 Louvor
+👤 João
+📖 Leitura bíblica
+👤 Maria
+🙏 Oração
+👤 Pedro
+🍞 Santa Ceia
+👤 Presbítero X
+A pessoa recebe:
+🔔 Você está escalado para o culto de domingo.
+
+E pode confirmar:
+✅ Vou participar
+❌ Não poderei participar
+Se não puder, o responsável recebe a informação.
+📺 14. Cultos Online
+Se a igreja transmite pelo YouTube:
+🔴 Culto ao vivo
+Além de:
+- Cultos anteriores
+- Pregações
+- Estudos
+- Música
+📝 15. Formulários
+Uma área que pode diminuir bastante o trabalho do secretário:
+Solicitações
+- Atualização cadastral
+- Solicitação de documento
+- Pedido de carta
+- Solicitação de visita pastoral
+- Batismo
+- Profissão de fé
+- Transferência
+- Casamento
+- Apresentação de crianças
+- Inscrição em eventos
+O membro preenche pelo aplicativo e isso chega para o responsável.
+🏛️ E eu faria uma segunda parte: Área Administrativa
+Essa seria restrita ao Conselho, pastores e líderes.
+Por exemplo:
+Conselho
+- Rol de membros
+- Professos
+- Não professos
+- Entradas
+- Saídas
+- Frequência
+- Visitas
+- Pendências
+- Atas
+- Documentos
+- Agenda do Conselho
+Secretaria
+- Cadastro dos membros
+- Famílias
+- Relatórios
+- Aniversariantes
+- Documentos
+- Histórico do membro
+Tesouraria
+- Entradas
+- Despesas
+- Contribuições
+- Relatórios
+- Categorias
+- Prestação de contas
+Pastor
+- Pedidos de oração
+- Visitas
+- Acompanhamento pastoral
+- Aniversariantes
+- Famílias
+- Agenda
+Líder de GD
+- Participantes
+- Presença
+- Estudos
+- Pedidos de oração
+- Comunicação
+⭐ Uma ideia que eu acho especialmente boa
+Eu faria o aplicativo com 3 níveis de acesso:
+👤 MEMBRO
+Vê e participa.
+👥 LÍDER
+Vê seu ministério/GD e seus participantes.
+🏛️ ADMINISTRADOR
+Conselho/pastores/secretaria/tesouraria administram a igreja.
+Assim você não precisa criar vários aplicativos.
+🚀 E começaria pequeno
+Não tentaria construir tudo de uma vez.
+V1 — essencial
+1. Login
+2. Cadastro do membro
+3. Agenda
+4. Avisos
+5. Pedidos de oração
+6. Aniversariantes
+7. Ministérios
+8. Contribuição/Pix
+9. Notificações
+10. Perfil/família
+V2 — gestão
+11. GD
+12. Escalas
+13. Frequência
+14. Solicitações
+15. Área do líder
+V3 — administração
+16. Rol de membros
+17. Relatórios
+18. Secretaria
+19. Tesouraria
+20. Conselho
+21. Documentos/atas
+E tem uma coisa importante: como você já está pensando em um sistema para o Rol de Membros, eu faria o aplicativo já nascer com um banco de dados central da igreja. Assim o cadastro feito pelo membro alimenta o Rol, o GD usa o mesmo cadastro, a secretaria usa o mesmo cadastro e futuramente a tesouraria também.
+Isso evita ter um sistema para o membro + outro para o secretário + outro para o GD.

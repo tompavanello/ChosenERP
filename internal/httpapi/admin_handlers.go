@@ -12,15 +12,25 @@ import (
 	"chosenerp/internal/org"
 )
 
-// superAdminClaims exige o papel super_admin (autorizacao de plataforma).
-func (a *App) superAdminClaims(w http.ResponseWriter, r *http.Request) (*auth.Claims, bool) {
+// platformAdminClaims exige a flag de administrador da PLATAFORMA
+// (users.is_platform_admin), e nao o papel super_admin da igreja. E o gate dos
+// endpoints cross-tenant (listar/editar/criar igrejas, planos).
+func (a *App) platformAdminClaims(w http.ResponseWriter, r *http.Request) (*auth.Claims, bool) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
 		writeErr(w, http.StatusUnauthorized, "unauthenticated")
 		return nil, false
 	}
-	if claims.Role != "super_admin" {
-		writeErr(w, http.StatusForbidden, "apenas super_admin")
+	var isPlatform bool
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `SELECT is_platform_admin()`).Scan(&isPlatform)
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return nil, false
+	}
+	if !isPlatform {
+		writeErr(w, http.StatusForbidden, "apenas administrador da plataforma")
 		return nil, false
 	}
 	return claims, true
@@ -30,7 +40,7 @@ func (a *App) superAdminClaims(w http.ResponseWriter, r *http.Request) (*auth.Cl
 // filiais, papeis, permissoes) e apenas o usuario super_admin. Pensado para
 // reiniciar testes operacionais. Exige confirmacao explicita no corpo.
 func (a *App) handleResetData(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.superAdminClaims(w, r); !ok {
+	if _, ok := a.platformAdminClaims(w, r); !ok {
 		return
 	}
 	var in struct {
@@ -49,7 +59,7 @@ func (a *App) handleResetData(w http.ResponseWriter, r *http.Request) {
 
 // handleListTenants lista as igrejas (super_admin) para a tela de onboarding.
 func (a *App) handleListTenants(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.superAdminClaims(w, r); !ok {
+	if _, ok := a.platformAdminClaims(w, r); !ok {
 		return
 	}
 	var out []org.AdminTenant
@@ -68,7 +78,7 @@ func (a *App) handleListTenants(w http.ResponseWriter, r *http.Request) {
 // handleCreateTenant cria uma igreja completa (tenant + Matriz + papeis +
 // primeiro super_admin). O subdominio passa a funcionar automaticamente.
 func (a *App) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.superAdminClaims(w, r); !ok {
+	if _, ok := a.platformAdminClaims(w, r); !ok {
 		return
 	}
 	var in struct {

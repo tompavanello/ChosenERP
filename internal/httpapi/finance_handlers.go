@@ -1005,6 +1005,10 @@ func (a *App) handleUploadAttachment(w http.ResponseWriter, r *http.Request) {
 
 	var att *finance.Attachment
 	err = a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		if e := a.enforceQuota(r.Context(), tx, claims.TenantID, "storage", size); e != nil {
+			_ = os.Remove(diskPath) // nao deixa arquivo orfao quando o plano bloqueia
+			return e
+		}
 		var err error
 		// Verifica que a transacao pertence ao escopo antes de anexar.
 		var txExists bool
@@ -1029,6 +1033,9 @@ func (a *App) handleUploadAttachment(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
+		if writeQuotaErr(w, err) {
+			return
+		}
 		if store.IsNotFound(err) {
 			writeErr(w, http.StatusNotFound, "transaction not found")
 			return

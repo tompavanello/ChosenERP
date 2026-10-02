@@ -93,6 +93,10 @@ em todos os tenants. Corrigido pela migracao `000016_tenant_scope_rls` (detalhes
 | # | Item | Notas |
 |---|---|---|
 | 23 | **CRUD de usuarios/perfis** (`GET/POST/PATCH /api/v1/users`) + tela no webadmin |  **Feito (23/09/2026)** - API + tela "Usuarios e Acessos" (perfis, filial, ativar/desativar, redefinir senha) |
+| 23b | **Console da plataforma** (admin do SaaS): flag `users.is_platform_admin` (`000075`), console de Igrejas (editar dados/plano/limites/branding, suspender/reativar) e catalogo de `plans`. Corrige o gate antigo (qualquer `super_admin` de igreja listava/criava tenants). |  **Feito (02/10/2026)** - `GET/PATCH /admin/tenants/{id}`, `/usage`, `GET/POST/PATCH /admin/plans`; menu "Plataforma" no webadmin |
+| 23c | **Acesso do membro ao app**: identidade vinculada ao cadastro (`user_attach_member`, `000076`), login por **e-mail ou telefone** (`users.phone`), senha provisoria com troca forcada no 1o acesso. |  **Feito (02/10/2026)** - aba "Acesso" no membro; `/api/v1/members/{id}/access*`; tela `/trocar-senha` no PWA |
+| 23d | **Suporte da plataforma por igreja**: lista/cria/edita acessos, define administradores, ativa/desativa e redefine senha de qualquer igreja pelo console; loga em `audit_log`. |  **Feito (02/10/2026)** - `/api/v1/admin/tenants/{id}/users*`, `/roles`, `/branches`; aba "Usuarios" no Gerenciar |
+| 23e | **Modulos por plano (entitlements) + quotas**: `plans.features` + override por igreja (`000078`); enforcement por rota (403 `plan_feature_disabled`) e quotas (`max_members/branches/users/storage`). |  **Feito (02/10/2026)** - catalogo em `internal/org/entitlements.go`; `GET /admin/features`; checkboxes em Planos e override na igreja |
 
 ---
 
@@ -153,6 +157,7 @@ em todos os tenants. Corrigido pela migracao `000016_tenant_scope_rls` (detalhes
 - [ ] **Modulo 11**: botao de panico, gestao de estacionamento.
 - [ ] Multi-idioma e multi-moeda.
 - [ ] SuperApp white-label (Biblia, hinario, devocional gamificado) - hoje existe apenas a pagina publica `/member/[token]`.
+  > **V1 do app do membro (PWA, `apps/member`) entregue:** vinculo `memberships.member_id` (`000073`) + backfill `cmd/link-members`; API self `/api/v1/me/member|family|events|announcements|birthdays|ministries|contributions`; pedidos de oracao (`000074`, `/api/v1/me/prayer-requests*` + moderacao); contribuir com Pix (`tenants.pix_key` - `000080`); PWA instalavel (service worker/offline/icones) servido em `{slug}.erpchosen.com.br`. Faltam V2 (GD/escalas/frequencia) e Web Push.
 - [ ] **Modulo 4**: cultos e eventos (`events`, `service_liturgy`), venda/reserva de vagas, reserva de espacos.
 
 ---

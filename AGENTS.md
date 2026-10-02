@@ -12,6 +12,7 @@ Este arquivo e a fonte das instrucoes de build/execucao para agentes e devs.
 ```
 apps/webadmin/        Painel administrativo (Next.js 15, App Router, Tailwind v4) + Dockerfile
 apps/marketing/       Site institucional / landing (Next.js 15, Tailwind v4) + Dockerfile
+apps/member/          App do Membro / PWA mobile-first (Next.js 15, Tailwind v4) + Dockerfile
 cmd/api/              Entrypoint do servico Go (monolito modular)
 internal/             Dominios: auth, store (pool+migracoes+RLS), httpapi, members
 db/migrations/        Migracoes SQL versionadas (embutidas no binario via Go embed)
@@ -68,12 +69,14 @@ npm run dev        # http://localhost:33000
 
 ### Site institucional (marketing)
 
-O site publico fica em `apps/marketing` (Next.js 15, estatico) e e servido no
-**dominio central** (`erpchosen.com.br` / `www`). O painel continua nos
-subdominios de igreja e em `app.erpchosen.com.br` - o split e feito por
-`server_name` no `infra/nginx/conf.d/default.conf` (blocos exatos caem no
-marketing; o regex wildcard cai no webadmin). `app`/`www`/`api`/`admin` sao
-`RESERVED_SLUGS` no webadmin, entao nao colidem com igrejas.
+O site publico fica em `apps/marketing` (Next.js 15) e e servido no
+**dominio central** (`erpchosen.com.br` / `www`). O painel administrativo fica
+em **`app.erpchosen.com.br`** (sem igreja fixa: o usuario escolhe a igreja) e o
+**app do membro** nos subdominios de igreja (`{slug}.erpchosen.com.br`). O split
+e feito por `server_name` no `infra/nginx/conf.d/default.conf`: blocos EXATOS
+(`app`/`admin` -> webadmin; apex/www -> marketing) tem prioridade sobre o regex
+wildcard, que cai no **member**. `app`/`www`/`api`/`admin` sao `RESERVED_SLUGS`
+no frontend, entao nao colidem com igrejas.
 
 ```bash
 cd apps/marketing
@@ -88,6 +91,76 @@ O formulario de contato chama `POST /api/v1/public/leads`, que grava em
 `marketing_leads` (migracao `000060`; sem tenant/RLS e com **apenas INSERT**
 para o papel da app). CTAs usam `NEXT_PUBLIC_APP_URL` e `NEXT_PUBLIC_WHATSAPP`
 (build args do Compose: `MARKETING_APP_URL` / `MARKETING_WHATSAPP`).
+
+### App do Membro (PWA)
+
+`apps/member` e o PWA mobile-first do membro, servido na raiz do subdominio da
+igreja (`{slug}.erpchosen.com.br`). Reusa a MESMA API do webadmin - backend
+unificado. O membro so enxerga o proprio cadastro: o vinculo identidade <->
+pessoa vive em `memberships.member_id` (migracao `000073`) e as rotas
+`/api/v1/me/*` derivam o membro do token (nunca de um id do cliente).
+
+```bash
+cd apps/member
+npm install
+npm run dev        # http://localhost:33020 (proxied API em API_ORIGIN)
+
+# no Compose: sobe junto com o stack na porta ${MEMBER_PORT:-33020}
+docker compose -f infra/docker-compose.yml up -d member
+```
+
+- **Vinculo de acesso:** o membro precisa de uma identidade (`users`) com
+  membership no tenant (papel `membro`) e do vinculo `memberships.member_id`.
+  Backfill por e-mail: `go run ./cmd/link-members` (idempotente; `-dry-run` para
+  simular). Membros sem e-mail no cadastro nao sao vinculados automaticamente.
+- **Pedidos de oracao** (migracao `000074`): `prayer_requests` com visibilidade
+  (`pastor`/`pastor_conselho`/`grupo`/`igreja`) + `prayer_reactions` (reacao
+  anonima "estou orando"). Endpoints `/api/v1/me/prayer-requests*`; moderacao em
+  `/api/v1/prayer-requests` (permissoes `prayer.read`/`prayer.moderate`).
+- **PWA white-label:** o manifest e gerado por igreja em
+  `app/manifest.webmanifest/route.ts` (nome/cor/logo do branding do tenant). O
+  app e instalavel (service worker `public/sw.js`, tela `/offline`, icones PNG)
+  e oferece instalacao (banner/`beforeinstallprompt` + dica iOS).
+- **Automacoes do membro:** Aniversariantes (`/me/birthdays`), Ministerios
+  (`/me/ministries`) e Contribuir com Pix + historico (`/me/contributions`). O
+  Pix da igreja vive em `tenants.pix_key`/`pix_name` (`000080`) e sai no
+  `public_tenant`; edite em Configuracoes -> Igreja.
+- **Build args do Compose:** `API_ORIGIN`, `NEXT_PUBLIC_BASE_DOMAIN`.
+- **Acesso do membro:** a Sede cria o acesso em Membros -> aba **Acesso**, que
+  grava a identidade + senha provisoria e linka `memberships.member_id` via
+  `user_attach_member` (`000076`). O login aceita **e-mail ou telefone**
+  (`users.phone`, normalizado e unico). Senha provisoria (`must_change_password`)
+  forca a troca no 1o acesso (tela `/trocar-senha`).
+
+### Console da plataforma (admin do SaaS)
+
+`users.is_platform_admin` (`000075`) distingue o operador do SaaS do
+`super_admin` de uma igreja. O admin de plataforma **nao tem vinculo de igreja**
+(`000077` remove memberships de quem tem a flag): o login emite tokens **sem
+tenant** e papel `platform_admin` (o RLS nao devolve dados operacionais). Com a
+flag, o webadmin mostra apenas o menu **Plataforma** (Visao geral, Igrejas,
+Planos): edita dados/plano/limites/branding, suspende/reativa a igreja, gerencia
+o catalogo `plans` e ve estatisticas gerais (`GET /admin/stats`). No Gerenciar de
+cada igreja ha a aba **Usuarios** (suporte): listar/criar acessos, definir
+perfis (administradores), ativar/desativar e redefinir senha — via
+`/admin/tenants/{id}/users*` (roda em `WithSystem`, sem impersonation, com
+registro em `audit_log`). Antes, qualquer `super_admin` de igreja listava e
+criava tenants (corrigido: o gate agora e `is_platform_admin()`). Enforcement de
+limites ainda nao existe (so gerencia/exibe).
+
+### Modulos por plano (entitlements)
+
+`plans.features` (jsonb) define os modulos de cada plano e `tenants.features`
+(jsonb) e o override por igreja; a feature efetiva e o plano sobreposto pelo
+override, com **chave ausente = habilitada** (`000078`). Modulos core (pessoas,
+admin, app do membro) nunca sao bloqueados. O catalogo fica em
+`internal/org/entitlements.go` (exposto em `GET /admin/features`). O enforcement
+e no backend: um middleware mapeia rota->feature e devolve **403
+`plan_feature_disabled`**; o menu do webadmin so esconde (nao e a seguranca).
+Quotas (`max_members/max_branches/max_users/max_storage_mb`) bloqueiam criacao
+(POST membros/filiais/usuarios/acesso e uploads) com 403 `limite do plano
+atingido`. A resolucao roda no escopo da igreja, por isso a policy de `plans`
+libera a leitura do proprio plano (`000079`).
 
 ### 3. Servico Go localmente (para depurar)
 
@@ -267,7 +340,7 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 |---|---|---|---|
 | GET  | `/healthz` | - | Health check |
 | GET  | `/metrics` | - | Metricas Prometheus |
-| POST | `/api/v1/auth/login` | - | Login (access + refresh); `tenant_slug` opcional; pode exigir selecao de igreja |
+| POST | `/api/v1/auth/login` | - | Login por e-mail OU telefone (access + refresh); `tenant_slug` opcional; pode exigir selecao de igreja |
 | POST | `/api/v1/auth/select-tenant` | selection token | Conclui o login escolhendo a igreja |
 | POST | `/api/v1/auth/switch-tenant` | Bearer | Troca a igreja ativa (novos tokens) |
 | GET  | `/api/v1/auth/refresh` | refresh | Renova tokens |
@@ -277,6 +350,19 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | POST | `/api/v1/public/leads` | - | Lead do site institucional (grava `marketing_leads`) |
 | PATCH | `/api/v1/me` | Bearer | Edita o proprio perfil (nome/e-mail) |
 | POST | `/api/v1/me/password` | Bearer | Troca a propria senha (senha atual + nova) |
+| GET  | `/api/v1/me/member` | Bearer | Cadastro de membro vinculado a identidade (app do membro) |
+| PATCH | `/api/v1/me/member` | Bearer | Edita contato/endereco do proprio membro |
+| GET  | `/api/v1/me/family` | Bearer | Familias do membro |
+| GET  | `/api/v1/me/events` | Bearer | Agenda no escopo do membro |
+| GET  | `/api/v1/me/announcements` | Bearer | Avisos ativos da igreja/filial do membro |
+| GET  | `/api/v1/me/birthdays?month=` | Bearer | Aniversariantes de nascimento e casamento do mes |
+| GET  | `/api/v1/me/ministries` | Bearer | Ministerios dos quais o membro participa |
+| GET  | `/api/v1/me/contributions?year=` | Bearer | Contribuicoes (entradas) do proprio membro no ano |
+| GET/POST | `/api/v1/me/prayer-requests` | Bearer | Meus pedidos de oracao / criar pedido |
+| GET  | `/api/v1/me/prayer-wall` | Bearer | Mural publico (visibilidade `igreja`) |
+| POST | `/api/v1/me/prayer-requests/{id}/react` | Bearer | "Estou orando" (reacao anonima) |
+| GET  | `/api/v1/prayer-requests` | Bearer (`prayer.read`) | Moderacao: lista pedidos por visibilidade |
+| PATCH | `/api/v1/prayer-requests/{id}` | Bearer (`prayer.moderate`) | Modera o pedido (status/observacao) |
 | GET  | `/api/v1/members` | Bearer | Lista membros (escopo RLS) |
 | POST | `/api/v1/members` | Bearer | Cria membro (escopo RLS) |
 | GET  | `/api/v1/members/{id}` | Bearer | Detalhe de membro |
@@ -286,6 +372,10 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | POST | `/api/v1/members/{id}/relationships` | Bearer | Cria vinculo (conjuge/filho/discipulo...) |
 | POST | `/api/v1/members/{id}/photo` | Bearer | Envia foto (multipart, `UPLOAD_DIR`, disco local) |
 | DELETE | `/api/v1/members/{id}/photo` | Bearer | Remove a foto do membro |
+| GET  | `/api/v1/members/{id}/access` | Bearer (Sede) | Situacao do acesso do membro ao app |
+| POST | `/api/v1/members/{id}/access` | Bearer (Sede) | Cria acesso (e-mail/telefone + senha provisoria) |
+| PATCH | `/api/v1/members/{id}/access` | Bearer (Sede) | Altera identificador / ativa-desativa acesso |
+| POST | `/api/v1/members/{id}/access/password` | Bearer (Sede) | Redefine a senha (provisoria) |
 | POST | `/api/v1/members/{id}/card` | Bearer | Emite carteirinha QR - **idempotente** (devolve `card_ref` + `token`) |
 | GET  | `/api/v1/members/{id}/card` | Bearer | Le a carteirinha ja emitida (`card_ref` + `token`) |
 | GET  | `/api/v1/members/{id}/families` | Bearer | Familias das quais o membro participa |
@@ -418,6 +508,19 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | POST | `/api/v1/admin/reset-data` | Bearer (super_admin) | Limpa dados operacionais (mantem base + super_admin); corpo `{"confirm":"RESET"}` |
 | GET  | `/api/v1/admin/tenants` | Bearer (super_admin) | Lista as igrejas (onboarding) |
 | POST | `/api/v1/admin/tenants` | Bearer (super_admin) | Cria igreja (tenant + Matriz + papeis + super_admin); o subdominio ja vale |
+| GET  | `/api/v1/admin/tenants/{id}` | Bearer (platform admin) | Detalhe da igreja para o console |
+| PATCH | `/api/v1/admin/tenants/{id}` | Bearer (platform admin) | Edita dados/plano/branding/limites/situacao (suspender/reativar) |
+| GET  | `/api/v1/admin/tenants/{id}/usage` | Bearer (platform admin) | Uso da igreja (membros/filiais/usuarios/storage) |
+| GET  | `/api/v1/admin/stats` | Bearer (platform admin) | Estatisticas gerais (igrejas por plano, totais, recentes) |
+| GET  | `/api/v1/admin/features` | Bearer (platform admin) | Catalogo de modulos gateaveis por plano |
+| GET/POST | `/api/v1/admin/tenants/{id}/users` | Bearer (platform admin) | Suporte: lista/cria acessos da igreja |
+| PATCH | `/api/v1/admin/tenants/{id}/users/{userId}` | Bearer (platform admin) | Suporte: edita perfil/filial/ativo (define administradores) |
+| POST | `/api/v1/admin/tenants/{id}/users/{userId}/password` | Bearer (platform admin) | Suporte: redefine senha do acesso |
+| GET  | `/api/v1/admin/tenants/{id}/roles` | Bearer (platform admin) | Perfis da igreja (seletor do console) |
+| GET  | `/api/v1/admin/tenants/{id}/branches` | Bearer (platform admin) | Filiais da igreja (seletor do console) |
+| GET  | `/api/v1/admin/plans` | Bearer (platform admin) | Catalogo de planos |
+| POST | `/api/v1/admin/plans` | Bearer (platform admin) | Cria plano |
+| PATCH | `/api/v1/admin/plans/{key}` | Bearer (platform admin) | Edita plano |
 | GET  | `/api/v1/auth/mfa` | Bearer | Estado do MFA |
 | POST | `/api/v1/auth/mfa/setup` | Bearer | Gera segredo TOTP |
 | POST | `/api/v1/auth/mfa/enable` | Bearer | Ativa MFA (codigo) |
@@ -427,7 +530,7 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | PATCH | `/api/v1/branches/{id}` | Bearer (Sede) | Edita filial (nome/tipo/CNPJ/endereco/ativa) |
 | DELETE | `/api/v1/branches/{id}` | Bearer (Sede) | Exclui filial (409 se houver membros) |
 | GET  | `/api/v1/tenant` | Bearer | Dados da igreja (tenant) |
-| PATCH | `/api/v1/tenant` | Bearer (Sede) | Edita dados da igreja |
+| PATCH | `/api/v1/tenant` | Bearer (Sede) | Edita dados da igreja (inclui branding e Pix) |
 
 ---
 
