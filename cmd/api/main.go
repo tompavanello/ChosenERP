@@ -32,6 +32,7 @@ import (
 	"chosenerp/internal/org"
 	"chosenerp/internal/prayer"
 	"chosenerp/internal/programacao"
+	"chosenerp/internal/push"
 	"chosenerp/internal/rosters"
 	"chosenerp/internal/store"
 	"chosenerp/internal/suppliers"
@@ -71,6 +72,16 @@ func main() {
 	// Permite resolver canais (SMTP/WhatsApp) por filial no momento do envio.
 	dispatcher.Store = st
 
+	// Web Push (VAPID): desabilitado quando as chaves nao estao configuradas.
+	pushRepo := &push.Repo{
+		Config: push.Config{
+			PublicKey:  cfg.VAPIDPublicKey,
+			PrivateKey: cfg.VAPIDPrivateKey,
+			Subject:    cfg.VAPIDSubject,
+		},
+		Client: &http.Client{Timeout: 15 * time.Second},
+	}
+
 	docRepo := &documents.Repo{}
 	finRepo := &finance.Repo{}
 	router := httpapi.NewRouter(&httpapi.Config{
@@ -85,7 +96,7 @@ func main() {
 		&members.Repo{}, finRepo, &audit.Repo{}, docRepo,
 		&families.Repo{}, &visitors.Repo{}, &benefactors.Repo{}, &suppliers.Repo{},
 		&ministries.Repo{}, &groups.Repo{}, &announcements.Repo{},
-		&cargos.Repo{}, &programacao.Repo{}, &users.Repo{}, &events.Repo{}, &lgpd.Repo{}, &governance.Repo{}, &org.Repo{}, &rosters.Repo{}, &kids.Repo{}, &memberevents.Repo{}, &prayer.Repo{}, &materials.Repo{}, dispatcher)
+		&cargos.Repo{}, &programacao.Repo{}, &users.Repo{}, &events.Repo{}, &lgpd.Repo{}, &governance.Repo{}, &org.Repo{}, &rosters.Repo{}, &kids.Repo{}, &memberevents.Repo{}, &prayer.Repo{}, &materials.Repo{}, pushRepo, dispatcher)
 
 	// Worker da outbox de envio (retry de pendentes/falhos)
 	worker := &delivery.Worker{

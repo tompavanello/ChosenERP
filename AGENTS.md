@@ -136,6 +136,13 @@ docker compose -f infra/docker-compose.yml up -d member
   `PATCH /me/rosters/assignments/{id}` para confirmar/recusar a propria presenca
   (so o proprio `member_id`); tela "Minhas escalas". Frequencia propria em
   `GET /me/frequency` (aba "Minha frequencia" no Perfil).
+- **Web Push (`000083`)**: `push_subscriptions` guarda a inscricao por
+  dispositivo (dono = `current_user_id()`; system le tudo para enviar). O envio
+  usa VAPID (`webpush-go`); gere as chaves com `go run ./cmd/vapid-gen` e cole no
+  `.env` (`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`) - sem elas o
+  envio fica desabilitado. O service worker (`public/sw.js`) exibe a notificacao;
+  o toggle fica no Perfil do app. Hoje dispara ao criar um comunicado
+  (`pushToTenantAsync`, best-effort).
 - **Build args do Compose:** `API_ORIGIN`, `NEXT_PUBLIC_BASE_DOMAIN`.
 - **Acesso do membro:** a Sede cria o acesso em Membros -> aba **Acesso**, que
   grava a identidade + senha provisoria e linka `memberships.member_id` via
@@ -374,6 +381,9 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | GET  | `/api/v1/me/rosters` | Bearer | Escalas em que o membro foi escalado (confirmacao/recusa) |
 | PATCH | `/api/v1/me/rosters/assignments/{assignmentId}` | Bearer | Confirma/recusa a propria presenca na escala |
 | GET  | `/api/v1/me/frequency` | Bearer | Historico de frequencia do proprio membro |
+| GET  | `/api/v1/me/push/public-key` | Bearer | Chave publica VAPID para assinar Web Push |
+| POST | `/api/v1/me/push/subscribe` | Bearer | Registra a inscricao Web Push do dispositivo |
+| DELETE | `/api/v1/me/push/subscribe` | Bearer | Remove a inscricao Web Push (por `endpoint`) |
 | GET/POST | `/api/v1/me/prayer-requests` | Bearer | Meus pedidos de oracao / criar pedido |
 | GET  | `/api/v1/me/prayer-wall` | Bearer | Mural publico (visibilidade `igreja`) |
 | POST | `/api/v1/me/prayer-requests/{id}/react` | Bearer | "Estou orando" (reacao anonima) |

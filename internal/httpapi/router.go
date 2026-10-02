@@ -24,6 +24,7 @@ import (
 	"chosenerp/internal/org"
 	"chosenerp/internal/prayer"
 	"chosenerp/internal/programacao"
+	"chosenerp/internal/push"
 	"chosenerp/internal/rosters"
 	"chosenerp/internal/store"
 	"chosenerp/internal/suppliers"
@@ -59,13 +60,14 @@ type App struct {
 	MemberEvents  *memberevents.Repo
 	Prayers       *prayer.Repo
 	Materials     *materials.Repo
+	Push          *push.Repo
 	Dispatch      *delivery.Dispatcher
 	// Limitador protege as rotas /api/v1/public/* (sem auth).
 	Limitador *limitadorPublico
 }
 
 // NewRouter monta o gateway HTTP e suas rotas.
-func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo *members.Repo, finRepo *finance.Repo, auditRepo *audit.Repo, docRepo *documents.Repo, famRepo *families.Repo, visitRepo *visitors.Repo, benefRepo *benefactors.Repo, suppliersRepo *suppliers.Repo, ministRepo *ministries.Repo, groupsRepo *groups.Repo, annRepo *announcements.Repo, cargosRepo *cargos.Repo, programacaoRepo *programacao.Repo, usersRepo *users.Repo, eventsRepo *events.Repo, lgpdRepo *lgpd.Repo, govRepo *governance.Repo, orgRepo *org.Repo, rostersRepo *rosters.Repo, kidsRepo *kids.Repo, memberEventsRepo *memberevents.Repo, prayerRepo *prayer.Repo, materialsRepo *materials.Repo, dispatcher *delivery.Dispatcher) http.Handler {
+func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo *members.Repo, finRepo *finance.Repo, auditRepo *audit.Repo, docRepo *documents.Repo, famRepo *families.Repo, visitRepo *visitors.Repo, benefRepo *benefactors.Repo, suppliersRepo *suppliers.Repo, ministRepo *ministries.Repo, groupsRepo *groups.Repo, annRepo *announcements.Repo, cargosRepo *cargos.Repo, programacaoRepo *programacao.Repo, usersRepo *users.Repo, eventsRepo *events.Repo, lgpdRepo *lgpd.Repo, govRepo *governance.Repo, orgRepo *org.Repo, rostersRepo *rosters.Repo, kidsRepo *kids.Repo, memberEventsRepo *memberevents.Repo, prayerRepo *prayer.Repo, materialsRepo *materials.Repo, pushRepo *push.Repo, dispatcher *delivery.Dispatcher) http.Handler {
 	app := &App{
 		Config:        cfg,
 		Store:         st,
@@ -93,6 +95,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 		MemberEvents:  memberEventsRepo,
 		Prayers:       prayerRepo,
 		Materials:     materialsRepo,
+		Push:          pushRepo,
 		Dispatch:      dispatcher,
 		Limitador:     newLimitadorPublico(),
 	}
@@ -134,6 +137,9 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/me/rosters", authed(http.HandlerFunc(app.handleMeRosters)))
 	mux.Handle("PATCH /api/v1/me/rosters/assignments/{assignmentId}", authed(http.HandlerFunc(app.handleMeRespondRoster)))
 	mux.Handle("GET /api/v1/me/frequency", authed(http.HandlerFunc(app.handleMeFrequency)))
+	mux.Handle("GET /api/v1/me/push/public-key", authed(http.HandlerFunc(app.handlePushPublicKey)))
+	mux.Handle("POST /api/v1/me/push/subscribe", authed(http.HandlerFunc(app.handleMePushSubscribe)))
+	mux.Handle("DELETE /api/v1/me/push/subscribe", authed(http.HandlerFunc(app.handleMePushUnsubscribe)))
 	mux.Handle("GET /api/v1/me/prayer-requests", authed(http.HandlerFunc(app.handleListMyPrayers)))
 	mux.Handle("POST /api/v1/me/prayer-requests", authed(http.HandlerFunc(app.handleCreatePrayer)))
 	mux.Handle("GET /api/v1/me/prayer-wall", authed(http.HandlerFunc(app.handlePrayerWall)))

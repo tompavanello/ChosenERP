@@ -479,6 +479,23 @@ export async function getMeFrequency(): Promise<FrequencyEntry[]> {
   return data.frequency ?? [];
 }
 
+export interface PushSubscriptionPayload {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}
+
+export async function getPushPublicKey(): Promise<{ public_key: string; enabled: boolean }> {
+  return api<{ public_key: string; enabled: boolean }>("/api/v1/me/push/public-key");
+}
+
+export async function subscribePush(sub: PushSubscriptionPayload): Promise<void> {
+  await api("/api/v1/me/push/subscribe", { method: "POST", body: JSON.stringify(sub) });
+}
+
+export async function unsubscribePush(endpoint: string): Promise<void> {
+  await api("/api/v1/me/push/subscribe", { method: "DELETE", body: JSON.stringify({ endpoint }) });
+}
+
 // ---- Formatação ----
 export function datePt(iso?: string | null): string {
   if (!iso) return "";

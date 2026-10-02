@@ -44,6 +44,11 @@ type Config struct {
 	NotificationInterval time.Duration
 	// ScheduleInterval e o intervalo da varredura dos comunicados agendados.
 	ScheduleInterval time.Duration
+	// Web Push (VAPID): chaves do par gerado por `go run ./cmd/vapid-gen` e o
+	// contato (sub do JWT). Vazio desabilita o envio de push.
+	VAPIDPublicKey  string
+	VAPIDPrivateKey string
+	VAPIDSubject    string
 }
 
 func getenv(key, fallback string) string {
@@ -92,5 +97,8 @@ func Load() Config {
 		RecurringInterval:    time.Duration(getenvInt("RECURRING_POLL_SECONDS", 3600)) * time.Second,
 		NotificationInterval: time.Duration(getenvInt("NOTIFICATION_POLL_SECONDS", 3600)) * time.Second,
 		ScheduleInterval:     time.Duration(getenvInt("SCHEDULE_POLL_SECONDS", 60)) * time.Second,
+		VAPIDPublicKey:       getenv("VAPID_PUBLIC_KEY", ""),
+		VAPIDPrivateKey:      getenv("VAPID_PRIVATE_KEY", ""),
+		VAPIDSubject:         getenv("VAPID_SUBJECT", "mailto:contato@erpchosen.com.br"),
 	}
 }

@@ -169,6 +169,8 @@ func (a *App) handleCreateAnnouncement(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// Web Push best-effort: avisa os dispositivos inscritos da igreja.
+	a.pushToTenantAsync(claims.TenantID, an.Title, an.Body)
 	writeJSON(w, http.StatusCreated, an)
 }
 

@@ -179,7 +179,7 @@ App do membro
       `plan_feature_disabled`) e **quotas** de membros/filiais/usuarios/storage
       (403 `limite do plano atingido`). Editor de modulos em Planos e override
       por igreja. Modulos core e app do membro nunca bloqueados.
-- [ ] V2 (solicitacoes/formularios, area do lider) e Web Push (notificacoes no navegador).
+- [ ] V2 (solicitacoes/formularios, area do lider).
   > V1 ampliada (02/10/2026): aniversariantes/casamentos (`/me/birthdays`),
   > ministerios do membro (`/me/ministries`) e Contribuir com Pix + historico
   > (`/me/contributions`, `tenants.pix_key`/`pix_name` - `000080`). PWA
@@ -194,6 +194,10 @@ App do membro
   > da propria presenca (`PATCH /me/rosters/assignments/{id}` - so o proprio
   > `member_id`); tela "Minhas escalas"; `GET /me/frequency` e tela/aba "Minha
   > frequencia".
+  > **Web Push (02/10/2026):** `push_subscriptions` (`000083`), VAPID
+  > (`go run ./cmd/vapid-gen` -> `VAPID_*`), endpoints `/me/push/*`, service
+  > worker com handler de `push`/`notificationclick` e toggle no Perfil; dispara
+  > best-effort ao criar um comunicado.
 - [ ] Enforcement de limites de plano (hoje so gerencia/exibe).
 - [ ] O item "App do membro - versao basica" do PRD era atendido apenas como
       **pagina publica** de carteirinha + avisos (sem login); agora ha app PWA

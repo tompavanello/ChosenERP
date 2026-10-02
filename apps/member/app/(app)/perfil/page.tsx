@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/input";
 import { SkeletonRows } from "@/components/ui/skeleton";
+import { PushToggle } from "@/components/push-toggle";
 import {
   datePt,
   getMeFamily,
@@ -161,6 +162,8 @@ export default function PerfilPage() {
           </ul>
         )}
       </Card>
+
+      <PushToggle />
 
       <Link href="/frequencia" className="block">
         <Card className="flex items-center justify-between">

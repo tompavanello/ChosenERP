@@ -136,6 +136,9 @@ services:
       PUBLIC_BASE_DOMAIN: ${PUBLIC_BASE_DOMAIN:-erpchosen.com.br}
       DELIVERY_POLL_SECONDS: ${DELIVERY_POLL_SECONDS:-30}
       RECURRING_POLL_SECONDS: ${RECURRING_POLL_SECONDS:-3600}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:contato@erpchosen.com.br}
     ports:
       - "${API_HTTP_PORT:-38080}:8080"
     volumes:
