@@ -163,6 +163,8 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("PATCH /api/v1/members/{id}", authed(http.HandlerFunc(app.handleUpdateMember)))
 	mux.Handle("DELETE /api/v1/members/{id}", authed(http.HandlerFunc(app.handleDeleteMember)))
 	mux.Handle("POST /api/v1/members/{id}/transfer", authed(app.perm("members.write", app.handleTransferMember)))
+	mux.Handle("GET /api/v1/members/{id}/documents", authed(http.HandlerFunc(app.handleListMemberDocuments)))
+	mux.Handle("POST /api/v1/members/{id}/documents", authed(app.perm("members.write", app.handleIssueMemberDocument)))
 	mux.Handle("GET /api/v1/members/{id}/tree", authed(http.HandlerFunc(app.handleMemberTree)))
 	mux.Handle("POST /api/v1/members/{id}/relationships", authed(http.HandlerFunc(app.handleAddRelationship)))
 	mux.Handle("POST /api/v1/members/{id}/card", authed(http.HandlerFunc(app.handleIssueCard)))
@@ -281,6 +283,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 
 	// Documentos digitais (leitura por token do QR)
 	mux.Handle("GET /api/v1/documents/by-token/{token}", authed(http.HandlerFunc(app.handleGetDocumentByToken)))
+	mux.Handle("GET /api/v1/documents/{id}/html", authed(http.HandlerFunc(app.handleRenderDocument)))
 
 	// Recibos: renderizacao e envio (prefixo proprio evita ambiguidade de rotas)
 	mux.Handle("GET /api/v1/receipts/{id}", authed(http.HandlerFunc(app.handleRenderReceipt)))

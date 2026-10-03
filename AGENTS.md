@@ -409,6 +409,8 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | PATCH | `/api/v1/members/{id}` | Bearer | Edita perfil do membro |
 | DELETE | `/api/v1/members/{id}` | Bearer (Sede) | Exclui membro definitivamente (so `super_admin`/`admin_sede`; cascata nos vinculos) |
 | POST | `/api/v1/members/{id}/transfer` | Bearer (`members.write`) | Transfere o membro para outra filial do mesmo tenant (auditado) |
+| GET/POST | `/api/v1/members/{id}/documents` | Bearer (`members.write` no POST) | Lista/emite certificados e cartas do membro |
+| GET | `/api/v1/documents/{id}/html` | Bearer | Renderiza o documento (certificado/carta/recibo) em HTML |
 | POST | `/api/v1/members/{id}/relationships` | Bearer | Cria vinculo (conjuge/filho/discipulo...) |
 | POST | `/api/v1/members/{id}/photo` | Bearer | Envia foto (multipart, `UPLOAD_DIR`, disco local) |
 | DELETE | `/api/v1/members/{id}/photo` | Bearer | Remove a foto do membro |

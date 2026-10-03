@@ -759,6 +759,30 @@ export const transferMember = (id: string, branchId: string, reason = "") =>
     body: JSON.stringify({ branch_id: branchId, reason }),
   });
 
+// ---- Documentos de secretaria (certificados/cartas) ----
+export interface MemberDocument {
+  id: string;
+  kind: string;
+  title: string;
+  document_ref: string;
+  qr_token: string;
+  created_at: string;
+}
+export const listMemberDocuments = (memberId: string) =>
+  api<{ documents: MemberDocument[] }>(`/api/v1/members/${memberId}/documents`);
+export const issueMemberDocument = (
+  memberId: string,
+  data: { kind: string; type: string; notes?: string; city?: string; spouse?: string },
+) => api<MemberDocument>(`/api/v1/members/${memberId}/documents`, { method: "POST", body: JSON.stringify(data) });
+
+/** Abre o documento (certificado/carta) em nova aba, com a sessao atual. */
+export async function openDocument(id: string) {
+  const res = await apiRaw(`/api/v1/documents/${id}/html`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank");
+}
+
 // ---- Historico eclesiastico do membro (requisito 1.8) ----
 export const listMemberHistory = (memberId: string) =>
   api<{ history: MemberHistory[] }>(`/api/v1/members/${memberId}/history`);

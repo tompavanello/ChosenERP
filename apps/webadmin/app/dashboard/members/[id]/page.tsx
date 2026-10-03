@@ -26,6 +26,7 @@ import { HistorySection } from "@/components/members/history-section";
 import { FrequencySection } from "@/components/members/frequency-section";
 import { LgpdSection } from "@/components/members/lgpd-section";
 import { AccessSection } from "@/components/members/access-section";
+import { SecretariaDocs } from "@/components/members/secretaria-docs";
 import {
   getMember, getMemberTree, addRelationship, listMembers, assetURL,
   updateMember, transferMember,
@@ -381,26 +382,29 @@ export default function MemberDetailPage() {
       )}
 
       {tab === "docs" && (
-        <Card className="p-3">
-          <div className="mb-3 flex items-center gap-2">
-            <HeartHandshake className="h-4 w-4 text-sky-600" />
-            <h3 className="text-sm font-semibold">Documentos</h3>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-zinc-300 p-4 dark:border-zinc-700">
-            <div>
-              <p className="font-medium">Carteirinha de membro</p>
-              <p className="text-xs text-zinc-400">
-                QR Code com vinculo digital a igreja. O numero e unico e estavel: emitir de novo
-                devolve a mesma carteirinha.
-              </p>
+        <div className="space-y-4">
+          <Card className="p-3">
+            <div className="mb-3 flex items-center gap-2">
+              <HeartHandshake className="h-4 w-4 text-sky-600" />
+              <h3 className="text-sm font-semibold">Documentos</h3>
             </div>
-            <CardCell
-              memberId={member.id}
-              cardRef={member.card_ref}
-              onIssued={(ref) => setMember((m) => (m ? { ...m, card_ref: ref } : m))}
-            />
-          </div>
-        </Card>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-zinc-300 p-4 dark:border-zinc-700">
+              <div>
+                <p className="font-medium">Carteirinha de membro</p>
+                <p className="text-xs text-zinc-400">
+                  QR Code com vinculo digital a igreja. O numero e unico e estavel: emitir de novo
+                  devolve a mesma carteirinha.
+                </p>
+              </div>
+              <CardCell
+                memberId={member.id}
+                cardRef={member.card_ref}
+                onIssued={(ref) => setMember((m) => (m ? { ...m, card_ref: ref } : m))}
+              />
+            </div>
+          </Card>
+          <SecretariaDocs memberId={member.id} canWrite={canWrite} />
+        </div>
       )}
 
       {tab === "lgpd" && <LgpdSection memberId={member.id} canWrite={canWrite} isAdmin={isAdmin} />}

@@ -56,12 +56,12 @@ func (r *Repo) TenantName(ctx context.Context, tx pgx.Tx) (string, error) {
 
 // CardInfo resume os dados de uma carteirinha resolvida por token (app do membro).
 type CardInfo struct {
-	Token      string  `json:"token"`
-	Ref        string  `json:"card_ref"`
-	MemberID   string  `json:"member_id"`
-	MemberName string  `json:"member"`
-	TenantID   string  `json:"tenant_id"`
-	BranchID   string  `json:"branch_id"`
+	Token      string `json:"token"`
+	Ref        string `json:"card_ref"`
+	MemberID   string `json:"member_id"`
+	MemberName string `json:"member"`
+	TenantID   string `json:"tenant_id"`
+	BranchID   string `json:"branch_id"`
 	// PhotoURL e BranchName alimentam a carteirinha impressa; a foto vem do
 	// cadastro do membro (members.photo_url) e a filial e o nome legivel, nao o
 	// UUID - a versao anterior imprimia "Ref: CARD-XXXX" sem foto nem filial.
