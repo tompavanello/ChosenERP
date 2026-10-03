@@ -352,6 +352,13 @@ O subdominio de cada igreja e `{tenant.slug}.erpchosen.com.br` (ex.: o tenant
   UPDATE/DELETE) com **hash-chain** de integridade.
 - Login usa funcao `SECURITY DEFINER` (`auth_lookup_user`) para localizar o usuario
   **fora** do escopo RLS (o tenant ainda nao e conhecido).
+- **RBAC por rota (`app.perm`)**: as rotas de **membros** (`members.read`/`write`/
+  `delete`, `families.read`, `visitors.read`), **financeiro**
+  (`finance.read`/`write`) e **relatorios** (`reports.read`) exigem a permissao do
+  papel (403 `forbidden`), alem do gate de plano. O acesso do membro
+  (`/members/{id}/access*`) exige Sede via `adminOnly`. Os demais modulos
+  (eventos, ministerios, grupos, etc.) ainda sao apenas *feature-gated* - a nav do
+  webadmin esconde por permissao, mas falta endurecer o backend.
 
 ### Teste manual de isolamento
 

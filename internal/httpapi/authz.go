@@ -180,6 +180,23 @@ func (a *App) hasPerm(ctx context.Context, tx pgx.Tx, claims *auth.Claims, perm 
 	return ok, err
 }
 
+// adminOnly restringe a rota a Sede (super_admin/admin_sede). Complementa o
+// gate de permissao para operacoes sensiveis que o frontend so mostra ao admin.
+func (a *App) adminOnly(next http.HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := claimsFrom(r.Context())
+		if !ok {
+			writeErr(w, http.StatusUnauthorized, "unauthenticated")
+			return
+		}
+		if !isAdmin(claims.Role) {
+			writeErr(w, http.StatusForbidden, "somente admin_sede ou super_admin")
+			return
+		}
+		next(w, r)
+	})
+}
+
 // perm envolve um handler exigindo uma permissao. Usa o mesmo escopo RLS da
 // sessao; nega com 403 quando o papel nao possui a permissao. Serve para
 // proteger rotas sensiveis (ex.: moderacao de pedidos de oracao).

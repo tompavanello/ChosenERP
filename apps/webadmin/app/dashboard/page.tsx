@@ -43,13 +43,13 @@ export default function OverviewPage() {
     const load = async () => {
       if (hasPerm("finance.read")) {
         const [bal, s, m, v] = await Promise.all([
-          getBalance(),
-          getMonthlyBalance(),
+          getBalance().catch(() => null),
+          hasPerm("reports.read") ? getMonthlyBalance().catch(() => null) : Promise.resolve(null),
           listMembers().then((r) => r.members.length).catch(() => null),
           listVisitors().then((r) => r.visitors.length).catch(() => null),
         ]);
         setBalance(bal);
-        setSeries(s.series);
+        setSeries(s?.series ?? []);
         setMembers(m);
         setVisitors(v);
       } else {

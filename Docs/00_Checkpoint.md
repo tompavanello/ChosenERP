@@ -131,13 +131,13 @@ Secretaria digital (1.4)
       (politicas RLS ignoram `parent_id`, e nao ha CRUD/UI de hierarquia).
 
 Compliance LGPD (1.5) - *risco legal, bloqueia comercializacao*
-- [ ] API/UI de termo de consentimento (tabelas `consent_terms` e `member_consents` existem, **sem endpoint nem tela**).
-- [ ] Exportacao/portabilidade dos dados do titular.
-- [ ] Anonimizacao e exclusao sob solicitacao.
+- [x] Termo de consentimento (`consent_terms`/`member_consents`): `GET/POST /consent-terms`, `GET/POST /members/{id}/consents` + aba LGPD (Etapa 6).
+- [x] Exportacao/portabilidade dos dados do titular: `GET /members/{id}/export` (JSON) (Etapa 6).
+- [x] Anonimizacao sob solicitacao: `POST /members/{id}/anonymize` (Etapa 6; exclusao fisica nao, por retencao fiscal).
 
 Financeiro (2.1 / 2.2)
 - [x] Contas a pagar **vs. pagas** (02/10/2026): `due_date`/`paid_at`/`cost_center` (`000085`) + quitacao (`/finance/transactions/{id}/settle`) e situacao no financeiro. Fluxo completo de titulos/parcelas (`Docs/05_...`) pendente.
-- [ ] Anexo de comprovantes digitais (**depende de S3**, tambem pendente da Fase 0).
+- [x] Anexo de comprovantes digitais (`financial_attachments`, `000019`) em disco local - S3 virou troca de backend, nao bloqueio.
 - [x] Centro de custo por ministerio/celula (`000085` - coluna `cost_center`).
 - [ ] Orcamento inteligente com workflow de aprovacao do tesoureiro.
 - [ ] Campanha de crowdfunding com pagina publica e termometro (o enum preve, sem implementacao).
@@ -145,8 +145,8 @@ Financeiro (2.1 / 2.2)
 
 Relatorios (Modulo 12)
 - [x] Relatorio de inadimplencia / queda de contribuicao (02/10/2026): `GET /reports/contribution-drop` + pagina "Queda de contribuicao".
-- [ ] Dashboard demografico: piramide etaria, distribuicao geografica.
-- [ ] Aniversariantes do mes (membros e casamentos).
+- [x] Dashboard demografico: piramide etaria, distribuicao geografica (`GET /reports/demographics`).
+- [x] Aniversariantes do mes (membros e casamentos) (`GET /reports/birthdays`).
 - [ ] Engajamento e frequencia por ministerio/celula.
   > A Visao Geral hoje mostra apenas: entradas, saidas, saldo, total de membros,
   > total de visitantes e grafico mensal de saldo.
