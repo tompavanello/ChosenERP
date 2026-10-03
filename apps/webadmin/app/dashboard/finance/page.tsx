@@ -21,7 +21,7 @@ import {
    getReceiptHTML, sendReceipt, createCategory, updateCategory, deleteCategory,
    listCategoryGroups, createCategoryGroup, updateCategoryGroup, deleteCategoryGroup,
    listAccounts, createAccount, updateAccount, deleteAccount,
-   uploadAttachment, listAttachments, listDeliveries, createTransaction, deleteTransaction,
+   uploadAttachment, listAttachments, listDeliveries, createTransaction, deleteTransaction, settleTransaction,
    listTransactionEvents, previewTransactions, importTransactionsFile, reorderTransactions,
    type Category, type CategoryGroup, type Transaction, type Balance, type BankAccount,
    type FinancialAttachment, type Delivery, type ImportResult, type EventAllocation,
@@ -299,6 +299,17 @@ export default function FinancePage() {
       ),
     },
     {
+      key: "pay_status",
+      label: "Situação",
+      width: "w-28",
+      render: (t) => {
+        if (t.type !== "expense") return <span className="text-zinc-300">-</span>;
+        if (t.paid_at) return <Badge tone="green">Pago</Badge>;
+        const overdue = !!t.due_date && t.due_date < new Date().toISOString().slice(0, 10);
+        return <Badge tone={overdue ? "red" : "amber"}>{overdue ? "Vencido" : "Em aberto"}</Badge>;
+      },
+    },
+    {
       key: "id",
       label: "",
       sortable: false,
@@ -312,6 +323,11 @@ export default function FinancePage() {
           <Button variant="ghost" size="sm" onClick={() => openDetail(t)} aria-label="Ver detalhes" title="Detalhes"><Eye className="h-3.5 w-3.5" /></Button>
           {!t.voided_at && hasPerm("finance.write") && (
             <>
+              {t.type === "expense" && (
+                <Button variant="ghost" size="sm" onClick={() => togglePaid(t)} title={t.paid_at ? "Reabrir" : "Quitar"}>
+                  {t.paid_at ? "Reabrir" : "Quitar"}
+                </Button>
+              )}
               <Button variant="ghost" size="sm" onClick={() => openEdit(t)} aria-label="Editar" title="Editar"><Pencil className="h-3.5 w-3.5" /></Button>
               <Button variant="ghost" size="sm" onClick={() => removeTxn(t)} aria-label="Excluir" title="Excluir"><Trash2 className="h-3.5 w-3.5 text-red-500" /></Button>
             </>
@@ -393,6 +409,16 @@ export default function FinancePage() {
       await handleTxnSaved();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao excluir", "error");
+    }
+  }
+
+  async function togglePaid(t: Transaction) {
+    try {
+      await settleTransaction(t.id, !t.paid_at);
+      toast(t.paid_at ? "Lancamento reaberto." : "Lancamento quitado.");
+      await handleTxnSaved();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao alterar quitacao", "error");
     }
   }
 
@@ -998,6 +1024,9 @@ export default function FinancePage() {
             supplier_id: editing.supplier_id ?? "",
             is_anonymous: editing.is_anonymous,
             entry_seq: editing.entry_seq !== undefined && editing.entry_seq !== null ? String(editing.entry_seq) : "",
+            due_date: editing.due_date ?? "",
+            cost_center: editing.cost_center ?? "",
+            paid: !!editing.paid_at,
           } : undefined}
           submitLabel={editing ? "Salvar alteracoes" : "Lancar"}
         />

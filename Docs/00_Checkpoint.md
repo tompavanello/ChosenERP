@@ -136,15 +136,15 @@ Compliance LGPD (1.5) - *risco legal, bloqueia comercializacao*
 - [ ] Anonimizacao e exclusao sob solicitacao.
 
 Financeiro (2.1 / 2.2)
-- [ ] Contas a pagar **vs. pagas** (hoje so ha lancamento de despesa; sem quitacao/vencimento).
+- [x] Contas a pagar **vs. pagas** (02/10/2026): `due_date`/`paid_at`/`cost_center` (`000085`) + quitacao (`/finance/transactions/{id}/settle`) e situacao no financeiro. Fluxo completo de titulos/parcelas (`Docs/05_...`) pendente.
 - [ ] Anexo de comprovantes digitais (**depende de S3**, tambem pendente da Fase 0).
-- [ ] Centro de custo por ministerio/celula (nao existe coluna `cost_center`).
+- [x] Centro de custo por ministerio/celula (`000085` - coluna `cost_center`).
 - [ ] Orcamento inteligente com workflow de aprovacao do tesoureiro.
 - [ ] Campanha de crowdfunding com pagina publica e termometro (o enum preve, sem implementacao).
-- [ ] Recibo com validade juridica para deducao de IR.
+- [x] Recibo com validade juridica para deducao de IR (02/10/2026): snapshot de emitente (razao social/CNPJ) e doador (nome + CPF/CNPJ) no recibo.
 
 Relatorios (Modulo 12)
-- [ ] Relatorio de inadimplencia / queda de contribuicao.
+- [x] Relatorio de inadimplencia / queda de contribuicao (02/10/2026): `GET /reports/contribution-drop` + pagina "Queda de contribuicao".
 - [ ] Dashboard demografico: piramide etaria, distribuicao geografica.
 - [ ] Aniversariantes do mes (membros e casamentos).
 - [ ] Engajamento e frequencia por ministerio/celula.
@@ -179,7 +179,7 @@ App do membro
       `plan_feature_disabled`) e **quotas** de membros/filiais/usuarios/storage
       (403 `limite do plano atingido`). Editor de modulos em Planos e override
       por igreja. Modulos core e app do membro nunca bloqueados.
-- [ ] V2 (solicitacoes/formularios, area do lider).
+- [x] V2 do app (solicitacoes/formularios, area do lider) - **02/10/2026**.
   > V1 ampliada (02/10/2026): aniversariantes/casamentos (`/me/birthdays`),
   > ministerios do membro (`/me/ministries`) e Contribuir com Pix + historico
   > (`/me/contributions`, `tenants.pix_key`/`pix_name` - `000080`). PWA
@@ -198,6 +198,10 @@ App do membro
   > (`go run ./cmd/vapid-gen` -> `VAPID_*`), endpoints `/me/push/*`, service
   > worker com handler de `push`/`notificationclick` e toggle no Perfil; dispara
   > best-effort ao criar um comunicado.
+  > **Solicitacoes + area do lider (02/10/2026):** `member_requests` (`000084`)
+  > com `/me/requests` (membro) e `/requests` (secretaria, `members.read/write`)
+  > + pagina "Solicitacoes"; `GET /me/led-groups` (grupos que o membro lidera com
+  > participantes e presenca) e tela "Area do lider". **V2 do app concluido.**
 - [ ] Enforcement de limites de plano (hoje so gerencia/exibe).
 - [ ] O item "App do membro - versao basica" do PRD era atendido apenas como
       **pagina publica** de carteirinha + avisos (sem login); agora ha app PWA

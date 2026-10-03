@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Church, LayoutDashboard, Users, Wallet, LogOut, HeartHandshake, DoorOpen,
-  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, CalendarCheck, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight, Globe, Layers, BookOpen,
+  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, TrendingDown, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, CalendarCheck, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight, Globe, Layers, BookOpen, Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -41,6 +41,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
     items: [
       { key: "members", href: "/dashboard/members", label: "Membros", icon: Users, perms: ["members.read"] },
       { key: "visitors", href: "/dashboard/visitors", label: "Visitantes", icon: DoorOpen, perms: ["members.read"] },
+      { key: "requests", href: "/dashboard/requests", label: "Solicitações", icon: Inbox, perms: ["members.read"] },
       { key: "benefactors", href: "/dashboard/benefactors", label: "Benfeitores", icon: HeartHandshake, perms: ["members.read"] },
       { key: "suppliers", href: "/dashboard/suppliers", label: "Fornecedores", icon: Truck, perms: ["finance.read"] },
     ],
@@ -80,6 +81,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
       { key: "rep-consolidated", href: "/dashboard/reports/consolidated", label: "Consolidado Sede > Filiais", icon: Building2, perms: ["finance.read"], feature: "reports" },
       { key: "rep-birthdays", href: "/dashboard/reports/birthdays", label: "Aniversariantes", icon: Cake, perms: ["members.read"], feature: "reports" },
       { key: "rep-demographics", href: "/dashboard/reports/demographics", label: "Demograficos", icon: PieChart, perms: ["members.read"], feature: "reports" },
+      { key: "rep-drop", href: "/dashboard/reports/contribution-drop", label: "Queda de contribuição", icon: TrendingDown, perms: ["finance.read"], feature: "reports" },
       { key: "rep-attendance", href: "/dashboard/reports/attendance", label: "Participantes por evento", icon: CalendarCheck, perms: ["members.read"], feature: "reports" },
     ],
   },

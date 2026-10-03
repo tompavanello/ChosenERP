@@ -482,6 +482,36 @@ func (a *App) handleVoidTxn(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// handleSettleTxn marca/desmarca a quitacao de um lancamento (contas a pagar).
+func (a *App) handleSettleTxn(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	id := r.PathValue("id")
+	var in struct {
+		Paid bool `json:"paid"`
+	}
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	b := boundsFromClaims(claims)
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		return a.Finance.Settle(r.Context(), tx, id, in.Paid)
+	})
+	if err != nil {
+		if store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "lancamento nao encontrado")
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 // handleDeleteTxn exclui DEFINITIVAMENTE um lancamento (sem deixar estorno) e
 // recalcula a hash-chain do tenant. Bloqueado quando preso a auditoria fechada.
 func (a *App) handleDeleteTxn(w http.ResponseWriter, r *http.Request) {

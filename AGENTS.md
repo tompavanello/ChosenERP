@@ -143,6 +143,15 @@ docker compose -f infra/docker-compose.yml up -d member
   envio fica desabilitado. O service worker (`public/sw.js`) exibe a notificacao;
   o toggle fica no Perfil do app. Hoje dispara ao criar um comunicado
   (`pushToTenantAsync`, best-effort).
+- **Solicitacoes/formularios (`000084`)**: `member_requests` (atualizacao
+  cadastral, carta, visita, batismo, profissao de fe, transferencia, casamento,
+  inscricao em evento); membro cria/acompanha em `/me/requests` (tela
+  "Solicitacoes"); secretaria responde em `GET/PATCH /requests` (permissao
+  `members.read`/`members.write`; pagina "Solicitacoes" no webadmin).
+- **Area do lider:** `GET /me/led-groups` devolve os grupos que o membro lidera
+  (por `small_groups.leader_id` ou `group_members.role='leader'`) com
+  participantes e o resumo dos ultimos encontros; tela "Area do lider" (atalho na
+  Home so quando o membro lidera algum grupo).
 - **Build args do Compose:** `API_ORIGIN`, `NEXT_PUBLIC_BASE_DOMAIN`.
 - **Acesso do membro:** a Sede cria o acesso em Membros -> aba **Acesso**, que
   grava a identidade + senha provisoria e linka `memberships.member_id` via
@@ -384,6 +393,10 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | GET  | `/api/v1/me/push/public-key` | Bearer | Chave publica VAPID para assinar Web Push |
 | POST | `/api/v1/me/push/subscribe` | Bearer | Registra a inscricao Web Push do dispositivo |
 | DELETE | `/api/v1/me/push/subscribe` | Bearer | Remove a inscricao Web Push (por `endpoint`) |
+| GET/POST | `/api/v1/me/requests` | Bearer | Solicitacoes/formularios do proprio membro |
+| GET  | `/api/v1/me/led-groups` | Bearer | Grupos que o membro lidera (participantes + presenca) |
+| GET  | `/api/v1/requests` | Bearer (`members.read`) | Lista solicitacoes dos membros (secretaria) |
+| PATCH | `/api/v1/requests/{id}` | Bearer (`members.write`) | Responde a solicitacao (status + observacao) |
 | GET/POST | `/api/v1/me/prayer-requests` | Bearer | Meus pedidos de oracao / criar pedido |
 | GET  | `/api/v1/me/prayer-wall` | Bearer | Mural publico (visibilidade `igreja`) |
 | POST | `/api/v1/me/prayer-requests/{id}/react` | Bearer | "Estou orando" (reacao anonima) |
@@ -486,6 +499,7 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | POST | `/api/v1/finance/transactions/reorder` | Bearer | Renumera a sequencia (entry_seq) dos lancamentos da mesma conta/data |
 | DELETE | `/api/v1/finance/transactions/{id}` | Bearer | Exclui o lancamento definitivamente (recalcula hash-chain) |
 | POST | `/api/v1/finance/transactions/{id}/void` | Bearer | Estorna o lancamento (legado; sai dos relatorios) |
+| POST | `/api/v1/finance/transactions/{id}/settle` | Bearer | Marca/desmarca a quitacao (contas a pagar; `paid_at`) |
 | GET  | `/api/v1/finance/transactions/{id}/events` | Bearer | Rateio do lancamento por evento |
 | PATCH | `/api/v1/ministries/{id}` | Bearer | Edita ministerio (responsavel/situacao) |
 | DELETE | `/api/v1/ministries/{id}` | Bearer | Exclui ministerio |
@@ -522,6 +536,7 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | GET  | `/api/v1/reports/dre?from=&to=` | Bearer | DRE por categoria + comparativo de periodo |
 | GET  | `/api/v1/reports/birthdays?month=` | Bearer | Aniversariantes (nascimento + casamento) |
 | GET  | `/api/v1/reports/demographics` | Bearer | Painel demografico (idade/status/UF/cidade) |
+| GET  | `/api/v1/reports/contribution-drop?months=&recent=` | Bearer | Queda/parada de contribuicao (doadores que pararam) |
 | GET  | `/api/v1/reports/balance/export?format=csv\|xlsx\|pdf` | Bearer | Exporta o balancete |
 | GET  | `/api/v1/reports/dre/export?format=csv\|xlsx\|pdf` | Bearer | Exporta o DRE |
 | GET  | `/api/v1/reports/birthdays/export?month=&format=` | Bearer | Exporta aniversariantes |

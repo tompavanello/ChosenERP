@@ -76,6 +76,10 @@ type Transaction struct {
 	DonorMemberID *string `json:"donor_member_id,omitempty"`
 	BenefactorID  *string `json:"benefactor_id,omitempty"`
 	DonorName     *string `json:"donor_name,omitempty"`
+	// Contas a pagar: vencimento, quitacao (NULL = em aberto) e centro de custo.
+	DueDate    *string    `json:"due_date,omitempty"`
+	PaidAt     *time.Time `json:"paid_at,omitempty"`
+	CostCenter *string    `json:"cost_center,omitempty"`
 }
 
 // MarshalJSON serializa occurred_at como data pura (YYYY-MM-DD). A data efetiva
@@ -304,6 +308,10 @@ type CreateTxnInput struct {
 	EntrySeq *int `json:"entry_seq"`
 	// Rateio opcional do lancamento entre eventos (custo real por evento).
 	EventAllocations []EventAllocationInput `json:"event_allocations"`
+	// Contas a pagar (opcional): vencimento, centro de custo e status pago.
+	DueDate    *string `json:"due_date"`
+	CostCenter *string `json:"cost_center"`
+	Paid       *bool   `json:"paid"`
 }
 
 type EventAllocationInput struct {
@@ -398,20 +406,24 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 	err = tx.QueryRow(ctx, `
 		INSERT INTO financial_transactions
 			(tenant_id, branch_id, category_id, type, amount, currency,
-			 payment_method, donor_member_id, benefactor_id, donor_name, supplier_id, is_anonymous, description, occurred_at, account_id, entry_seq)
+			 payment_method, donor_member_id, benefactor_id, donor_name, supplier_id, is_anonymous, description, occurred_at, account_id, entry_seq,
+			 due_date, cost_center, paid_at)
 		VALUES ($1, NULLIF($2,'')::uuid, NULLIF($3,'')::uuid, $4, $5, 'BRL',
-			 $6, NULLIF($7,'')::uuid, NULLIF($8,'')::uuid, NULLIF($14,''), NULLIF($13,'')::uuid, $9, $10, $11, NULLIF($12,'')::uuid, $15)
+			 $6, NULLIF($7,'')::uuid, NULLIF($8,'')::uuid, NULLIF($14,''), NULLIF($13,'')::uuid, $9, $10, $11, NULLIF($12,'')::uuid, $15,
+			 NULLIF($16,'')::date, NULLIF($17,''), CASE WHEN $18 THEN now() ELSE NULL END)
 		RETURNING id::text, branch_id::text, category_id::text, account_id::text,
 		          donor_member_id::text, benefactor_id::text, donor_name, entry_seq,
 		          type, amount::float8, currency, payment_method, is_anonymous,
-		          description, receipt_issued, hash, occurred_at, created_at`,
+		          description, receipt_issued, hash, occurred_at, created_at,
+		          due_date::text, paid_at, cost_center`,
 		tenantID, branchID, nullIfEmpty(in.CategoryID), in.Type, in.Amount,
 		in.PaymentMethod, in.DonorMemberID, in.BenefactorID, in.IsAnonymous, in.Description, when, in.AccountID,
-		in.SupplierID, in.DonorName, entrySeq).
+		in.SupplierID, in.DonorName, entrySeq, in.DueDate, in.CostCenter, in.Paid != nil && *in.Paid).
 		Scan(&t.ID, &t.BranchID, &t.CategoryID, &t.AccountID,
 			&t.DonorMemberID, &t.BenefactorID, &t.DonorName, &outSeq,
 			&t.Type, &t.Amount, &t.Currency,
-			&t.PaymentMethod, &t.IsAnonymous, &t.Description, &status, &t.Hash, &t.OccurredAt, &t.CreatedAt)
+			&t.PaymentMethod, &t.IsAnonymous, &t.Description, &status, &t.Hash, &t.OccurredAt, &t.CreatedAt,
+			&t.DueDate, &t.PaidAt, &t.CostCenter)
 	if err != nil {
 		return nil, "", "", "", err
 	}
@@ -649,7 +661,8 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind string) ([]Transaction,
 		       d.id::text, d.document_ref, d.qr_token,
 		       t.voided_at, t.void_reason,
 		       (SELECT count(*) FROM financial_attachments fa WHERE fa.transaction_id = t.id)::int,
-		       (SELECT fa.file_url FROM financial_attachments fa WHERE fa.transaction_id = t.id ORDER BY fa.created_at LIMIT 1)
+		       (SELECT fa.file_url FROM financial_attachments fa WHERE fa.transaction_id = t.id ORDER BY fa.created_at LIMIT 1),
+		       t.due_date::text, t.paid_at, t.cost_center
 		FROM financial_transactions t
 		JOIN recent r ON r.id = t.id
 		LEFT JOIN financial_categories c ON c.id = t.category_id
@@ -673,12 +686,30 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind string) ([]Transaction,
 			&t.Type, &t.Amount, &t.Currency, &t.PaymentMethod,
 			&t.IsAnonymous, &t.Description, &t.ReceiptIssued, &t.Hash, &t.OccurredAt, &t.CreatedAt, &t.EntrySeq,
 			&t.ReceiptID, &t.ReceiptRef, &t.ReceiptToken,
-			&t.VoidedAt, &t.VoidReason, &t.AttachmentCount, &t.AttachmentURL); err != nil {
+			&t.VoidedAt, &t.VoidReason, &t.AttachmentCount, &t.AttachmentURL,
+			&t.DueDate, &t.PaidAt, &t.CostCenter); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
 	}
 	return out, rows.Err()
+}
+
+// Settle marca (paid=true) ou desmarca (paid=false) a quitacao do lancamento.
+// Usado pelas contas a pagar. Colunas fora da hash-chain, entao o trigger
+// append-only permite o UPDATE.
+func (r *Repo) Settle(ctx context.Context, tx pgx.Tx, id string, paid bool) error {
+	tag, err := tx.Exec(ctx, `
+		UPDATE financial_transactions
+		SET paid_at = CASE WHEN $2 THEN now() ELSE NULL END
+		WHERE id = $1::uuid`, id, paid)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }
 
 // SumBalance retorna entradas/saidas agregadas e por categoria (balancete/DRE).

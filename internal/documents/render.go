@@ -21,6 +21,14 @@ type receiptContent struct {
 	Href       string  `json:"href"`
 	MemberID   string  `json:"member_id"`
 	Member     string  `json:"member"`
+	// Identificacao das partes (recibo com validade para comprovacao/IR).
+	DonorName   string `json:"donor_name"`
+	DonorDoc    string `json:"donor_doc"`
+	IsAnonymous bool   `json:"is_anonymous"`
+	Description string `json:"description"`
+	ChurchName  string `json:"church_name"`
+	ChurchLegal string `json:"church_legal_name"`
+	ChurchDoc   string `json:"church_doc"`
 }
 
 var typeLabel = map[string]string{
@@ -49,6 +57,8 @@ func RenderReceiptHTML(doc *Document, tenantName string) (string, error) {
 	if label == "" {
 		label = html.EscapeString(c.Type)
 	}
+
+	// Carteirinha: template reduzido (sem valores/doador).
 	if c.Kind == KindMembershipCard {
 		return fmt.Sprintf(receiptTemplate,
 			html.EscapeString(tenantName),
@@ -56,18 +66,51 @@ func RenderReceiptHTML(doc *Document, tenantName string) (string, error) {
 			"Carteirinha de Membro",
 			html.EscapeString(c.Member),
 			html.EscapeString(doc.DocumentRef),
-			when, "-", strings.Repeat("-", 24),
+			when,
+			"-",
+			"-",
+			"Nao identificado",
+			strings.Repeat("-", 24),
 			html.EscapeString(doc.QRToken),
+			"Documento de identificacao do membro (sem valor financeiro).",
 		), nil
+	}
+
+	// Recibo de contribuicao: identificacao do emitente e do doador.
+	emitente := html.EscapeString(tenantName)
+	if c.ChurchLegal != "" {
+		emitente = html.EscapeString(c.ChurchLegal)
+	}
+	if c.ChurchDoc != "" {
+		emitente += " - CNPJ " + html.EscapeString(c.ChurchDoc)
+	}
+	doador := "Nao identificado"
+	switch {
+	case c.IsAnonymous:
+		doador = "Doador anonimo"
+	case c.DonorName != "":
+		doador = html.EscapeString(c.DonorName)
+		if c.DonorDoc != "" {
+			doador += " - CPF/CNPJ: " + html.EscapeString(c.DonorDoc)
+		}
+	}
+	desc := "Contribuicao / dizimo"
+	if c.Description != "" {
+		desc = html.EscapeString(c.Description)
 	}
 	return fmt.Sprintf(receiptTemplate,
 		html.EscapeString(tenantName),
 		html.EscapeString(doc.Title),
 		label,
-		"Contribuicao/dizimo",
+		desc,
 		html.EscapeString(doc.DocumentRef),
-		when, brl(c.Amount), strings.Repeat("-", 24),
+		when,
+		brl(c.Amount),
+		emitente,
+		doador,
+		strings.Repeat("-", 24),
 		html.EscapeString(doc.QRToken),
+		"Recibo de contribuicao (dizimo/oferta) para fins de comprovacao. Documento nao fiscal.",
 	), nil
 }
 
@@ -80,14 +123,15 @@ const receiptTemplate = `<!doctype html>
 <style>
   :root { color-scheme: light; }
   body { margin:0; padding:32px; background:#f7f8fb; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color:#0b1020; }
-  .sheet { max-width:420px; margin:0 auto; background:#fff; border:1px solid #e4e7ee; border-radius:12px; padding:28px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+  .sheet { max-width:460px; margin:0 auto; background:#fff; border:1px solid #e4e7ee; border-radius:12px; padding:28px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
   .brand { display:flex; align-items:center; gap:10px; margin-bottom:18px; }
   .dot { width:34px; height:34px; border-radius:9px; background:#6d28d9; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; }
   h1 { font-size:16px; margin:0; letter-spacing:.02em; }
   .sub { font-size:12px; color:#6b7280; margin:0; }
   hr { border:0; border-top:1px dashed #d1d5db; margin:16px 0; }
-  .row { display:flex; justify-content:space-between; font-size:13px; padding:4px 0; }
-  .label { color:#6b7280; }
+  .row { display:flex; justify-content:space-between; gap:16px; font-size:13px; padding:4px 0; }
+  .row .label { color:#6b7280; white-space:nowrap; }
+  .row .val { text-align:right; }
   .amount { font-size:22px; font-weight:600; text-align:center; margin:14px 0 4px; }
   .kind { text-align:center; font-size:12px; color:#6b7280; }
   .sep { text-align:center; color:#cbd5e1; letter-spacing:2px; font-size:12px; }
@@ -105,16 +149,18 @@ const receiptTemplate = `<!doctype html>
       </div>
     </div>
     <hr />
-    <div class="row"><span class="label">Tipo</span><span>%[3]s</span></div>
-    <div class="row"><span class="label">Descricao</span><span>%[4]s</span></div>
-    <div class="row"><span class="label">Referencia</span><span>%[5]s</span></div>
-    <div class="row"><span class="label">Data</span><span>%[6]s</span></div>
+    <div class="row"><span class="label">Tipo</span><span class="val">%[3]s</span></div>
+    <div class="row"><span class="label">Descricao</span><span class="val">%[4]s</span></div>
+    <div class="row"><span class="label">Referencia</span><span class="val">%[5]s</span></div>
+    <div class="row"><span class="label">Data</span><span class="val">%[6]s</span></div>
+    <div class="row"><span class="label">Emitente</span><span class="val">%[8]s</span></div>
+    <div class="row"><span class="label">Doador</span><span class="val">%[9]s</span></div>
     <hr />
     <div class="amount">%[7]s</div>
     <div class="kind">%[3]s</div>
     <hr />
-    <div class="sep">%[8]s</div>
-    <p class="foot">Codigo de validacao: %[9]s<br/>Emitido via Chosen ERP</p>
+    <div class="sep">%[10]s</div>
+    <p class="foot">Codigo de validacao: %[11]s<br/>%[12]s<br/>Emitido via Chosen ERP</p>
   </div>
 </body>
 </html>`

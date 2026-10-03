@@ -25,6 +25,7 @@ import (
 	"chosenerp/internal/prayer"
 	"chosenerp/internal/programacao"
 	"chosenerp/internal/push"
+	"chosenerp/internal/requests"
 	"chosenerp/internal/rosters"
 	"chosenerp/internal/store"
 	"chosenerp/internal/suppliers"
@@ -61,13 +62,14 @@ type App struct {
 	Prayers       *prayer.Repo
 	Materials     *materials.Repo
 	Push          *push.Repo
+	Requests      *requests.Repo
 	Dispatch      *delivery.Dispatcher
 	// Limitador protege as rotas /api/v1/public/* (sem auth).
 	Limitador *limitadorPublico
 }
 
 // NewRouter monta o gateway HTTP e suas rotas.
-func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo *members.Repo, finRepo *finance.Repo, auditRepo *audit.Repo, docRepo *documents.Repo, famRepo *families.Repo, visitRepo *visitors.Repo, benefRepo *benefactors.Repo, suppliersRepo *suppliers.Repo, ministRepo *ministries.Repo, groupsRepo *groups.Repo, annRepo *announcements.Repo, cargosRepo *cargos.Repo, programacaoRepo *programacao.Repo, usersRepo *users.Repo, eventsRepo *events.Repo, lgpdRepo *lgpd.Repo, govRepo *governance.Repo, orgRepo *org.Repo, rostersRepo *rosters.Repo, kidsRepo *kids.Repo, memberEventsRepo *memberevents.Repo, prayerRepo *prayer.Repo, materialsRepo *materials.Repo, pushRepo *push.Repo, dispatcher *delivery.Dispatcher) http.Handler {
+func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo *members.Repo, finRepo *finance.Repo, auditRepo *audit.Repo, docRepo *documents.Repo, famRepo *families.Repo, visitRepo *visitors.Repo, benefRepo *benefactors.Repo, suppliersRepo *suppliers.Repo, ministRepo *ministries.Repo, groupsRepo *groups.Repo, annRepo *announcements.Repo, cargosRepo *cargos.Repo, programacaoRepo *programacao.Repo, usersRepo *users.Repo, eventsRepo *events.Repo, lgpdRepo *lgpd.Repo, govRepo *governance.Repo, orgRepo *org.Repo, rostersRepo *rosters.Repo, kidsRepo *kids.Repo, memberEventsRepo *memberevents.Repo, prayerRepo *prayer.Repo, materialsRepo *materials.Repo, pushRepo *push.Repo, requestsRepo *requests.Repo, dispatcher *delivery.Dispatcher) http.Handler {
 	app := &App{
 		Config:        cfg,
 		Store:         st,
@@ -96,6 +98,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 		Prayers:       prayerRepo,
 		Materials:     materialsRepo,
 		Push:          pushRepo,
+		Requests:      requestsRepo,
 		Dispatch:      dispatcher,
 		Limitador:     newLimitadorPublico(),
 	}
@@ -132,6 +135,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/me/ministries", authed(http.HandlerFunc(app.handleMeMinistries)))
 	mux.Handle("GET /api/v1/me/contributions", authed(http.HandlerFunc(app.handleMeContributions)))
 	mux.Handle("GET /api/v1/me/groups", authed(http.HandlerFunc(app.handleMeGroups)))
+	mux.Handle("GET /api/v1/me/led-groups", authed(http.HandlerFunc(app.handleMeLedGroups)))
 	mux.Handle("GET /api/v1/me/materials", authed(http.HandlerFunc(app.handleListMyMaterials)))
 	mux.Handle("GET /api/v1/me/materials/{id}/file", authed(http.HandlerFunc(app.handleDownloadMaterial)))
 	mux.Handle("GET /api/v1/me/rosters", authed(http.HandlerFunc(app.handleMeRosters)))
@@ -140,6 +144,10 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/me/push/public-key", authed(http.HandlerFunc(app.handlePushPublicKey)))
 	mux.Handle("POST /api/v1/me/push/subscribe", authed(http.HandlerFunc(app.handleMePushSubscribe)))
 	mux.Handle("DELETE /api/v1/me/push/subscribe", authed(http.HandlerFunc(app.handleMePushUnsubscribe)))
+	mux.Handle("GET /api/v1/me/requests", authed(http.HandlerFunc(app.handleListMyRequests)))
+	mux.Handle("POST /api/v1/me/requests", authed(http.HandlerFunc(app.handleCreateMyRequest)))
+	mux.Handle("GET /api/v1/requests", authed(app.perm("members.read", app.handleListRequests)))
+	mux.Handle("PATCH /api/v1/requests/{id}", authed(app.perm("members.write", app.handleUpdateRequest)))
 	mux.Handle("GET /api/v1/me/prayer-requests", authed(http.HandlerFunc(app.handleListMyPrayers)))
 	mux.Handle("POST /api/v1/me/prayer-requests", authed(http.HandlerFunc(app.handleCreatePrayer)))
 	mux.Handle("GET /api/v1/me/prayer-wall", authed(http.HandlerFunc(app.handlePrayerWall)))
@@ -236,6 +244,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/finance/transactions/import/preview", authed(http.HandlerFunc(app.handlePreviewTransactions)))
 	mux.Handle("POST /api/v1/finance/transactions/reorder", authed(http.HandlerFunc(app.handleReorderTxns)))
 	mux.Handle("POST /api/v1/finance/transactions/{id}/void", authed(http.HandlerFunc(app.handleVoidTxn)))
+	mux.Handle("POST /api/v1/finance/transactions/{id}/settle", authed(http.HandlerFunc(app.handleSettleTxn)))
 	mux.Handle("DELETE /api/v1/finance/transactions/{id}", authed(http.HandlerFunc(app.handleDeleteTxn)))
 	mux.Handle("GET /api/v1/finance/transactions/{id}/events", authed(http.HandlerFunc(app.handleListTxnEvents)))
 	mux.Handle("GET /api/v1/finance/transactions/{id}/attachments", authed(http.HandlerFunc(app.handleListAttachments)))
@@ -283,6 +292,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/reports/balance/export", authed(http.HandlerFunc(app.handleExportBalance)))
 	mux.Handle("GET /api/v1/reports/dre/export", authed(http.HandlerFunc(app.handleExportDRE)))
 	mux.Handle("GET /api/v1/reports/birthdays", authed(http.HandlerFunc(app.handleBirthdays)))
+	mux.Handle("GET /api/v1/reports/contribution-drop", authed(http.HandlerFunc(app.handleContributionDrops)))
 	mux.Handle("GET /api/v1/reports/birthdays/export", authed(http.HandlerFunc(app.handleExportBirthdays)))
 	mux.Handle("GET /api/v1/reports/demographics", authed(http.HandlerFunc(app.handleDemographics)))
 	mux.Handle("GET /api/v1/reports/demographics/export", authed(http.HandlerFunc(app.handleExportDemographics)))

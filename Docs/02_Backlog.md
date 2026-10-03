@@ -75,16 +75,16 @@ em todos os tenants. Corrigido pela migracao `000016_tenant_scope_rls` (detalhes
 | 11 | **S3 / object storage** | item pendente da Fase 0. **Nao e mais bloqueio de #12/#13**: ambos foram entregues sobre disco local |
 | 12 | **Anexo de comprovantes** nos lancamentos |  **Feito** (Set/2026) - `financial_attachments` (000019) + `POST /finance/transactions/{id}/attachments` e `GET /attachments/{filename}` em disco local |
 | 13 | **Upload de foto** do membro |  **Feito** (Set/2026) - `POST/DELETE /members/{id}/photo`, mesmo padrao de disco local de #12; foto no grid, no perfil e na carteirinha publica |
-| 14 | **Contas a pagar vs. pagas** | hoje so existe lancamento de despesa; falta `due_date`, `paid_at`, quitacao |
-| 15 | **Centro de custo** por ministerio/celula | adicionar `cost_center` em `financial_transactions` + migracao |
+| 14 | **Contas a pagar vs. pagas** | hoje so existe lancamento de despesa; falta `due_date`, `paid_at`, quitacao |  **Parcial (02/10/2026)** - `due_date`/`paid_at`/`cost_center` (`000085`), `POST /finance/transactions/{id}/settle` e coluna "Situacao" (Pago/Em aberto/Vencido) no financeiro. Fluxo completo de titulos/parcelas em `Docs/05_Plano_Fluxo_de_Caixa_Contas_Pagar_Receber.md` pendente |
+| 15 | **Centro de custo** por ministerio/celula | adicionar `cost_center` em `financial_transactions` + migracao |  **Feito (02/10/2026)** - coluna `cost_center` (`000085`) no lancamento |
 | 16 | **Orcamento (budgeting)** com workflow de aprovacao do tesoureiro | novo dominio `internal/budget` |
-| 17 | **Recibo com validade juridica para deducao de IR** | dados do doador (CPF/CNPJ) + layout especifico |
+| 17 | **Recibo com validade juridica para deducao de IR** | dados do doador (CPF/CNPJ) + layout especifico |  **Feito (02/10/2026)** - o recibo grava snapshot do emitente (razao social/CNPJ) e do doador (nome + CPF/CNPJ) e renderiza essas linhas no HTML |
 | 18 | **Crowdfunding** com pagina publica e termometro de meta | o enum de `type` ja preve `crowdfunding` |
 
 ### Relatorios (Modulo 12)
 | # | Item | Notas |
 |---|---|---|
-| 19 | **Relatorio de inadimplencia / queda de contribuicao** | com sigilo preservado (perfil) |
+| 19 | **Relatorio de inadimplencia / queda de contribuicao** | com sigilo preservado (perfil) |  **Feito (02/10/2026)** - `GET /reports/contribution-drop` (`internal/finance/contribution_drop.go`) + pagina "Queda de contribuicao" em Relatorios |
 | 20 | **Dashboard demografico**: piramide etaria + distribuicao geografica |  **Feito (23/09/2026)** - `GET /reports/demographics` + painel Recharts em Relatorios |
 | 21 | **Aniversariantes do mes** (membros e casamentos) |  **Feito (23/09/2026)** - `GET /reports/birthdays` + widget na Visao Geral; casamento usa `members.marriage_date` (`000023`) |
 | 22 | **Engajamento e frequencia** por ministerio/celula | reaproveitar `group_attendance` |
@@ -157,7 +157,7 @@ em todos os tenants. Corrigido pela migracao `000016_tenant_scope_rls` (detalhes
 - [ ] **Modulo 11**: botao de panico, gestao de estacionamento.
 - [ ] Multi-idioma e multi-moeda.
 - [ ] SuperApp white-label (Biblia, hinario, devocional gamificado) - hoje existe apenas a pagina publica `/member/[token]`.
-  > **V1 do app do membro (PWA, `apps/member`) entregue:** vinculo `memberships.member_id` (`000073`) + backfill `cmd/link-members`; API self `/api/v1/me/member|family|events|announcements|birthdays|ministries|contributions|groups|materials|rosters|frequency|push`; pedidos de oracao (`000074`, `/api/v1/me/prayer-requests*` + moderacao); contribuir com Pix (`tenants.pix_key` - `000080`); GD (`group_members` - `000081`) e materiais de estudo com download (`study_materials` - `000082`); escalas do membro (confirmar/recusar) e frequencia propria; Web Push VAPID (`000083`, `cmd/vapid-gen`); PWA instalavel (service worker/offline/icones) servido em `{slug}.erpchosen.com.br`. Faltam V2 (solicitacoes/formularios/area do lider).
+  > **V1 do app do membro (PWA, `apps/member`) entregue:** vinculo `memberships.member_id` (`000073`) + backfill `cmd/link-members`; API self `/api/v1/me/member|family|events|announcements|birthdays|ministries|contributions|groups|materials|rosters|frequency|push|requests|led-groups`; pedidos de oracao (`000074`, `/api/v1/me/prayer-requests*` + moderacao); contribuir com Pix (`tenants.pix_key` - `000080`); GD (`group_members` - `000081`) e materiais de estudo com download (`study_materials` - `000082`); escalas do membro (confirmar/recusar) e frequencia propria; Web Push VAPID (`000083`, `cmd/vapid-gen`); solicitacoes/formularios (`000084`) e area do lider; PWA instalavel (service worker/offline/icones) servido em `{slug}.erpchosen.com.br`. **V2 do app concluido**; faltam extras (Palavra/Estudos, Cultos online) e V3 (coberto pelo webadmin).
 - [ ] **Modulo 4**: cultos e eventos (`events`, `service_liturgy`), venda/reserva de vagas, reserva de espacos.
 
 ---

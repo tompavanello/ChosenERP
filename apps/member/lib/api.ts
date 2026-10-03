@@ -203,6 +203,12 @@ export interface MyGroup {
   meeting_time?: string | null;
   my_role: string;
   members: GroupMember[];
+  attendance?: AttendanceDay[];
+}
+export interface AttendanceDay {
+  date: string;
+  present: number;
+  absent: number;
 }
 export interface StudyMaterial {
   id: string;
@@ -407,6 +413,11 @@ export async function getMeGroups(): Promise<MyGroup[]> {
   return data.groups ?? [];
 }
 
+export async function getMeLedGroups(): Promise<MyGroup[]> {
+  const data = await api<{ groups: MyGroup[] }>("/api/v1/me/led-groups");
+  return data.groups ?? [];
+}
+
 export async function getMeMaterials(): Promise<StudyMaterial[]> {
   const data = await api<{ materials: StudyMaterial[] }>("/api/v1/me/materials");
   return data.materials ?? [];
@@ -494,6 +505,37 @@ export async function subscribePush(sub: PushSubscriptionPayload): Promise<void>
 
 export async function unsubscribePush(endpoint: string): Promise<void> {
   await api("/api/v1/me/push/subscribe", { method: "DELETE", body: JSON.stringify({ endpoint }) });
+}
+
+export interface MemberRequest {
+  id: string;
+  member_id?: string | null;
+  member_name?: string | null;
+  kind: string;
+  subject: string;
+  message?: string | null;
+  status: string;
+  response?: string | null;
+  created_at: string;
+  updated_at: string;
+  responded_at?: string | null;
+}
+
+export async function getMyRequests(): Promise<MemberRequest[]> {
+  const data = await api<{ requests: MemberRequest[] }>("/api/v1/me/requests");
+  return data.requests ?? [];
+}
+
+export async function createRequest(input: {
+  kind: string;
+  subject: string;
+  message?: string;
+}): Promise<MemberRequest> {
+  const data = await api<{ request: MemberRequest }>("/api/v1/me/requests", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return data.request;
 }
 
 // ---- Formatação ----

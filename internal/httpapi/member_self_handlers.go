@@ -275,6 +275,41 @@ func (a *App) handleMeGroups(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"groups": out})
 }
 
+// handleMeLedGroups lista os grupos que o membro lidera, com participantes e as
+// ultimas sessoes de presenca (area do lider).
+func (a *App) handleMeLedGroups(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var out []groups.MyGroup
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		m, e := a.memberForClaims(r.Context(), tx, claims)
+		if e != nil {
+			return e
+		}
+		out, e = a.Groups.ListLedByMember(r.Context(), tx, m.ID)
+		if e != nil {
+			return e
+		}
+		for i := range out {
+			if out[i].Attendance, e = a.Groups.AttendanceSummary(r.Context(), tx, out[i].ID, 3); e != nil {
+				return e
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		writeMemberErr(w, err)
+		return
+	}
+	if out == nil {
+		out = []groups.MyGroup{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"groups": out})
+}
+
 // handleMeRosters lista as escalas em que o membro foi escalado.
 func (a *App) handleMeRosters(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())

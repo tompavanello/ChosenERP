@@ -227,6 +227,15 @@ type MyGroup struct {
 	MeetingTime *string       `json:"meeting_time,omitempty"`
 	MyRole      string        `json:"my_role"`
 	Members     []GroupMember `json:"members"`
+	// Attendance e preenchido apenas na visao do lider (ultimas sessoes).
+	Attendance []AttendanceDay `json:"attendance,omitempty"`
+}
+
+// AttendanceDay e o resumo de presenca de um dia de encontro do grupo.
+type AttendanceDay struct {
+	Date    string `json:"date"`
+	Present int    `json:"present"`
+	Absent  int    `json:"absent"`
 }
 
 // ListMembers retorna os participantes de um grupo.
@@ -308,6 +317,75 @@ func (r *Repo) ListForMember(ctx context.Context, tx pgx.Tx, memberID string) ([
 		out[i].Members = members
 	}
 	return out, nil
+}
+
+// ListLedByMember lista os grupos ativos que o membro lidera (por `leader_id`
+// ou por papel 'leader' em group_members). Base da "Area do lider" no app.
+func (r *Repo) ListLedByMember(ctx context.Context, tx pgx.Tx, memberID string) ([]MyGroup, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT g.id::text, g.name, g.kind, lm.full_name, COALESCE(g.address->>'text',''),
+		       g.weekday, g.meeting_time::text
+		FROM small_groups g
+		LEFT JOIN members lm ON lm.id = g.leader_id
+		WHERE g.is_active
+		  AND (g.leader_id = $1::uuid
+		       OR EXISTS (SELECT 1 FROM group_members gm
+		                  WHERE gm.group_id = g.id AND gm.member_id = $1::uuid AND gm.role = 'leader'))
+		ORDER BY g.name`, memberID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MyGroup{}
+	for rows.Next() {
+		g := MyGroup{MyRole: "leader"}
+		if err := rows.Scan(&g.ID, &g.Name, &g.Kind, &g.LeaderName, &g.Address,
+			&g.Weekday, &g.MeetingTime); err != nil {
+			return nil, err
+		}
+		out = append(out, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range out {
+		members, err := r.ListMembers(ctx, tx, out[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		out[i].Members = members
+	}
+	return out, nil
+}
+
+// AttendanceSummary devolve o resumo de presenca das ultimas sessoes do grupo
+// (agrupado por dia), mais recentes primeiro.
+func (r *Repo) AttendanceSummary(ctx context.Context, tx pgx.Tx, groupID string, limit int) ([]AttendanceDay, error) {
+	if limit <= 0 {
+		limit = 3
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT to_char(ga.attended_at, 'YYYY-MM-DD'),
+		       count(*) FILTER (WHERE ga.present)::int,
+		       count(*) FILTER (WHERE NOT ga.present)::int
+		FROM group_attendance ga
+		WHERE ga.small_group_id = $1::uuid
+		GROUP BY 1
+		ORDER BY 1 DESC
+		LIMIT $2`, groupID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []AttendanceDay{}
+	for rows.Next() {
+		var d AttendanceDay
+		if err := rows.Scan(&d.Date, &d.Present, &d.Absent); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
 }
 
 func nullStr(s *string) *string {

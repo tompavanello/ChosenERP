@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, BookOpen, Cake, Calendar, CalendarCheck, HandCoins, Heart, User, Users, UsersRound } from "lucide-react";
+import { Bell, BookOpen, Cake, Calendar, CalendarCheck, HandCoins, Heart, Inbox, User, UserCog, Users, UsersRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import {
@@ -10,6 +10,7 @@ import {
   dateTimePt,
   getMeAnnouncements,
   getMeEvents,
+  getMeLedGroups,
   getMeMember,
   type Announcement,
   type ChurchEvent,
@@ -22,6 +23,7 @@ export default function HomePage() {
   const [anns, setAnns] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ledCount, setLedCount] = useState(0);
 
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10);
@@ -39,6 +41,10 @@ export default function HomePage() {
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Erro ao carregar."))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    getMeLedGroups().then((g) => setLedCount(g.length)).catch(() => {});
   }, []);
 
   if (loading) return <SkeletonRows rows={4} />;
@@ -149,6 +155,20 @@ export default function HomePage() {
             <span className="text-sm font-medium">Minhas escalas</span>
           </Card>
         </Link>
+        <Link href="/solicitacoes">
+          <Card className="flex h-full flex-col items-center justify-center gap-1 py-5 text-center">
+            <Inbox className="h-5 w-5 text-[var(--brand)]" />
+            <span className="text-sm font-medium">Solicitações</span>
+          </Card>
+        </Link>
+        {ledCount > 0 && (
+          <Link href="/lider">
+            <Card className="flex h-full flex-col items-center justify-center gap-1 py-5 text-center">
+              <UserCog className="h-5 w-5 text-[var(--brand)]" />
+              <span className="text-sm font-medium">Área do líder</span>
+            </Card>
+          </Link>
+        )}
         <Link href="/perfil" className="col-span-2">
           <Card className="flex h-full flex-col items-center justify-center gap-1 py-5 text-center">
             <User className="h-5 w-5 text-[var(--brand)]" />

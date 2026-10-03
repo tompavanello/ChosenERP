@@ -33,6 +33,10 @@ export interface TransactionFormState {
   is_anonymous: boolean;
   /** Posicao na sequencia do dia/conta (vazio = anexa ao fim). */
   entry_seq: string;
+  /** Contas a pagar (despesa): vencimento, centro de custo e pago. */
+  due_date: string;
+  cost_center: string;
+  paid: boolean;
 }
 
 const EMPTY: TransactionFormState = {
@@ -49,6 +53,9 @@ const EMPTY: TransactionFormState = {
   supplier_id: "",
   is_anonymous: false,
   entry_seq: "",
+  due_date: "",
+  cost_center: "",
+  paid: false,
 };
 
 export interface TransactionFormProps {
@@ -178,6 +185,9 @@ export function TransactionForm({
       supplier_id: form.supplier_id || undefined,
       is_anonymous: form.is_anonymous,
       entry_seq: form.entry_seq === "" ? undefined : Number(form.entry_seq),
+      due_date: form.due_date || undefined,
+      cost_center: form.cost_center || undefined,
+      paid: form.paid,
     };
     if (alloc.length > 0) {
       payload.event_allocations = alloc.map((a) => ({
@@ -393,6 +403,36 @@ export function TransactionForm({
               onChange={(v) => set("supplier_id", v)}
               className="w-full"
             />
+          </Field>
+        </Section>
+      )}
+
+      {form.type === "expense" && (
+        <Section title="Contas a pagar" hint="Vencimento, centro de custo e quitacao (opcional).">
+          <Field label="Vencimento">
+            <Input type="date" value={form.due_date} onChange={(e) => set("due_date", e.target.value)} disabled={saving} />
+          </Field>
+          <Field label="Centro de custo" hint="Ministerio, celula ou projeto.">
+            <Input
+              value={form.cost_center}
+              placeholder="Ex.: Missoes, Louvor"
+              maxLength={200}
+              onChange={(e) => set("cost_center", e.target.value)}
+              disabled={saving}
+            />
+          </Field>
+          <Field label="Situacao">
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="paid-toggle"
+                checked={form.paid}
+                onChange={(e) => set("paid", e.target.checked)}
+                disabled={saving}
+                className="h-4 w-4 rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
+              />
+              <label htmlFor="paid-toggle" className="text-sm text-zinc-600">Ja esta paga</label>
+            </div>
           </Field>
         </Section>
       )}

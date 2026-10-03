@@ -185,6 +185,32 @@ func (a *App) handleBirthdays(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleContributionDrops lista membros com queda/parada de contribuicao.
+func (a *App) handleContributionDrops(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	months, _ := strconv.Atoi(r.URL.Query().Get("months"))
+	recent, _ := strconv.Atoi(r.URL.Query().Get("recent"))
+	b := boundsFromClaims(claims)
+	var out []finance.ContributionDrop
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var e error
+		out, e = a.Finance.ContributionDrops(r.Context(), tx, months, recent)
+		return e
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if out == nil {
+		out = []finance.ContributionDrop{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"members": out})
+}
+
 // handleDemographics devolve o painel demografico (piramide etaria, status,
 // estado civil, sexo e distribuicao geografica) do escopo da sessao.
 func (a *App) handleDemographics(w http.ResponseWriter, r *http.Request) {

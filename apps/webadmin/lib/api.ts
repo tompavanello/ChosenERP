@@ -311,9 +311,13 @@ export interface Transaction {
   donor_name?: string;
   /** Sequencia do lancamento no escopo (filial, conta, data). */
   entry_seq?: number;
-  supplier_id?: string;
-  supplier_name?: string;
-  hash: string;
+    supplier_id?: string;
+    supplier_name?: string;
+    /** Contas a pagar: vencimento, quitacao (ausente = em aberto) e centro de custo. */
+    due_date?: string | null;
+    paid_at?: string | null;
+    cost_center?: string | null;
+    hash: string;
   occurred_at: string;
   /** Instante de criacao do registro (trilha de auditoria). */
   created_at?: string;
@@ -1133,6 +1137,12 @@ export const voidTransaction = (id: string, reason = "") =>
     method: "POST",
     body: JSON.stringify({ reason }),
   });
+/** Marca/desmarca a quitacao (contas a pagar). */
+export const settleTransaction = (id: string, paid: boolean) =>
+  api<{ ok: boolean }>(`/api/v1/finance/transactions/${id}/settle`, {
+    method: "POST",
+    body: JSON.stringify({ paid }),
+  });
 
 /** Exclui DEFINITIVAMENTE um lancamento (recalcula a hash-chain no backend). */
 export const deleteTransaction = (id: string) =>
@@ -1250,6 +1260,18 @@ export interface Demographics {
 export const getBirthdays = (month?: number) =>
   api<BirthdaysResult>(`/api/v1/reports/birthdays${month ? `?month=${month}` : ""}`);
 export const getDemographics = () => api<Demographics>("/api/v1/reports/demographics");
+
+// ---- Queda/parada de contribuicao (financeiro) ----
+export interface ContributionDrop {
+  member_id: string;
+  member_name: string;
+  last_at: string;
+  total: number;
+}
+export const getContributionDrops = (months = 6, recent = 1) =>
+  api<{ members: ContributionDrop[] }>(
+    `/api/v1/reports/contribution-drop?months=${months}&recent=${recent}`,
+  );
 
 // ---- Relatorio de participantes por evento (comparativo ano anterior) ----
 export interface AttendancePeriod {
@@ -1916,6 +1938,25 @@ export async function downloadMaterial(id: string, filename: string) {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+// ---- Solicitacoes do membro (formularios) ----
+export interface MemberRequest {
+  id: string;
+  member_id?: string | null;
+  member_name?: string | null;
+  kind: string;
+  subject: string;
+  message?: string | null;
+  status: string;
+  response?: string | null;
+  created_at: string;
+  updated_at: string;
+  responded_at?: string | null;
+}
+export const listRequests = (status?: string) =>
+  api<{ requests: MemberRequest[] }>(`/api/v1/requests${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+export const updateRequest = (id: string, data: { status: string; response?: string }) =>
+  api<{ request: MemberRequest }>(`/api/v1/requests/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 
 // ---- Avisos ----
 export interface Announcement {

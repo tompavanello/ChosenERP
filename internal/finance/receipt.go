@@ -16,16 +16,47 @@ func (r *Repo) issueReceipt(ctx context.Context, tx pgx.Tx, tenantID, branchID s
 	ref := "REC-" + hex.EncodeToString([]byte(t.Hash))[:8]
 	token := randomToken(12)
 
+	// Identificacao das partes (snapshot): o recibo deve guardar quem doou e
+	// quem recebeu COM os documentos, para ter validade de comprovacao mesmo se
+	// o cadastro mudar depois.
+	var churchName, churchLegal, churchDoc string
+	_ = tx.QueryRow(ctx, `
+		SELECT name, COALESCE(legal_name,''), COALESCE(cnpj,'')
+		FROM tenants WHERE id = $1::uuid`, tenantID).Scan(&churchName, &churchLegal, &churchDoc)
+
+	donorName, donorDoc := "", ""
+	switch {
+	case t.DonorMemberID != nil && *t.DonorMemberID != "":
+		_ = tx.QueryRow(ctx, `SELECT full_name, COALESCE(cpf,'') FROM members WHERE id = $1::uuid`,
+			*t.DonorMemberID).Scan(&donorName, &donorDoc)
+	case t.BenefactorID != nil && *t.BenefactorID != "":
+		_ = tx.QueryRow(ctx, `SELECT name, COALESCE(cpf,'') FROM benefactors WHERE id = $1::uuid`,
+			*t.BenefactorID).Scan(&donorName, &donorDoc)
+	case t.DonorName != nil:
+		donorName = *t.DonorName
+	}
+	desc := ""
+	if t.Description != nil {
+		desc = *t.Description
+	}
+
 	content, _ := json.Marshal(map[string]any{
-		"kind":        "receipt",
-		"ref":         ref,
-		"tx_id":       t.ID,
-		"branch_id":   t.BranchID,
-		"type":        t.Type,
-		"amount":      t.Amount,
-		"currency":    t.Currency,
-		"occurred_at": t.OccurredAt.UTC().Format(dateLayout),
-		"href":        "/api/v1/documents/by-token/" + token,
+		"kind":              "receipt",
+		"ref":               ref,
+		"tx_id":             t.ID,
+		"branch_id":         t.BranchID,
+		"type":              t.Type,
+		"amount":            t.Amount,
+		"currency":          t.Currency,
+		"occurred_at":       t.OccurredAt.UTC().Format(dateLayout),
+		"href":              "/api/v1/documents/by-token/" + token,
+		"donor_name":        donorName,
+		"donor_doc":         donorDoc,
+		"is_anonymous":      t.IsAnonymous,
+		"description":       desc,
+		"church_name":       churchName,
+		"church_legal_name": churchLegal,
+		"church_doc":        churchDoc,
 	})
 	var docID string
 	err := tx.QueryRow(ctx, `
