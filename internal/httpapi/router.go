@@ -283,7 +283,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 
 	// Documentos digitais (leitura por token do QR)
 	mux.Handle("GET /api/v1/documents/by-token/{token}", authed(http.HandlerFunc(app.handleGetDocumentByToken)))
-	mux.Handle("GET /api/v1/documents/{id}/html", authed(http.HandlerFunc(app.handleRenderDocument)))
+	mux.Handle("GET /api/v1/member-documents/{id}/html", authed(http.HandlerFunc(app.handleRenderDocument)))
 
 	// Recibos: renderizacao e envio (prefixo proprio evita ambiguidade de rotas)
 	mux.Handle("GET /api/v1/receipts/{id}", authed(http.HandlerFunc(app.handleRenderReceipt)))

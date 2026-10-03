@@ -777,7 +777,7 @@ export const issueMemberDocument = (
 
 /** Abre o documento (certificado/carta) em nova aba, com a sessao atual. */
 export async function openDocument(id: string) {
-  const res = await apiRaw(`/api/v1/documents/${id}/html`);
+  const res = await apiRaw(`/api/v1/member-documents/${id}/html`);
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   window.open(url, "_blank");
