@@ -258,6 +258,22 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput,
 	return r.Get(ctx, tx, updatedID)
 }
 
+// Transfer move o membro para outra filial do MESMO tenant. A juncao com
+// branches garante que o destino pertence ao tenant (o RLS de members nao valida
+// o branch de destino por si so).
+func (r *Repo) Transfer(ctx context.Context, tx pgx.Tx, id, branchID string) (*Member, error) {
+	var updatedID string
+	err := tx.QueryRow(ctx, `
+		UPDATE members m SET branch_id = b.id, updated_at = now()
+		FROM branches b
+		WHERE m.id = $1::uuid AND b.id = $2::uuid AND b.tenant_id = m.tenant_id
+		RETURNING m.id::text`, id, branchID).Scan(&updatedID)
+	if err != nil {
+		return nil, err
+	}
+	return r.Get(ctx, tx, updatedID)
+}
+
 // SetPhoto grava a foto do membro. Chamado apenas pelo endpoint de upload, que
 // monta a URL no servidor.
 func (r *Repo) SetPhoto(ctx context.Context, tx pgx.Tx, id string, photoURL *string) (*Member, error) {

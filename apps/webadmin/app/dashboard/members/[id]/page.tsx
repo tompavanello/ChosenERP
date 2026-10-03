@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
   ArrowLeft, Award, FileText, GitBranch, HeartHandshake, History, Link as LinkIcon, Pencil,
-  Phone, User, Users, Activity, ShieldCheck, KeyRound,
+  Phone, User, Users, Activity, ShieldCheck, KeyRound, ArrowLeftRight,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ import { LgpdSection } from "@/components/members/lgpd-section";
 import { AccessSection } from "@/components/members/access-section";
 import {
   getMember, getMemberTree, addRelationship, listMembers, assetURL,
-  updateMember,
+  updateMember, transferMember,
   type Member, type MemberAddress, type Relationship,
 } from "@/lib/api";
 import { useBranches } from "@/lib/swr-hooks";
@@ -50,6 +50,9 @@ export default function MemberDetailPage() {
   const [saving, setSaving] = useState(false);
   const [rel, setRel] = useState({ relate_member_id: "", kind: "spouse" });
   const [loading, setLoading] = useState(true);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferForm, setTransferForm] = useState({ branch_id: "", reason: "" });
+  const [transferring, setTransferring] = useState(false);
 
   const canWrite = hasPerm("members.write");
   const isAdmin = user?.role === "super_admin" || user?.role === "admin_sede";
@@ -100,6 +103,28 @@ export default function MemberDetailPage() {
     [branchData],
   );
 
+  function openTransfer() {
+    if (!member) return;
+    setTransferForm({ branch_id: member.branch_id ?? "", reason: "" });
+    setTransferOpen(true);
+  }
+
+  async function submitTransfer(e: React.FormEvent) {
+    e.preventDefault();
+    if (!member || !transferForm.branch_id) return;
+    setTransferring(true);
+    try {
+      await transferMember(member.id, transferForm.branch_id, transferForm.reason);
+      toast("Membro transferido de filial.");
+      setTransferOpen(false);
+      await load();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao transferir", "error");
+    } finally {
+      setTransferring(false);
+    }
+  }
+
   if (loading) return <div className="page"><SkeletonRows rows={6} /></div>;
   if (!member) {
     return (
@@ -146,6 +171,11 @@ export default function MemberDetailPage() {
             {canWrite && (
               <Button variant="outline" onClick={() => setEditando((v) => !v)}>
                 <Pencil className="h-4 w-4" /> {editando ? "Fechar edicao" : "Editar"}
+              </Button>
+            )}
+            {isAdmin && (
+              <Button variant="outline" onClick={openTransfer}>
+                <ArrowLeftRight className="h-4 w-4" /> Transferir filial
               </Button>
             )}
           </>
@@ -405,6 +435,46 @@ export default function MemberDetailPage() {
           }}
           onCancel={() => setEditando(false)}
         />
+      </Drawer>
+
+      <Drawer open={transferOpen} onClose={() => setTransferOpen(false)} title="Transferir de filial">
+        <form onSubmit={submitTransfer} className="space-y-3">
+          <p className="text-sm text-zinc-500">
+            Move <strong>{member.full_name}</strong> para outra filial do mesmo tenant. A acao fica registrada na auditoria.
+          </p>
+          <Field label="Filial de destino" required>
+            <Select
+              className="h-8 text-sm"
+              value={transferForm.branch_id}
+              onChange={(e) => setTransferForm({ ...transferForm, branch_id: e.target.value })}
+            >
+              <option value="">Selecione...</option>
+              {(branchData?.branches ?? [])
+                .filter((b) => b.id !== member.branch_id)
+                .map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+            </Select>
+          </Field>
+          <Field label="Motivo (opcional)">
+            <Select
+              className="h-8 text-sm"
+              value={transferForm.reason}
+              onChange={(e) => setTransferForm({ ...transferForm, reason: e.target.value })}
+            >
+              <option value="">-</option>
+              <option value="mudanca">Mudança de endereço</option>
+              <option value="pedido">Pedido do membro</option>
+              <option value="organizacional">Reorganização</option>
+            </Select>
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" type="button" onClick={() => setTransferOpen(false)}>Cancelar</Button>
+            <Button type="submit" disabled={transferring || !transferForm.branch_id}>
+              {transferring ? "Transferindo..." : "Transferir"}
+            </Button>
+          </div>
+        </form>
       </Drawer>
     </div>
   );

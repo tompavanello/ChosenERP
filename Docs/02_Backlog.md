@@ -66,7 +66,7 @@ em todos os tenants. Corrigido pela migracao `000016_tenant_scope_rls` (detalhes
 |---|---|---|
 | 7 | **Certificados** (batismo, casamento, apresentacao de bebes) | reaproveitar `documents` + `internal/documents/render.go` |
 | 8 | **Cartas de transferencia e recomendacao** | idem |
-| 9 | **Transferencia de membro entre filiais** | mutacao de `branch_id` - exige atencao ao RLS (`WITH CHECK`) e ao `audit_log` |
+| 9 | **Transferencia de membro entre filiais** | mutacao de `branch_id` - exige atencao ao RLS (`WITH CHECK`) e ao `audit_log` |  **Feito (02/10/2026)** - `POST /members/{id}/transfer` (valida filial do mesmo tenant, auditado) + acao "Transferir filial" no perfil do membro (Sede) |
 | 10 | **Sub-congregacoes** (3o nivel) |  **Feito (Set/2026)** - leitura hierarquica no RLS (`rls_read_scope`, migracao `000036`); CRUD ja existia com `parent_id`/`kind`; guarda contra ciclo na API; item de menu e validacao. Correcao `000037`: politicas `*_sel` passaram a ser `FOR SELECT` (antes eram `ALL` e davam escrita pela leitura) |
 
 ### Financeiro (Modulo 2.1 / 2.2)

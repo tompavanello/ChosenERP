@@ -752,6 +752,13 @@ export const updateMember = (id: string, data: Record<string, unknown>) =>
 export const deleteMember = (id: string) =>
   api<{ ok: boolean }>(`/api/v1/members/${id}`, { method: "DELETE" });
 
+/** Transfere o membro para outra filial do mesmo tenant. */
+export const transferMember = (id: string, branchId: string, reason = "") =>
+  api<Member>(`/api/v1/members/${id}/transfer`, {
+    method: "POST",
+    body: JSON.stringify({ branch_id: branchId, reason }),
+  });
+
 // ---- Historico eclesiastico do membro (requisito 1.8) ----
 export const listMemberHistory = (memberId: string) =>
   api<{ history: MemberHistory[] }>(`/api/v1/members/${memberId}/history`);

@@ -125,7 +125,7 @@ O mesmo esforco revelou e corrigiu um vazamento **cross-tenant** (secao 5.1).
 Secretaria digital (1.4)
 - [ ] Cartas de transferencia e recomendacao.
 - [ ] Certificados (batismo, casamento, apresentacao de bebes).
-- [ ] Transferencia digital de cadastro de membro entre filiais.
+- [x] Transferencia digital de cadastro de membro entre filiais (02/10/2026): `POST /members/{id}/transfer` (auditado) + acao no perfil.
 - [ ] Hierarquia Sede > Congregacoes > **Sub-congregacoes**: a coluna `branches.parent_id`
       e o `kind='sub_congregation'` **ja existem** (migracao 000002); falta usar
       (politicas RLS ignoram `parent_id`, e nao ha CRUD/UI de hierarquia).

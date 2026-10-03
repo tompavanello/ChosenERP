@@ -346,3 +346,46 @@ func (a *App) handleDeleteMember(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
+
+// handleTransferMember move um membro para outra filial do mesmo tenant,
+// registrando a acao em audit_log.
+func (a *App) handleTransferMember(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	id := r.PathValue("id")
+	var in struct {
+		BranchID string `json:"branch_id"`
+		Reason   string `json:"reason"`
+	}
+	if err := readJSON(r, &in); err != nil || strings.TrimSpace(in.BranchID) == "" {
+		writeErr(w, http.StatusBadRequest, "branch_id required")
+		return
+	}
+	b := boundsFromClaims(claims)
+	var m *members.Member
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var e error
+		m, e = a.Members.Transfer(r.Context(), tx, id, in.BranchID)
+		if e != nil {
+			return e
+		}
+		payload, _ := json.Marshal(map[string]any{"branch_id": in.BranchID, "reason": in.Reason})
+		_, e = tx.Exec(r.Context(), `
+			INSERT INTO audit_log (tenant_id, actor_id, action, entity, entity_id, payload)
+			SELECT $1, $2::uuid, 'member.transferred', 'members', $3::uuid, $4
+			FROM users WHERE id = $2`, claims.TenantID, claims.UserID, id, payload)
+		return e
+	})
+	if err != nil {
+		if store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "membro ou filial de destino nao encontrada")
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, m)
+}
