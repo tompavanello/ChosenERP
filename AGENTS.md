@@ -504,6 +504,8 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | DELETE | `/api/v1/finance/transactions/{id}` | Bearer | Exclui o lancamento definitivamente (recalcula hash-chain) |
 | POST | `/api/v1/finance/transactions/{id}/void` | Bearer | Estorna o lancamento (legado; sai dos relatorios) |
 | POST | `/api/v1/finance/transactions/{id}/settle` | Bearer | Marca/desmarca a quitacao (contas a pagar; `paid_at`) |
+| GET | `/api/v1/finance/split` | Bearer | Estado do split de repasses (`split_enabled` + regras) |
+| PUT | `/api/v1/finance/split` | Bearer (`finance.write`) | Liga/desliga e grava as regras de split (% por filial de destino) |
 | GET  | `/api/v1/finance/transactions/{id}/events` | Bearer | Rateio do lancamento por evento |
 | PATCH | `/api/v1/ministries/{id}` | Bearer | Edita ministerio (responsavel/situacao) |
 | DELETE | `/api/v1/ministries/{id}` | Bearer | Exclui ministerio |

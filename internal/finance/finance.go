@@ -439,6 +439,12 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 	if err := r.insertEventAllocations(ctx, tx, tenantID, branchID, t.ID, in.Amount, in.EventAllocations); err != nil {
 		return nil, "", "", "", err
 	}
+	// Split automatico de repasses (somente ENTRADAS, quando ligado).
+	if t.Type == "income" {
+		if err := r.ApplySplit(ctx, tx, tenantID, t.BranchID, t.ID, t.Amount); err != nil {
+			return nil, "", "", "", err
+		}
+	}
 	return &t, docID, ref, token, nil
 }
 

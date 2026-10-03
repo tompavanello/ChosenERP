@@ -512,6 +512,55 @@ func (a *App) handleSettleTxn(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// handleGetSplit devolve o estado do split de repasses e as regras da igreja.
+func (a *App) handleGetSplit(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var enabled bool
+	var rules []finance.SplitRule
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		var e error
+		enabled, rules, e = a.Finance.GetSplit(r.Context(), tx)
+		return e
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if rules == nil {
+		rules = []finance.SplitRule{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"enabled": enabled, "rules": rules})
+}
+
+// handlePutSplit grava o liga/desliga + regras do split de repasses.
+func (a *App) handlePutSplit(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var in struct {
+		Enabled bool                     `json:"enabled"`
+		Rules   []finance.SplitRuleInput `json:"rules"`
+	}
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		return a.Finance.SetSplit(r.Context(), tx, claims.TenantID, in.Enabled, in.Rules)
+	})
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 // handleDeleteTxn exclui DEFINITIVAMENTE um lancamento (sem deixar estorno) e
 // recalcula a hash-chain do tenant. Bloqueado quando preso a auditoria fechada.
 func (a *App) handleDeleteTxn(w http.ResponseWriter, r *http.Request) {

@@ -1803,6 +1803,21 @@ export const listTransfers = () => api<{ transfers: Transfer[] }>("/api/v1/finan
 export const createTransfer = (data: Record<string, unknown>) =>
   api<Transfer>("/api/v1/finance/transfers", { method: "POST", body: JSON.stringify(data) });
 
+// ---- Split automatico de repasses ----
+export interface SplitRule {
+  id?: string;
+  destination_branch_id: string;
+  destination_branch?: string;
+  name?: string | null;
+  percent: number;
+  is_active: boolean;
+}
+export const getSplit = () => api<{ enabled: boolean; rules: SplitRule[] }>("/api/v1/finance/split");
+export const updateSplit = (
+  enabled: boolean,
+  rules: { destination_branch_id: string; name?: string; percent: number; is_active: boolean }[],
+) => api<{ ok: boolean }>("/api/v1/finance/split", { method: "PUT", body: JSON.stringify({ enabled, rules }) });
+
 // ---- Doacoes recorrentes ----
 export interface RecurringDonation {
   id: string;

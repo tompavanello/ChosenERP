@@ -254,9 +254,7 @@ App do membro
       (`/rosters/suggestions`, por ministerio e frequencia, marcando conflito).
       Tela **Escalas** no menu Organizacao. Faltam ferias/disponibilidade
       explicita (#26).
-- [ ] **Motor de repasses dinamico (split automatico)**: o `POST /finance/transfers`
-      e **manual**. Nao ha regras configuraveis (ex.: 10% filial -> sede, 5% missoes)
-      executadas automaticamente no lancamento.
+- [x] **Motor de repasses dinamico (split automatico)** (02/10/2026): `tenants.split_enabled` + `transfer_rules` (`000086`); `GET/PUT /finance/split` (percentual por destino) aplicado ao lancar uma entrada; tela de configuracao em Repasses.
 - [x] **Visao consolidada Sede > Filiais**: `GET /api/v1/reports/consolidated` +
       pagina "Consolidado Sede > Filiais" (por filial, respeitando a hierarquia).
 - [x] **Sub-congregacoes** (3o nivel hierarquico): RLS com leitura hierarquica
