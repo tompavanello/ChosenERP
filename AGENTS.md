@@ -358,11 +358,12 @@ O subdominio de cada igreja e `{tenant.slug}.erpchosen.com.br` (ex.: o tenant
   (`finance.read`/`write`), **relatorios** (`reports.read`), **ministerios/grupos/
   escalas/materiais** (`ministries.read`/`write`), **eventos/programacao/kids/LGPD**
   (`members.read`/`write`), **governanca** (`governance.read`/`write`), **usuarios**
-  (`users.read`/`write`) e **configuracao/tenant/filiais** (`settings.read`/`write`).
+  (`users.read`/`write`), **configuracao/tenant/filiais** (`settings.read`/`write`) e
+  **comunicados/automacoes** (`announcements.read`/`write`, migracao `000087`).
   O acesso do membro (`/members/{id}/access*`) e a anonimizacao LGPD exigem Sede via
-  `adminOnly`. **Excecao**: comunicados/automacoes de WhatsApp ainda sao so
-  *feature-gated* (nao ha permissao dedicada), e o console da plataforma valida
-  `is_platform_admin` no proprio handler.
+  `adminOnly`. Recebido por id (`/receipts/{id}`) exige `finance.read` e o render de
+  documentos (`/member-documents/{id}/html`) exige `members.read`. O console da
+  plataforma valida `is_platform_admin` no proprio handler.
 
 ### Teste manual de isolamento
 

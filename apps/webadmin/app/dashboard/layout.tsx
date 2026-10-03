@@ -67,7 +67,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
       { key: "governance", href: "/dashboard/governance", label: "Governanca", icon: Gavel, perms: ["governance.read"], feature: "governance" },
       { key: "users", href: "/dashboard/users", label: "Usuarios", icon: UserCog, perms: ["users.read"] },
       { key: "settings", href: "/dashboard/settings", label: "Configuracoes", icon: Settings, perms: ["settings.read"] },
-      { key: "announcements", href: "/dashboard/announcements", label: "Comunicados", icon: Bell, perms: [], feature: "whatsapp" },
+      { key: "announcements", href: "/dashboard/announcements", label: "Comunicados", icon: Bell, perms: ["announcements.read"], feature: "whatsapp" },
     ],
   },
   {

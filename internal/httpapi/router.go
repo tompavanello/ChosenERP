@@ -285,12 +285,12 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 
 	// Documentos digitais (leitura por token do QR)
 	mux.Handle("GET /api/v1/documents/by-token/{token}", authed(http.HandlerFunc(app.handleGetDocumentByToken)))
-	mux.Handle("GET /api/v1/member-documents/{id}/html", authed(http.HandlerFunc(app.handleRenderDocument)))
+	mux.Handle("GET /api/v1/member-documents/{id}/html", authed(app.perm("members.read", app.handleRenderDocument)))
 
 	// Recibos: renderizacao e envio (prefixo proprio evita ambiguidade de rotas)
-	mux.Handle("GET /api/v1/receipts/{id}", authed(http.HandlerFunc(app.handleRenderReceipt)))
-	mux.Handle("POST /api/v1/receipts/{id}/send", authed(http.HandlerFunc(app.handleSendDocument)))
-	mux.Handle("GET /api/v1/receipts/{id}/deliveries", authed(http.HandlerFunc(app.handleListDeliveries)))
+	mux.Handle("GET /api/v1/receipts/{id}", authed(app.perm("finance.read", app.handleRenderReceipt)))
+	mux.Handle("POST /api/v1/receipts/{id}/send", authed(app.perm("finance.write", app.handleSendDocument)))
+	mux.Handle("GET /api/v1/receipts/{id}/deliveries", authed(app.perm("finance.read", app.handleListDeliveries)))
 
 	// Relatorios
 	mux.Handle("GET /api/v1/reports/balance", authed(app.perm("reports.read", app.handleMonthlyBalance)))
@@ -373,22 +373,22 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/materials/{id}/file", authed(app.perm("ministries.read", app.handleDownloadMaterial)))
 
 	// Avisos (app do membro) - gestao + disparo
-	mux.Handle("GET /api/v1/announcements", authed(http.HandlerFunc(app.handleListAnnouncements)))
-	mux.Handle("POST /api/v1/announcements", authed(http.HandlerFunc(app.handleCreateAnnouncement)))
-	mux.Handle("PATCH /api/v1/announcements/{id}", authed(http.HandlerFunc(app.handleUpdateAnnouncement)))
-	mux.Handle("DELETE /api/v1/announcements/{id}", authed(http.HandlerFunc(app.handleDeleteAnnouncement)))
-	mux.Handle("POST /api/v1/announcements/audience/preview", authed(http.HandlerFunc(app.handlePreviewAudience)))
-	mux.Handle("POST /api/v1/announcements/{id}/send", authed(http.HandlerFunc(app.handleSendAnnouncement)))
-	mux.Handle("GET /api/v1/announcements/{id}/deliveries", authed(http.HandlerFunc(app.handleListAnnouncementDeliveries)))
-	mux.Handle("POST /api/v1/announcements/send-test", authed(http.HandlerFunc(app.handleSendTestMessage)))
+	mux.Handle("GET /api/v1/announcements", authed(app.perm("announcements.read", app.handleListAnnouncements)))
+	mux.Handle("POST /api/v1/announcements", authed(app.perm("announcements.write", app.handleCreateAnnouncement)))
+	mux.Handle("PATCH /api/v1/announcements/{id}", authed(app.perm("announcements.write", app.handleUpdateAnnouncement)))
+	mux.Handle("DELETE /api/v1/announcements/{id}", authed(app.perm("announcements.write", app.handleDeleteAnnouncement)))
+	mux.Handle("POST /api/v1/announcements/audience/preview", authed(app.perm("announcements.read", app.handlePreviewAudience)))
+	mux.Handle("POST /api/v1/announcements/{id}/send", authed(app.perm("announcements.write", app.handleSendAnnouncement)))
+	mux.Handle("GET /api/v1/announcements/{id}/deliveries", authed(app.perm("announcements.read", app.handleListAnnouncementDeliveries)))
+	mux.Handle("POST /api/v1/announcements/send-test", authed(app.perm("announcements.write", app.handleSendTestMessage)))
 
 	// Historico de disparos agendados (tela Execucoes)
-	mux.Handle("GET /api/v1/notification-runs", authed(http.HandlerFunc(app.handleListNotificationRuns)))
+	mux.Handle("GET /api/v1/notification-runs", authed(app.perm("announcements.read", app.handleListNotificationRuns)))
 
 	// Automacoes de WhatsApp (#31): aniversario, lembrete de escala e boas-vindas
-	mux.Handle("GET /api/v1/notifications/settings", authed(http.HandlerFunc(app.handleGetNotificationSettings)))
-	mux.Handle("PATCH /api/v1/notifications/settings", authed(http.HandlerFunc(app.handleUpdateNotificationSettings)))
-	mux.Handle("POST /api/v1/notifications/run", authed(http.HandlerFunc(app.handleRunNotifications)))
+	mux.Handle("GET /api/v1/notifications/settings", authed(app.perm("announcements.read", app.handleGetNotificationSettings)))
+	mux.Handle("PATCH /api/v1/notifications/settings", authed(app.perm("announcements.write", app.handleUpdateNotificationSettings)))
+	mux.Handle("POST /api/v1/notifications/run", authed(app.perm("announcements.write", app.handleRunNotifications)))
 
 	// Usuarios e acessos (autorizacao por papel no handler; RLS isola o tenant)
 	mux.Handle("GET /api/v1/users", authed(app.perm("users.read", app.handleListUsers)))
