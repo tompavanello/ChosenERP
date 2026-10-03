@@ -33,13 +33,13 @@ func (r *Repo) ContributionDrops(ctx context.Context, tx pgx.Tx, months, recent 
 			WHERE type = 'income'
 			  AND voided_at IS NULL
 			  AND donor_member_id IS NOT NULL
-			  AND occurred_at >= now() - make_interval(months => $1)
+			  AND occurred_at >= now() - make_interval(months => $1::int)
 			GROUP BY donor_member_id
 		)
 		SELECT m.id::text, m.full_name, c.last_at::date::text, c.total::float8
 		FROM contrib c
 		JOIN members m ON m.id = c.member_id
-		WHERE c.last_at < now() - make_interval(months => $2)
+		WHERE c.last_at < now() - make_interval(months => $2::int)
 		ORDER BY c.last_at`, months, recent)
 	if err != nil {
 		return nil, err

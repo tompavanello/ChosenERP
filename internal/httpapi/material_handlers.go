@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -244,6 +245,11 @@ func (a *App) handleDownloadMaterial(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	serveMaterial(a, w, r, m)
+}
+
+// serveMaterial valida o arquivo do material e o serve como anexo.
+func serveMaterial(a *App, w http.ResponseWriter, r *http.Request, m *materials.Material) {
 	if m.Kind != "file" || m.DiskName == nil || *m.DiskName == "" {
 		writeErr(w, http.StatusNotFound, "material sem arquivo")
 		return
@@ -267,6 +273,55 @@ func (a *App) handleDownloadMaterial(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, max-age=0")
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": downloadName}))
 	http.ServeFile(w, r, diskPath)
+}
+
+// errMaterialForbidden sinaliza material fora da visibilidade do membro.
+var errMaterialForbidden = errors.New("material nao disponivel")
+
+// handleDownloadMyMaterial serve o arquivo do material APENAS se ele estiver
+// publicado e for geral ou de um grupo do qual o membro participa. Evita que um
+// membro acesse rascunhos ou materiais de outros grupos conhecendo o id.
+func (a *App) handleDownloadMyMaterial(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	id := r.PathValue("id")
+	var m *materials.Material
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		mem, e := a.memberForClaims(r.Context(), tx, claims)
+		if e != nil {
+			return e
+		}
+		mat, e := a.Materials.Get(r.Context(), tx, id)
+		if e != nil {
+			return e
+		}
+		if !mat.IsPublished {
+			return errMaterialForbidden
+		}
+		if mat.GroupID != nil {
+			ok, e := a.Groups.IsMember(r.Context(), tx, *mat.GroupID, mem.ID)
+			if e != nil {
+				return e
+			}
+			if !ok {
+				return errMaterialForbidden
+			}
+		}
+		m = mat
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, errMaterialForbidden) {
+			writeErr(w, http.StatusForbidden, "material nao disponivel")
+			return
+		}
+		writeMemberErr(w, err)
+		return
+	}
+	serveMaterial(a, w, r, m)
 }
 
 // handleListMyMaterials lista os materiais visiveis para o proprio membro.

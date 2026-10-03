@@ -282,6 +282,15 @@ func (r *Repo) RemoveMember(ctx context.Context, tx pgx.Tx, groupID, memberID st
 	return err
 }
 
+// IsMember informa se o membro participa do grupo.
+func (r *Repo) IsMember(ctx context.Context, tx pgx.Tx, groupID, memberID string) (bool, error) {
+	var ok bool
+	err := tx.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM group_members WHERE group_id = $1::uuid AND member_id = $2::uuid)`,
+		groupID, memberID).Scan(&ok)
+	return ok, err
+}
+
 // ListForMember lista os grupos ativos dos quais o membro participa, com os
 // participantes de cada um (base do "Meu GD" no app do membro).
 func (r *Repo) ListForMember(ctx context.Context, tx pgx.Tx, memberID string) ([]MyGroup, error) {

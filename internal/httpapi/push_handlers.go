@@ -99,8 +99,9 @@ func (a *App) pushToAudienceAsync(tenantID, title, body, audience string, filter
 
 func truncateText(s string, max int) string {
 	s = strings.TrimSpace(s)
-	if len(s) <= max {
+	r := []rune(s)
+	if len(r) <= max {
 		return s
 	}
-	return strings.TrimSpace(s[:max]) + "..."
+	return strings.TrimSpace(string(r[:max])) + "..."
 }

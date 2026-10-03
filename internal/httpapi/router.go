@@ -137,7 +137,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/me/groups", authed(http.HandlerFunc(app.handleMeGroups)))
 	mux.Handle("GET /api/v1/me/led-groups", authed(http.HandlerFunc(app.handleMeLedGroups)))
 	mux.Handle("GET /api/v1/me/materials", authed(http.HandlerFunc(app.handleListMyMaterials)))
-	mux.Handle("GET /api/v1/me/materials/{id}/file", authed(http.HandlerFunc(app.handleDownloadMaterial)))
+	mux.Handle("GET /api/v1/me/materials/{id}/file", authed(http.HandlerFunc(app.handleDownloadMyMaterial)))
 	mux.Handle("GET /api/v1/me/rosters", authed(http.HandlerFunc(app.handleMeRosters)))
 	mux.Handle("PATCH /api/v1/me/rosters/assignments/{assignmentId}", authed(http.HandlerFunc(app.handleMeRespondRoster)))
 	mux.Handle("GET /api/v1/me/frequency", authed(http.HandlerFunc(app.handleMeFrequency)))

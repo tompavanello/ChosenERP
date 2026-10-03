@@ -2,9 +2,13 @@ package finance
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 )
+
+// ErrSplitOver100 sinaliza soma de percentuais ativos acima de 100%.
+var ErrSplitOver100 = errors.New("a soma dos percentuais ativos nao pode passar de 100%")
 
 // SplitRule e uma regra de repasse automatico (percentual) para uma filial.
 type SplitRule struct {
@@ -52,6 +56,18 @@ func (r *Repo) GetSplit(ctx context.Context, tx pgx.Tx) (bool, []SplitRule, erro
 
 // SetSplit grava o liga/desliga e SUBSTITUI as regras da igreja (config simples).
 func (r *Repo) SetSplit(ctx context.Context, tx pgx.Tx, tenantID string, enabled bool, rules []SplitRuleInput) error {
+	total := 0.0
+	for _, in := range rules {
+		if in.DestinationBranchID == "" || in.Percent <= 0 || in.Percent > 100 {
+			continue
+		}
+		if in.IsActive == nil || *in.IsActive {
+			total += in.Percent
+		}
+	}
+	if total > 100.0001 {
+		return ErrSplitOver100
+	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE tenants SET split_enabled = $2, updated_at = now() WHERE id = $1::uuid`, tenantID, enabled); err != nil {
 		return err
