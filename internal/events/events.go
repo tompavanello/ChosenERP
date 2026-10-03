@@ -42,16 +42,19 @@ type Event struct {
 	ParticipantsCount int        `json:"participants_count"`
 	AttendanceCount   int        `json:"attendance_count"`
 	// AttendanceMode: 'nominal' (chamada) ou 'count' (so o numero).
-	AttendanceMode string    `json:"attendance_mode"`
-	EstimatedCost  *float64  `json:"estimated_cost,omitempty"`
-	CostActual     float64   `json:"cost_actual"`
-	InvitedCount   int       `json:"invited_count"`
-	Notes          *string   `json:"notes,omitempty"`
+	AttendanceMode string   `json:"attendance_mode"`
+	EstimatedCost  *float64 `json:"estimated_cost,omitempty"`
+	CostActual     float64  `json:"cost_actual"`
+	InvitedCount   int      `json:"invited_count"`
+	Notes          *string  `json:"notes,omitempty"`
 	// Origin identifica quem gerou a ocorrencia: 'manual' (extra/avulso),
 	// 'programacao' (grade recorrente) ou 'escala' (voluntarios). `origin_id`
 	// aponta para a definicao de origem (sem FK - origem polimorfica).
 	Origin   string  `json:"origin"`
 	OriginID *string `json:"origin_id,omitempty"`
+	// MyRSVP e a resposta do membro logado ("going"/"maybe"/"declined"); so e
+	// preenchido nas rotas /me/events.
+	MyRSVP    *string   `json:"my_rsvp,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

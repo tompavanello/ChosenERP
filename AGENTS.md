@@ -136,14 +136,22 @@ docker compose -f infra/docker-compose.yml up -d member
   `PATCH /me/rosters/assignments/{id}` para confirmar/recusar a propria presenca
   (so o proprio `member_id`); tela "Minhas escalas". Frequencia propria em
   `GET /me/frequency` (aba "Minha frequencia" no Perfil).
+- **RSVP de eventos (`000088`):** `event_rsvps` guarda "eu vou"/"talvez"/"nao vou"
+  do membro (estimativa de publico). Membro: `PUT /me/events/{id}/rsvp` e
+  `POST /me/events/{id}/checkin` (tela Agenda). Staff: `GET /events/{id}/rsvp`
+  (contagens + lista; modal "Confirmacoes" na tela Eventos).
+- **Gestao da area do membro:** pagina **Area do Membro** no webadmin
+  (`GET /member-app/overview`) com acessos (ultimo login, dispositivos Web Push)
+  e aba de Materiais.
 - **Web Push (`000083`)**: `push_subscriptions` guarda a inscricao por
   dispositivo (dono = `current_user_id()`; system le tudo para enviar). O envio
   usa VAPID (`webpush-go`); gere as chaves com `go run ./cmd/vapid-gen` e cole no
   `.env` (`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`) - sem elas o
   envio fica desabilitado. O service worker (`public/sw.js`) exibe a notificacao;
-  o toggle fica no Perfil do app. Hoje dispara ao criar um comunicado
-  (`pushToAudienceAsync`, best-effort) **segmentado pelo publico/filtro** do aviso
-  (`announcements.ResolveMemberIDs` + `push.SendToMembers` via `memberships`).
+  o toggle fica no Perfil do app. Dispara ao criar um comunicado
+  (`pushToAudienceAsync`), nos comunicados **agendados** (`ScheduleWorker`) e nos
+  **lembretes de escala** (`NotificationWorker`), segmentado pelo publico/filtro do
+  aviso (`announcements.ResolveMemberIDs` + `push.SendToMembers` via `memberships`).
 - **Solicitacoes/formularios (`000084`)**: `member_requests` (atualizacao
   cadastral, carta, visita, batismo, profissao de fe, transferencia, casamento,
   inscricao em evento); membro cria/acompanha em `/me/requests` (tela
@@ -393,7 +401,9 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | GET  | `/api/v1/me/member` | Bearer | Cadastro de membro vinculado a identidade (app do membro) |
 | PATCH | `/api/v1/me/member` | Bearer | Edita contato/endereco do proprio membro |
 | GET  | `/api/v1/me/family` | Bearer | Familias do membro |
-| GET  | `/api/v1/me/events` | Bearer | Agenda no escopo do membro |
+| GET  | `/api/v1/me/events` | Bearer | Agenda no escopo do membro (inclui `my_rsvp`) |
+| PUT | `/api/v1/me/events/{id}/rsvp` | Bearer | Confirma presenca no evento (eu vou/talvez/nao vou) |
+| POST | `/api/v1/me/events/{id}/checkin` | Bearer | Faz o check-in do membro no evento |
 | GET  | `/api/v1/me/announcements` | Bearer | Avisos ativos da igreja/filial do membro |
 | GET  | `/api/v1/me/birthdays?month=` | Bearer | Aniversariantes de nascimento e casamento do mes |
 | GET  | `/api/v1/me/ministries` | Bearer | Ministerios dos quais o membro participa |
@@ -408,6 +418,7 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | DELETE | `/api/v1/me/push/subscribe` | Bearer | Remove a inscricao Web Push (por `endpoint`) |
 | GET/POST | `/api/v1/me/requests` | Bearer | Solicitacoes/formularios do proprio membro |
 | GET  | `/api/v1/me/led-groups` | Bearer | Grupos que o membro lidera (participantes + presenca) |
+| GET  | `/api/v1/member-app/overview` | Bearer (`members.read`) | Acessos ao app do membro + uso (ultimo login, dispositivos) |
 | GET  | `/api/v1/requests` | Bearer (`members.read`) | Lista solicitacoes dos membros (secretaria) |
 | PATCH | `/api/v1/requests/{id}` | Bearer (`members.write`) | Responde a solicitacao (status + observacao) |
 | GET/POST | `/api/v1/me/prayer-requests` | Bearer | Meus pedidos de oracao / criar pedido |
@@ -457,6 +468,7 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | PATCH | `/api/v1/events/{id}` | Bearer | Edita evento |
 | DELETE | `/api/v1/events/{id}` | Bearer | Exclui evento |
 | GET  | `/api/v1/events/{id}/attendance` | Bearer | Chamada nominal do evento |
+| GET  | `/api/v1/events/{id}/rsvp` | Bearer (`members.read`) | Confirmacoes (RSVP) do evento + estimativa de publico |
 | POST | `/api/v1/events/{id}/attendance` | Bearer | Salva chamada nominal + total |
 | GET  | `/api/v1/events/{id}/invitees` | Bearer | Convocados (pessoas/ministerios) |
 | POST | `/api/v1/events/{id}/invitees` | Bearer | Define os convocados do evento |

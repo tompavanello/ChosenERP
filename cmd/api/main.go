@@ -124,6 +124,7 @@ func main() {
 		Store:         st,
 		Announcements: &announcements.Repo{},
 		Dispatcher:    dispatcher,
+		Push:          pushRepo,
 		Interval:      cfg.NotificationInterval,
 	}
 	go notifWorker.Run(ctx)
@@ -133,6 +134,7 @@ func main() {
 		Store:         st,
 		Announcements: &announcements.Repo{},
 		Dispatcher:    dispatcher,
+		Push:          pushRepo,
 		Interval:      cfg.ScheduleInterval,
 	}
 	go scheduleWorker.Run(ctx)

@@ -198,6 +198,12 @@ App do membro
   > (`go run ./cmd/vapid-gen` -> `VAPID_*`), endpoints `/me/push/*`, service
   > worker com handler de `push`/`notificationclick` e toggle no Perfil; dispara
   > best-effort ao criar um comunicado, **segmentado pelo publico/filtro** do aviso.
+  > **RSVP de eventos + area do membro (02/10/2026):** `event_rsvps` (`000088`)
+  > com "eu vou"/"talvez"/"nao vou" e check-in (`/me/events/{id}/rsvp|checkin`),
+  > estimativa no webadmin (`/events/{id}/rsvp`); pagina **Area do Membro**
+  > (`/member-app/overview`) com acessos/uso/dispositivos; push tambem nos
+  > comunicados agendados (`ScheduleWorker`) e lembretes de escala
+  > (`NotificationWorker`).
   > **Solicitacoes + area do lider (02/10/2026):** `member_requests` (`000084`)
   > com `/me/requests` (membro) e `/requests` (secretaria, `members.read/write`)
   > + pagina "Solicitacoes"; `GET /me/led-groups` (grupos que o membro lidera com

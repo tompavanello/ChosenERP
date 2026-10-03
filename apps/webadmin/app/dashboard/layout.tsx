@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Church, LayoutDashboard, Users, Wallet, LogOut, HeartHandshake, DoorOpen,
-  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, TrendingDown, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, CalendarCheck, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight, Globe, Layers, BookOpen, Inbox,
+  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, TrendingDown, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, CalendarCheck, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight, Globe, Layers, BookOpen, Inbox, Smartphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -42,6 +42,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
       { key: "members", href: "/dashboard/members", label: "Membros", icon: Users, perms: ["members.read"] },
       { key: "visitors", href: "/dashboard/visitors", label: "Visitantes", icon: DoorOpen, perms: ["members.read"] },
       { key: "requests", href: "/dashboard/requests", label: "Solicitações", icon: Inbox, perms: ["members.read"] },
+      { key: "member-app", href: "/dashboard/member-app", label: "Área do Membro", icon: Smartphone, perms: ["members.read"] },
       { key: "benefactors", href: "/dashboard/benefactors", label: "Benfeitores", icon: HeartHandshake, perms: ["members.read"] },
       { key: "suppliers", href: "/dashboard/suppliers", label: "Fornecedores", icon: Truck, perms: ["finance.read"] },
     ],

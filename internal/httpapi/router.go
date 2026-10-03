@@ -441,6 +441,10 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/events/{id}/invitees", authed(app.perm("members.write", app.handleSetInvitees)))
 	mux.Handle("GET /api/v1/members/{id}/frequency", authed(app.perm("members.read", app.handleListFrequency)))
 	mux.Handle("POST /api/v1/members/{id}/frequency", authed(app.perm("members.write", app.handleSetFrequency)))
+	mux.Handle("PUT /api/v1/me/events/{id}/rsvp", authed(http.HandlerFunc(app.handleMeRSVP)))
+	mux.Handle("POST /api/v1/me/events/{id}/checkin", authed(http.HandlerFunc(app.handleMeCheckIn)))
+	mux.Handle("GET /api/v1/events/{id}/rsvp", authed(app.perm("members.read", app.handleEventRSVP)))
+	mux.Handle("GET /api/v1/member-app/overview", authed(app.perm("members.read", app.handleMemberAppOverview)))
 
 	// Programacao: grade de horarios recorrentes e publicacao na agenda
 	mux.Handle("GET /api/v1/programacoes", authed(app.perm("members.read", app.handleListProgramacao)))

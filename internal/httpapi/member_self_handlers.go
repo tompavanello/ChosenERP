@@ -113,18 +113,93 @@ func (a *App) handleMeEvents(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("kind")
 	var out []events.Event
 	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
-		if _, e := a.memberForClaims(r.Context(), tx, claims); e != nil {
+		m, e := a.memberForClaims(r.Context(), tx, claims)
+		if e != nil {
 			return e
 		}
-		var e error
-		out, e = a.Events.ListEvents(r.Context(), tx, from, to, kind)
-		return e
+		if out, e = a.Events.ListEvents(r.Context(), tx, from, to, kind); e != nil {
+			return e
+		}
+		rs, e := a.Events.MemberRSVPs(r.Context(), tx, m.ID)
+		if e != nil {
+			return e
+		}
+		for i := range out {
+			if st, ok := rs[out[i].ID]; ok {
+				s := st
+				out[i].MyRSVP = &s
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		writeMemberErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"events": out})
+}
+
+// handleMeRSVP grava a confirmacao de presenca ("eu vou"/"talvez"/"nao vou").
+func (a *App) handleMeRSVP(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	eventID := r.PathValue("id")
+	var in struct {
+		Status string `json:"status"`
+	}
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		m, e := a.memberForClaims(r.Context(), tx, claims)
+		if e != nil {
+			return e
+		}
+		branchID, e := a.writeBranchID(r.Context(), tx, claims)
+		if e != nil {
+			return e
+		}
+		return a.Events.UpsertRSVP(r.Context(), tx, claims.TenantID, branchID, eventID, m.ID, in.Status)
+	})
+	if err != nil {
+		if errors.Is(err, events.ErrInvalidRSVP) {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeMemberErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handleMeCheckIn registra a presenca do proprio membro no evento.
+func (a *App) handleMeCheckIn(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	eventID := r.PathValue("id")
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		m, e := a.memberForClaims(r.Context(), tx, claims)
+		if e != nil {
+			return e
+		}
+		branchID, e := a.writeBranchID(r.Context(), tx, claims)
+		if e != nil {
+			return e
+		}
+		return a.Events.SelfCheckIn(r.Context(), tx, claims.TenantID, branchID, eventID, m.ID)
+	})
+	if err != nil {
+		writeMemberErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 // handleMeAnnouncements lista os avisos ativos da igreja/filial do membro.

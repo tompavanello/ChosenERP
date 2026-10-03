@@ -216,6 +216,7 @@ func (r *Repo) BirthdayRecipients(ctx context.Context, tx pgx.Tx, tenantID strin
 // RosterReminderRecipient e um voluntario convidado cuja escala se aproxima.
 type RosterReminderRecipient struct {
 	AssignmentID string
+	MemberID     string
 	BranchID     string
 	Phone        string
 	FirstName    string
@@ -227,7 +228,7 @@ type RosterReminderRecipient struct {
 // confirmaram) cuja escala comeca dentro da janela [from, to].
 func (r *Repo) RosterReminderRecipients(ctx context.Context, tx pgx.Tx, tenantID string, from, to time.Time) ([]RosterReminderRecipient, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT ra.id::text, ra.branch_id::text, m.whatsapp,
+		SELECT ra.id::text, m.id::text, ra.branch_id::text, m.whatsapp,
 		       COALESCE(NULLIF(m.first_name,''), m.full_name), r.title, r.starts_at
 		FROM roster_assignments ra
 		JOIN rosters r ON r.id = ra.roster_id
@@ -245,7 +246,7 @@ func (r *Repo) RosterReminderRecipients(ctx context.Context, tx pgx.Tx, tenantID
 	out := []RosterReminderRecipient{}
 	for rows.Next() {
 		var rec RosterReminderRecipient
-		if err := rows.Scan(&rec.AssignmentID, &rec.BranchID, &rec.Phone,
+		if err := rows.Scan(&rec.AssignmentID, &rec.MemberID, &rec.BranchID, &rec.Phone,
 			&rec.FirstName, &rec.RosterTitle, &rec.StartsAt); err != nil {
 			return nil, err
 		}

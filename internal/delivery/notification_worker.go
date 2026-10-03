@@ -9,8 +9,15 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"chosenerp/internal/announcements"
+	"chosenerp/internal/push"
 	"chosenerp/internal/store"
 )
+
+// rosterPush e um lembrete de escala a enviar por Web Push.
+type rosterPush struct {
+	MemberID string
+	Body     string
+}
 
 // NotificationWorker dispara as automacoes de WhatsApp (#31): aniversario do
 // dia, lembrete de escala e boas-vindas a visitante. Ele NAO envia: apenas
@@ -20,7 +27,9 @@ type NotificationWorker struct {
 	Store         *store.Store
 	Announcements *announcements.Repo
 	Dispatcher    *Dispatcher
-	Interval      time.Duration
+	// Push envia Web Push dos lembretes de escala (opcional).
+	Push     *push.Repo
+	Interval time.Duration
 
 	// Now permite fixar o relogio nos testes; nil = time.Now.
 	Now func() time.Time
@@ -93,6 +102,7 @@ func (w *NotificationWorker) processTenant(ctx context.Context, s announcements.
 	loc := loadLocation(s.Timezone)
 	local := now.In(loc)
 	count := 0
+	var rosterPushes []rosterPush
 
 	err := w.Store.WithSystem(ctx, func(tx pgx.Tx) error {
 		if s.BirthdaysEnabled {
@@ -150,6 +160,7 @@ func (w *NotificationWorker) processTenant(ctx context.Context, s announcements.
 				}
 				if ok {
 					count++
+					rosterPushes = append(rosterPushes, rosterPush{MemberID: r.MemberID, Body: body})
 				}
 			}
 		}
@@ -188,7 +199,27 @@ func (w *NotificationWorker) processTenant(ctx context.Context, s announcements.
 		}
 		return nil
 	})
-	return count, err
+	if err != nil {
+		return count, err
+	}
+
+	// Web Push dos lembretes de escala (fora da transacao), best-effort.
+	if len(rosterPushes) > 0 && w.Push != nil && w.Push.Enabled() {
+		pctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		if e := w.Store.WithSystem(pctx, func(tx pgx.Tx) error {
+			for _, rp := range rosterPushes {
+				msg := push.Message{Title: "Lembrete de escala", Body: clip(rp.Body, 140), URL: "/escalas"}
+				if e := w.Push.SendToMembers(pctx, tx, s.TenantID, []string{rp.MemberID}, msg); e != nil {
+					log.Printf("[notification-worker] push escala %s: %v", rp.MemberID, e)
+				}
+			}
+			return nil
+		}); e != nil {
+			log.Printf("[notification-worker] push: %v", e)
+		}
+	}
+	return count, nil
 }
 
 // renderTemplate troca {chave} pelo valor; chaves desconhecidas ficam como estao.

@@ -2239,6 +2239,41 @@ export const createEvent = (data: Record<string, unknown>) =>
   api<ChurchEvent>("/api/v1/events", { method: "POST", body: JSON.stringify(data) });
 export const updateEvent = (id: string, data: Record<string, unknown>) =>
   api<ChurchEvent>(`/api/v1/events/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+
+// ---- Confirmacao de presenca (RSVP) do evento ----
+export interface EventRSVP {
+  event_id: string;
+  member_id: string;
+  member_name?: string;
+  status: string;
+  updated_at?: string;
+}
+export interface EventRSVPResult {
+  going: number;
+  maybe: number;
+  declined: number;
+  rsvps: EventRSVP[];
+}
+export const getEventRSVP = (eventId: string) => api<EventRSVPResult>(`/api/v1/events/${eventId}/rsvp`);
+
+// ---- Gestao da area do membro (acessos + uso do app) ----
+export interface MemberAppUser {
+  member_id: string;
+  member_name: string;
+  branch_id: string;
+  user_id: string;
+  email?: string | null;
+  phone?: string | null;
+  is_active: boolean;
+  must_change_password: boolean;
+  last_login_at?: string | null;
+  devices: number;
+  last_device_at?: string | null;
+}
+export const getMemberAppOverview = () =>
+  api<{ users: MemberAppUser[]; totals: { total: number; active: number; never_login: number } }>(
+    "/api/v1/member-app/overview",
+  );
 export const deleteEvent = (id: string) =>
   api<{ ok: boolean }>(`/api/v1/events/${id}`, { method: "DELETE" });
 export const listEventAttendance = (id: string) =>

@@ -323,3 +323,24 @@ func (a *App) handleSetFrequency(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, f)
 }
+
+// handleEventRSVP lista as confirmacoes de presenca (RSVP) de um evento.
+func (a *App) handleEventRSVP(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	eventID := r.PathValue("id")
+	var res *events.RSVPResult
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		var e error
+		res, e = a.Events.RSVPsOfEvent(r.Context(), tx, eventID)
+		return e
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}

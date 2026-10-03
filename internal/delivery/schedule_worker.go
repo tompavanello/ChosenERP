@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"chosenerp/internal/announcements"
+	"chosenerp/internal/push"
 	"chosenerp/internal/store"
 )
 
@@ -20,7 +21,9 @@ type ScheduleWorker struct {
 	Store         *store.Store
 	Announcements *announcements.Repo
 	Dispatcher    *Dispatcher
-	Interval      time.Duration
+	// Push envia Web Push do comunicado agendado (opcional).
+	Push     *push.Repo
+	Interval time.Duration
 
 	// Now permite fixar o relogio nos testes; nil = time.Now.
 	Now func() time.Time
@@ -126,7 +129,44 @@ func (w *ScheduleWorker) enqueue(ctx context.Context, s *announcements.Scheduled
 		}
 		return w.Announcements.MarkRun(ctx, tx, s.ID)
 	})
-	return count, err
+	if err != nil {
+		return count, err
+	}
+
+	// Web Push do comunicado (fora da transacao de enfileiramento), segmentado
+	// pelo publico do aviso. Best-effort.
+	w.sendPush(ctx, s)
+	return count, nil
+}
+
+// sendPush dispara o Web Push do comunicado agendado para o publico/filtro.
+func (w *ScheduleWorker) sendPush(ctx context.Context, s *announcements.ScheduledAnnouncement) {
+	if w.Push == nil || !w.Push.Enabled() {
+		return
+	}
+	pctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	msg := push.Message{Title: s.Title, Body: clip(s.Body, 140), URL: "/avisos"}
+	in := announcements.SendInput{Audience: s.Audience, AudienceFilter: s.AudienceFilter}
+	if err := w.Store.WithSystem(pctx, func(tx pgx.Tx) error {
+		ids, err := w.Announcements.ResolveMemberIDs(pctx, tx, s.TenantID, in)
+		if err != nil {
+			return err
+		}
+		return w.Push.SendToMembers(pctx, tx, s.TenantID, ids, msg)
+	}); err != nil {
+		log.Printf("[schedule-worker] push %s: %v", s.ID, err)
+	}
+}
+
+// clip limita o texto da notificacao (rune-safe).
+func clip(s string, max int) string {
+	s = strings.TrimSpace(s)
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return strings.TrimSpace(string(r[:max])) + "..."
 }
 
 // scheduleDue diz se o agendamento venceu e qual a chave de periodo (dia/evento)

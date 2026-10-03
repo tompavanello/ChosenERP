@@ -134,6 +134,7 @@ export interface ChurchEvent {
   ends_at?: string | null;
   location?: string | null;
   notes?: string | null;
+  my_rsvp?: string | null;
 }
 export interface Announcement {
   id: string;
@@ -358,6 +359,16 @@ export async function getMeEvents(from?: string, to?: string): Promise<ChurchEve
   const q = qs.toString();
   const data = await api<{ events: ChurchEvent[] }>(`/api/v1/me/events${q ? `?${q}` : ""}`);
   return data.events ?? [];
+}
+
+/** Confirma/atualiza a presenca no evento ("eu vou"/"talvez"/"nao vou"). */
+export async function setEventRSVP(eventId: string, status: "going" | "maybe" | "declined"): Promise<void> {
+  await api(`/api/v1/me/events/${eventId}/rsvp`, { method: "PUT", body: JSON.stringify({ status }) });
+}
+
+/** Registra a presenca (check-in) no proprio evento. */
+export async function checkinEvent(eventId: string): Promise<void> {
+  await api(`/api/v1/me/events/${eventId}/checkin`, { method: "POST" });
 }
 export async function getMeAnnouncements(): Promise<Announcement[]> {
   const data = await api<{ announcements: Announcement[] }>("/api/v1/me/announcements");

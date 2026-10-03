@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { Badge, type Tone } from "@/components/ui/badge";
-import { Drawer } from "@/components/ui/modal";
+import { Drawer, Modal } from "@/components/ui/modal";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Tabs } from "@/components/ui/tabs";
@@ -23,8 +23,9 @@ import {
   listEventKinds,
   listEvents, createEvent, updateEvent, deleteEvent,
   listEventAttendance, saveEventAttendance, listEventInvitees, setEventInvitees,
+  getEventRSVP,
   listMembers, listMinistries,
-  type ChurchEvent, type EventKind, type EventInvitee, type Member, type Ministry,
+  type ChurchEvent, type EventKind, type EventInvitee, type EventRSVPResult, type Member, type Ministry,
 } from "@/lib/api";
 import { currency, dateTimePt } from "@/lib/format";
 import { EVENT_ORIGIN } from "@/lib/constants";
@@ -60,6 +61,7 @@ export default function EventsPage() {
   const [filters, setFilters] = useState({ from: "", to: "", kind: "" });
 
   const [eventDrawer, setEventDrawer] = useState<{ open: boolean; editing?: ChurchEvent }>({ open: false });
+  const [rsvpModal, setRsvpModal] = useState<{ open: boolean; event?: ChurchEvent; data: EventRSVPResult | null }>({ open: false, data: null });
   const [form, setForm] = useState({ ...EMPTY_EVENT });
   const [present, setPresent] = useState<Set<string>>(new Set());
   const [invMembers, setInvMembers] = useState<Set<string>>(new Set());
@@ -313,10 +315,14 @@ export default function EventsPage() {
                       <TD className="text-right tabular-nums">{ev.estimated_cost != null ? currency(ev.estimated_cost) : "-"}</TD>
                       <TD className="text-right tabular-nums">{ev.cost_actual > 0 ? currency(ev.cost_actual) : "-"}</TD>
                       <TD>
-                        <div className="flex justify-end gap-1">
-                          {canWrite && <Button variant="ghost" className="h-8 px-2" title="Editar" onClick={() => openEdit(ev)}><Pencil className="h-4 w-4" /></Button>}
-                          {canWrite && <Button variant="ghost" className="h-8 px-2" title="Excluir" onClick={() => removeEvent(ev)}><Trash2 className="h-4 w-4" /></Button>}
-                        </div>
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" className="h-8 px-2" title="Confirmacoes (eu vou)" onClick={async () => {
+                              setRsvpModal({ open: true, event: ev, data: null });
+                              try { setRsvpModal({ open: true, event: ev, data: await getEventRSVP(ev.id) }); } catch { /* ignora */ }
+                            }}><Users className="h-4 w-4" /></Button>
+                            {canWrite && <Button variant="ghost" className="h-8 px-2" title="Editar" onClick={() => openEdit(ev)}><Pencil className="h-4 w-4" /></Button>}
+                            {canWrite && <Button variant="ghost" className="h-8 px-2" title="Excluir" onClick={() => removeEvent(ev)}><Trash2 className="h-4 w-4" /></Button>}
+                          </div>
                       </TD>
                     </TRow>
                   ))}
@@ -530,6 +536,37 @@ export default function EventsPage() {
           </div>
         </form>
       </Drawer>
+
+      <Modal open={rsvpModal.open} onClose={() => setRsvpModal({ open: false, data: null })} title={`Confirmações - ${rsvpModal.event?.title ?? "Evento"}`}>
+        {rsvpModal.data === null ? (
+          <p className="py-6 text-center text-sm text-zinc-400">Carregando...</p>
+        ) : (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-emerald-50 p-2"><div className="text-lg font-bold text-emerald-700">{rsvpModal.data.going}</div><div className="text-xs text-zinc-500">Eu vou</div></div>
+              <div className="rounded-lg bg-amber-50 p-2"><div className="text-lg font-bold text-amber-700">{rsvpModal.data.maybe}</div><div className="text-xs text-zinc-500">Talvez</div></div>
+              <div className="rounded-lg bg-zinc-100 p-2 dark:bg-zinc-800"><div className="text-lg font-bold text-zinc-600 dark:text-zinc-300">{rsvpModal.data.declined}</div><div className="text-xs text-zinc-500">Não vou</div></div>
+            </div>
+            <p className="text-xs text-zinc-400">
+              Estimativa de público: <strong>{rsvpModal.data.going}</strong> confirmado(s).
+            </p>
+            {rsvpModal.data.rsvps.length === 0 ? (
+              <p className="py-4 text-center text-sm text-zinc-400">Ninguém confirmou ainda.</p>
+            ) : (
+              <ul className="max-h-80 space-y-1 overflow-y-auto">
+                {rsvpModal.data.rsvps.map((x) => (
+                  <li key={x.member_id} className="flex items-center justify-between border-b border-zinc-100 py-1 dark:border-zinc-800">
+                    <span>{x.member_name}</span>
+                    <Badge tone={x.status === "going" ? "green" : x.status === "maybe" ? "amber" : "zinc"}>
+                      {x.status === "going" ? "Eu vou" : x.status === "maybe" ? "Talvez" : "Não vou"}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
