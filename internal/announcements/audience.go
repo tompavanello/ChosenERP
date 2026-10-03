@@ -203,3 +203,84 @@ func (r *Repo) CountRecipients(ctx context.Context, tx pgx.Tx, tenantID string, 
 	err := tx.QueryRow(ctx, "SELECT count(*) FROM ("+sql+") q", args...).Scan(&n)
 	return n, err
 }
+
+// ResolveMemberIDs devolve os IDs dos membros alcancados pelo publico/filtro,
+// para canais que NAO dependem de WhatsApp (ex.: Web Push). Diferente de
+// ResolveRecipients, nao exige `whatsapp` preenchido. Visitantes sao ignorados
+// (nao usam o app).
+func (r *Repo) ResolveMemberIDs(ctx context.Context, tx pgx.Tx, tenantID string, in SendInput) ([]string, error) {
+	b := &argBuilder{}
+	tenantPH := b.add(tenantID)
+	f := in.AudienceFilter
+	audience := in.Audience
+	if audience == "" {
+		audience = "everyone"
+	}
+	if audience == "visitors" {
+		return []string{}, nil
+	}
+
+	conds := []string{"m.tenant_id = " + tenantPH}
+	if c := b.in("m.branch_id", f.BranchIDs); c != "" {
+		conds = append(conds, c)
+	}
+	if c := b.in("m.gender", f.Genders); c != "" {
+		conds = append(conds, c)
+	}
+	if c := b.in("m.marital_status", f.MaritalStatuses); c != "" {
+		conds = append(conds, c)
+	}
+	if c := b.in("m.membership_status", f.MembershipStatuses); c != "" {
+		conds = append(conds, c)
+	}
+	if f.AgeMin != nil {
+		conds = append(conds, "m.birth_date IS NOT NULL AND date_part('year', age(m.birth_date)) >= "+b.add(*f.AgeMin))
+	}
+	if f.AgeMax != nil {
+		conds = append(conds, "m.birth_date IS NOT NULL AND date_part('year', age(m.birth_date)) <= "+b.add(*f.AgeMax))
+	}
+
+	base := "FROM members m"
+	distinct := false
+	switch audience {
+	case "leaders":
+		base = `FROM members m
+			LEFT JOIN ministry_members mm ON mm.member_id = m.id AND mm.role = 'leader'
+			LEFT JOIN small_groups sg ON sg.leader_id = m.id`
+		conds = append(conds, "(mm.member_id IS NOT NULL OR sg.id IS NOT NULL)")
+		distinct = true
+	case "groups":
+		if len(f.GroupIDs) == 0 {
+			return []string{}, nil
+		}
+		base = `FROM members m JOIN group_attendance ga ON ga.member_id = m.id`
+		conds = append(conds, "ga.small_group_id IN "+b.placeholders(f.GroupIDs))
+		distinct = true
+	case "ministries":
+		if len(f.MinistryIDs) == 0 {
+			return []string{}, nil
+		}
+		base = `FROM members m JOIN ministry_members mm ON mm.member_id = m.id`
+		conds = append(conds, "mm.ministry_id IN "+b.placeholders(f.MinistryIDs))
+		distinct = true
+	}
+
+	sel := "SELECT "
+	if distinct {
+		sel += "DISTINCT "
+	}
+	rows, err := tx.Query(ctx, sel+"m.id::text "+base+" WHERE "+strings.Join(conds, " AND "), b.args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}

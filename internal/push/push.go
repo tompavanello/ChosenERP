@@ -69,10 +69,8 @@ func (r *Repo) Unsubscribe(ctx context.Context, tx pgx.Tx, userID, endpoint stri
 	return err
 }
 
-// SendToTenant envia a mensagem a todas as inscricoes do tenant. Best-effort:
-// falhas de rede nao interrompem as demais; inscricoes expiradas (404/410) sao
-// removidas. Deve rodar em contexto de sistema (WithSystem), pois le inscricoes
-// de outros usuarios.
+// SendToTenant envia a mensagem a todas as inscricoes do tenant. Deve rodar em
+// contexto de sistema (WithSystem), pois le inscricoes de outros usuarios.
 func (r *Repo) SendToTenant(ctx context.Context, tx pgx.Tx, tenantID string, msg Message) error {
 	if !r.Enabled() {
 		return nil
@@ -84,23 +82,54 @@ func (r *Repo) SendToTenant(ctx context.Context, tx pgx.Tx, tenantID string, msg
 	if err != nil {
 		return err
 	}
-	var subs []Subscription
+	subs, err := scanSubs(rows)
+	if err != nil {
+		return err
+	}
+	return r.send(ctx, tx, subs, msg)
+}
+
+// SendToMembers envia a mensagem apenas as inscricoes cujos usuarios estao
+// vinculados a um dos membros (memberships.member_id). Util para segmentar o
+// push pelo publico do comunicado.
+func (r *Repo) SendToMembers(ctx context.Context, tx pgx.Tx, tenantID string, memberIDs []string, msg Message) error {
+	if !r.Enabled() || len(memberIDs) == 0 {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT DISTINCT ps.id::text, ps.endpoint, ps.p256dh, ps.auth
+		FROM push_subscriptions ps
+		JOIN memberships me ON me.user_id = ps.user_id AND me.tenant_id = ps.tenant_id
+		WHERE ps.tenant_id = $1::uuid AND me.member_id = ANY($2::uuid[])`, tenantID, memberIDs)
+	if err != nil {
+		return err
+	}
+	subs, err := scanSubs(rows)
+	if err != nil {
+		return err
+	}
+	return r.send(ctx, tx, subs, msg)
+}
+
+func scanSubs(rows pgx.Rows) ([]Subscription, error) {
+	defer rows.Close()
+	subs := []Subscription{}
 	for rows.Next() {
 		var s Subscription
 		if err := rows.Scan(&s.ID, &s.Endpoint, &s.P256dh, &s.Auth); err != nil {
-			rows.Close()
-			return err
+			return nil, err
 		}
 		subs = append(subs, s)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
-	}
+	return subs, rows.Err()
+}
+
+// send envia a mensagem a cada inscricao. Best-effort: falhas de rede nao
+// interrompem as demais; inscricoes expiradas (404/410) sao removidas.
+func (r *Repo) send(ctx context.Context, tx pgx.Tx, subs []Subscription, msg Message) error {
 	if len(subs) == 0 {
 		return nil
 	}
-
 	payload, err := json.Marshal(msg)
 	if err != nil {
 		return err

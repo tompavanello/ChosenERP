@@ -197,7 +197,7 @@ App do membro
   > **Web Push (02/10/2026):** `push_subscriptions` (`000083`), VAPID
   > (`go run ./cmd/vapid-gen` -> `VAPID_*`), endpoints `/me/push/*`, service
   > worker com handler de `push`/`notificationclick` e toggle no Perfil; dispara
-  > best-effort ao criar um comunicado.
+  > best-effort ao criar um comunicado, **segmentado pelo publico/filtro** do aviso.
   > **Solicitacoes + area do lider (02/10/2026):** `member_requests` (`000084`)
   > com `/me/requests` (membro) e `/requests` (secretaria, `members.read/write`)
   > + pagina "Solicitacoes"; `GET /me/led-groups` (grupos que o membro lidera com

@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"chosenerp/internal/announcements"
 	"chosenerp/internal/push"
 )
 
@@ -73,17 +74,23 @@ func (a *App) handleMePushUnsubscribe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// pushToTenantAsync dispara o envio (best-effort) sem bloquear a resposta.
-func (a *App) pushToTenantAsync(tenantID, title, body string) {
+// pushToAudienceAsync dispara o push (best-effort) apenas para os membros
+// alcancados pelo publico/filtro do comunicado, sem bloquear a resposta.
+func (a *App) pushToAudienceAsync(tenantID, title, body, audience string, filter announcements.AudienceFilter) {
 	if !a.Push.Enabled() || tenantID == "" || strings.TrimSpace(title) == "" {
 		return
 	}
 	msg := push.Message{Title: title, Body: truncateText(body, 140), URL: "/avisos"}
+	in := announcements.SendInput{Audience: audience, AudienceFilter: filter}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if err := a.Store.WithSystem(ctx, func(tx pgx.Tx) error {
-			return a.Push.SendToTenant(ctx, tx, tenantID, msg)
+			ids, err := a.Announcements.ResolveMemberIDs(ctx, tx, tenantID, in)
+			if err != nil {
+				return err
+			}
+			return a.Push.SendToMembers(ctx, tx, tenantID, ids, msg)
 		}); err != nil {
 			log.Printf("[push] tenant %s: %v", tenantID, err)
 		}

@@ -142,7 +142,8 @@ docker compose -f infra/docker-compose.yml up -d member
   `.env` (`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`) - sem elas o
   envio fica desabilitado. O service worker (`public/sw.js`) exibe a notificacao;
   o toggle fica no Perfil do app. Hoje dispara ao criar um comunicado
-  (`pushToTenantAsync`, best-effort).
+  (`pushToAudienceAsync`, best-effort) **segmentado pelo publico/filtro** do aviso
+  (`announcements.ResolveMemberIDs` + `push.SendToMembers` via `memberships`).
 - **Solicitacoes/formularios (`000084`)**: `member_requests` (atualizacao
   cadastral, carta, visita, batismo, profissao de fe, transferencia, casamento,
   inscricao em evento); membro cria/acompanha em `/me/requests` (tela
