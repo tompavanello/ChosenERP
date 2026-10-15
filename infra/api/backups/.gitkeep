@@ -1,0 +1,2 @@
+# Mantem o diretorio versionado. O Dockerfile copia /backups com o dono do
+# processo (65532) para que o volume nomeado nasca com a permissao correta.

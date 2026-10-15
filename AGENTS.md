@@ -143,6 +143,31 @@ docker compose -f infra/docker-compose.yml up -d member
 - **Gestao da area do membro:** pagina **Area do Membro** no webadmin
   (`GET /member-app/overview`) com acessos (ultimo login, dispositivos Web Push)
   e aba de Materiais.
+- **Acesso de visitante (`000094`)**: o visitante baixa o app, informa nome e
+  telefone em "Sou visitante" e recebe um **codigo de 6 digitos por WhatsApp**
+  (`POST /public/tenant/{slug}/visitor/request-code`; envio pelo `Dispatcher`,
+  canal da filial). A validacao (`.../verify-code`) cria/reaproveita a identidade
+  (`users` so-telefone, e-mail agora nullable), o registro em `visitors` e um
+  `membership` com papel `visitante`, `visitor_id` e `expires_at` (30 dias). O
+  visitante acessa `/me/visitor/*` (avisos, agenda, mural de oracao, Pix,
+  editar contato, "quero ser membro"); nao tem permissoes nem `member_id`, entao
+  as rotas de membro continuam negadas. Ao pedir "quero ser membro", a secretaria
+  aprova em Solicitacoes (`POST /requests/{id}/approve-membership`), que converte
+  em membro e **promove o mesmo membership** (`promote_visitor_to_member`). A
+  trilha de acolhimento e append-only: o trigger em `visitors.journey_stage`
+  grava `visitor_journey` (hash-chain), exibida em Visitantes -> trilha
+  (`GET /visitors/{id}/journey`). Anti-abuso: 1 codigo/min e 5/15min por telefone.
+- **Conteudo do membro (`000095`)**: modulo CORE (sem gate de plano) com
+  **devocionais em planos** (`devotional_plans`/`devotional_plan_days` +
+  `devotional_progress` com checklist/streak), **videos do YouTube**
+  (`content_videos`) e **culto ao vivo** (canal/URL do YouTube em `tenants`). O
+  membro acessa `/me/devotional-plans*`, `/me/videos` e `/me/live`; a staff
+  gerencia em Conteudo (permissoes `content.read`/`content.write`). Os planos
+  devocionais podem ser gerados como **rascunho por IA** OpenAI-compativel
+  (`POST /devotional-plans/generate`; env `AI_BASE_URL`/`AI_API_KEY`/`AI_MODEL`,
+  sem chave = `ai_disabled`). A **Biblia** usa a API licenciada api.bible
+  (`API_BIBLE_KEY`) com cache local em `bible_cache`; sem chave o leitor fica
+  indisponivel. Tela **Conteudo** no webadmin (Devocionais/Videos/Ao vivo/Biblia).
 - **Web Push (`000083`)**: `push_subscriptions` guarda a inscricao por
   dispositivo (dono = `current_user_id()`; system le tudo para enviar). O envio
   usa VAPID (`webpush-go`); gere as chaves com `go run ./cmd/vapid-gen` e cole no
@@ -184,6 +209,43 @@ registro em `audit_log`). Antes, qualquer `super_admin` de igreja listava e
 criava tenants (corrigido: o gate agora e `is_platform_admin()`). Enforcement de
 limites ainda nao existe (so gerencia/exibe).
 
+### Backup e restauracao por igreja (`000097`)
+
+Rotina de backup dos **dados completos** de um tenant (dados + arquivos de
+upload), operada pelo **admin da plataforma** (aba **Backup** em Igrejas e pagina
+**Backups** do menu Plataforma). O trabalho pesado fica em SQL:
+
+- `export_tenant(uuid)` monta um payload `jsonb` com **todas** as tabelas com
+  `tenant_id`, as tabelas-filhas sem `tenant_id` (resolvidas pelo catalogo via
+  FK), as identidades (`users`) referenciadas por `memberships` e os
+  `role_permissions` dos papeis do tenant.
+- `restore_tenant(uuid, jsonb)` **substitui todo o conteudo daquele tenant**
+  (as demais igrejas ficam intactas). Como e destrutivo e as tabelas append-only
+  bloqueiam DELETE/UPDATE por trigger, a funcao roda como dono (`SECURITY
+  DEFINER`) e usa `session_replication_role = replica` durante a transacao.
+  Faz upsert das identidades globais (por id/email/telefone) e remapeia
+  `memberships.user_id`. As tabelas-filhas e FKs sao descobertas dinamicamente
+  (`pg_constraint`), entao novas tabelas passam a ser cobertas automaticamente.
+
+O pacote `.zip` (`internal/backup`) contem `manifest.json`, `data.json` e
+`files/<nome-opaco>` (fotos, anexos e materiais referenciados por
+`/api/v1/attachments/...` e `study_materials.disk_name`). Os metadados ficam em
+`tenant_backups` (com `target_tenant_id`, para nao entrar no enunciado dinamico)
+e a configuracao global (`backup_settings`) define `enabled`,
+`interval_hours` e `retention_days`. O `backup.Worker` le essa configuracao e,
+quando habilitada, gera os backups das igrejas ativas e aplica a retencao.
+
+- **API:** `GET/POST /admin/tenants/{id}/backups` (`POST ?download=1` baixa na
+  hora), `GET /admin/backups`, `GET /admin/backups/{id}/download`,
+  `DELETE /admin/backups/{id}`, `POST /admin/tenants/{id}/restore` (por
+  `backup_id` ou upload `.zip`; confirma pelo slug) e
+  `GET/PUT /admin/backup-settings`. O restore gera automaticamente um backup de
+  seguranca (`pre_restore`) antes de substituir.
+- **Env:** `BACKUP_DIR` (no Compose e o volume nomeado `backups` em `/backups`)
+  e `BACKUP_POLL_SECONDS` (cadencia do worker).
+- **Atencao:** o pacote contem hashes de senha e segredos MFA; restrinja o
+  download ao admin da plataforma (o gate ja e `is_platform_admin`).
+
 ### Modulos por plano (entitlements)
 
 `plans.features` (jsonb) define os modulos de cada plano e `tenants.features`
@@ -197,6 +259,40 @@ Quotas (`max_members/max_branches/max_users/max_storage_mb`) bloqueiam criacao
 (POST membros/filiais/usuarios/acesso e uploads) com 403 `limite do plano
 atingido`. A resolucao roda no escopo da igreja, por isso a policy de `plans`
 libera a leitura do proprio plano (`000079`).
+
+### Pagamentos / gateways (Asaas)
+
+Camada `internal/payments` com a interface `Gateway` (abstracao de provider) e o
+`asaas` como primeira implementacao. Ha **dois fluxos**:
+
+- **Fluxo A (SaaS)**: a plataforma cobra a **igreja** pelos planos. Conta da
+  plataforma via env (`ASAAS_API_KEY`/`ASAAS_BASE_URL`) ou registro
+  `payment_gateway_configs` com `tenant_id NULL`. Tabelas `billing_customers`,
+  `billing_subscriptions`, `billing_invoices` (`000090`). "Criacao automatica de
+  planos" = a assinatura no Asaas e criada a partir de `plans.price_cents`/`cycle`
+  ao chamar `POST /admin/tenants/{id}/billing/subscription` (o Asaas nao tem
+  objeto de plano; `plans.gateway_refs` guarda o mapeamento para provedores que
+  tem, ex.: MercadoPago).
+- **Fluxo B (arrecadacao)**: a igreja cobra os membros. Credenciais por igreja em
+  `payment_gateway_configs` (`tenant_id` preenchido, `credentials` cifrado com
+  AES-GCM via `PAYMENTS_CREDENTIALS_KEY`, nunca devolvido). `payment_products`
+  (cada produto define a **categoria contabil** `financial_categories` e a conta
+  opcional), `payment_charges`, `payment_subscriptions` (`000091`). Ao liquidar
+  uma cobranca paga, o webhook gera o lancamento em `financial_transactions` com
+  a categoria/conta do produto (conciliacao idempotente por
+  `financial_transaction_id`).
+
+- **Webhook**: `POST /api/v1/public/payments/webhook/{provider}` (público,
+  rate-limited), validado pelo header `asaas-access-token` (`ASAAS_WEBHOOK_TOKEN`)
+  e **idempotente** por `(provider, event_id)` em `billing_webhook_events`.
+- **Suspensao automatica**: `payments.Worker` reconcilia as assinaturas no gateway
+  e suspende (`tenants.is_active=false`, `billing_status='suspended'`) as igrejas
+  inadimplentes apos `PAYMENTS_SUSPEND_AFTER_DAYS`; reativa automaticamente ao
+  regularizar. O login/refresh/`switch-tenant` passam a checar
+  `tenant_is_active()` (`000093`) e devolvem **403 `tenant_suspended`**. A igreja
+  e isenta com `tenants.billing_exempt` (planos gratis nunca sao suspensos).
+- **Permissoes**: `payments.read`/`payments.write` (Fluxo B) e `billing.read`
+  (Fluxo A na area da igreja) — `000092`.
 
 ### 3. Servico Go localmente (para depurar)
 
@@ -372,6 +468,12 @@ O subdominio de cada igreja e `{tenant.slug}.erpchosen.com.br` (ex.: o tenant
   `adminOnly`. Recebido por id (`/receipts/{id}`) exige `finance.read` e o render de
   documentos (`/member-documents/{id}/html`) exige `members.read`. O console da
   plataforma valida `is_platform_admin` no proprio handler.
+  Os papeis da Sede (`super_admin`/`admin_sede`) tem **todas as permissoes
+  implicitamente** (`auth.IsHQRole`): `hasPerm` libera direto e o login devolve o
+  catalogo completo, sem depender de backfill por migracao. O gate de plano
+  (`plan_feature_disabled`) continua valendo para todos - ou seja, a Sede acessa
+  todos os modulos **liberados para a igreja**. No webadmin, `hasPerm` tambem
+  trata esses papeis como donos de todas as permissoes.
 
 ### Teste manual de isolamento
 
@@ -418,6 +520,34 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | DELETE | `/api/v1/me/push/subscribe` | Bearer | Remove a inscricao Web Push (por `endpoint`) |
 | GET/POST | `/api/v1/me/requests` | Bearer | Solicitacoes/formularios do proprio membro |
 | GET  | `/api/v1/me/led-groups` | Bearer | Grupos que o membro lidera (participantes + presenca) |
+| POST | `/api/v1/public/tenant/{slug}/visitor/request-code` | - | Envia codigo de acesso ao visitante por WhatsApp |
+| POST | `/api/v1/public/tenant/{slug}/visitor/verify-code` | - | Valida o codigo e emite tokens de visitante |
+| GET/PATCH | `/api/v1/me/visitor` | Bearer | Perfil/contato do visitante (escopo self) |
+| GET  | `/api/v1/me/visitor/announcements` | Bearer | Avisos para o visitante |
+| GET  | `/api/v1/me/visitor/events` | Bearer | Agenda para o visitante |
+| GET/POST | `/api/v1/me/visitor/prayer-requests` | Bearer | Pedidos de oracao do visitante |
+| GET  | `/api/v1/me/visitor/prayer-wall` | Bearer | Mural publico para o visitante |
+| GET/POST | `/api/v1/me/visitor/requests` | Bearer | Solicitacoes do visitante (ex.: quero ser membro) |
+| GET  | `/api/v1/visitors/{id}/journey` | Bearer (`visitors.read`) | Trilha de acolhimento (historico de etapas) |
+| GET  | `/api/v1/me/videos` | Bearer | Videos (YouTube) publicados para o membro |
+| GET  | `/api/v1/me/live` | Bearer | Config do culto ao vivo (embed/link do YouTube) |
+| GET  | `/api/v1/me/devotional-plans` | Bearer | Planos devocionais ativos + progresso |
+| GET  | `/api/v1/me/devotional-plans/{id}` | Bearer | Plano + dias + dias concluidos |
+| POST/DELETE | `/api/v1/me/devotional-plans/{id}/days/{day}/complete` | Bearer | Marca/desmarca um dia como lido |
+| GET  | `/api/v1/me/bible/versions` | Bearer | Versoes da Biblia (api.bible) |
+| GET  | `/api/v1/me/bible/versions/{id}/books` | Bearer | Livros da versao |
+| GET  | `/api/v1/me/bible/versions/{id}/books/{bookId}/chapters` | Bearer | Capitulos do livro |
+| GET  | `/api/v1/me/bible/versions/{id}/chapters/{chapterId}` | Bearer | Texto do capitulo |
+| GET/POST | `/api/v1/videos` | Bearer (`content.read`/`write`) | Lista/cria video (YouTube) |
+| PATCH/DELETE | `/api/v1/videos/{id}` | Bearer (`content.write`) | Edita/exclui video |
+| GET/POST | `/api/v1/devotional-plans` | Bearer (`content.read`/`write`) | Lista/cria plano devocional |
+| GET/PATCH/DELETE | `/api/v1/devotional-plans/{id}` | Bearer (`content.read`/`write`) | Le/edita/exclui plano |
+| PUT  | `/api/v1/devotional-plans/{id}/days` | Bearer (`content.write`) | Substitui os dias do plano |
+| POST | `/api/v1/devotional-plans/generate` | Bearer (`content.write`) | Gera rascunho de plano por IA |
+| GET/PUT | `/api/v1/live-settings` | Bearer (`content.read`/`write`) | Config do culto ao vivo (canal/URL) |
+| GET/PUT | `/api/v1/bible-settings` | Bearer (`content.read`/`write`) | Versao padrao da Biblia |
+| GET  | `/api/v1/bible/versions` | Bearer (`content.read`) | Versoes da Biblia (staff) |
+| POST | `/api/v1/requests/{id}/approve-membership` | Bearer (`members.write`) | Aprova "quero ser membro" e promove o acesso |
 | GET  | `/api/v1/member-app/overview` | Bearer (`members.read`) | Acessos ao app do membro + uso (ultimo login, dispositivos) |
 | GET  | `/api/v1/requests` | Bearer (`members.read`) | Lista solicitacoes dos membros (secretaria) |
 | PATCH | `/api/v1/requests/{id}` | Bearer (`members.write`) | Responde a solicitacao (status + observacao) |
@@ -428,6 +558,8 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | PATCH | `/api/v1/prayer-requests/{id}` | Bearer (`prayer.moderate`) | Modera o pedido (status/observacao) |
 | GET  | `/api/v1/members` | Bearer | Lista membros (escopo RLS) |
 | POST | `/api/v1/members` | Bearer | Cria membro (escopo RLS) |
+| POST | `/api/v1/members/import/preview` | Bearer (`members.write`) | Le a planilha (CSV/XLSX base64) e devolve as linhas para mapear |
+| POST | `/api/v1/members/import` | Bearer (`members.write`) | Importa membros em lote (mapeamento de colunas + linha inicial; respeita a quota do plano) |
 | GET  | `/api/v1/members/{id}` | Bearer | Detalhe de membro |
 | GET  | `/api/v1/members/{id}/tree` | Bearer | Arvore genealogica + discipulado |
 | PATCH | `/api/v1/members/{id}` | Bearer | Edita perfil do membro |
@@ -525,6 +657,7 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | POST | `/api/v1/finance/transactions/import` | Bearer | Importa lancamentos (CSV ou XLSX, com mapeamento de colunas) |
 | POST | `/api/v1/finance/transactions/import/preview` | Bearer | Pre-visualiza as linhas da planilha para mapear colunas |
 | POST | `/api/v1/finance/transactions/reorder` | Bearer | Renumera a sequencia (entry_seq) dos lancamentos da mesma conta/data |
+| PATCH | `/api/v1/finance/transactions/{id}` | Bearer | Edita o lancamento EM VIGOR (preserva id, entry_seq, recibo e anexos; recalcula hash-chain) |
 | DELETE | `/api/v1/finance/transactions/{id}` | Bearer | Exclui o lancamento definitivamente (recalcula hash-chain) |
 | POST | `/api/v1/finance/transactions/{id}/void` | Bearer | Estorna o lancamento (legado; sai dos relatorios) |
 | POST | `/api/v1/finance/transactions/{id}/settle` | Bearer | Marca/desmarca a quitacao (contas a pagar; `paid_at`) |
@@ -597,7 +730,25 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | GET  | `/api/v1/admin/tenants/{id}/branches` | Bearer (platform admin) | Filiais da igreja (seletor do console) |
 | GET  | `/api/v1/admin/plans` | Bearer (platform admin) | Catalogo de planos |
 | POST | `/api/v1/admin/plans` | Bearer (platform admin) | Cria plano |
-| PATCH | `/api/v1/admin/plans/{key}` | Bearer (platform admin) | Edita plano |
+| GET  | `/api/v1/admin/plans/{key}` | Bearer (platform admin) | Detalhe do plano |
+| PATCH | `/api/v1/admin/plans/{key}` | Bearer (platform admin) | Edita plano (inclui ciclo e `gateway_refs`) |
+| GET  | `/api/v1/admin/billing/overview` | Bearer (platform admin) | Indicadores de cobranca (MRR, vencidas, suspensas) |
+| GET  | `/api/v1/admin/billing/subscriptions` | Bearer (platform admin) | Assinaturas por igreja |
+| GET  | `/api/v1/admin/billing/invoices` | Bearer (platform admin) | Faturas (`?status=`) |
+| GET  | `/api/v1/admin/tenants/{id}/billing` | Bearer (platform admin) | Cobranca da igreja (cliente/assinatura/faturas) |
+| POST | `/api/v1/admin/tenants/{id}/billing/subscription` | Bearer (platform admin) | Cria/atualiza a assinatura no Asaas a partir do plano |
+| DELETE | `/api/v1/admin/tenants/{id}/billing/subscription` | Bearer (platform admin) | Cancela a assinatura |
+| POST | `/api/v1/admin/tenants/{id}/billing/charge` | Bearer (platform admin) | Cobranca avulsa da igreja |
+| POST | `/api/v1/admin/tenants/{id}/billing/sync` | Bearer (platform admin) | Sincroniza assinatura/faturas no gateway |
+| POST | `/api/v1/admin/billing/invoices/{id}/refund?tenant_id=` | Bearer (platform admin) | Estorna a fatura |
+| GET  | `/api/v1/billing` | Bearer (`billing.read`) | Assinatura/faturas da propria igreja |
+| POST | `/api/v1/public/payments/webhook/{provider}` | - | Webhook do gateway (token `asaas-access-token`, idempotente) |
+| GET  | `/api/v1/payment-gateways` | Bearer (`payments.read`) | Gateways configurados da igreja |
+| PUT  | `/api/v1/payment-gateways/{provider}` | Bearer (`payments.write`) | Grava credenciais do gateway (cifradas) |
+| GET/POST | `/api/v1/payment-products` | Bearer (`payments.read`/`write`) | Produtos de arrecadacao (categoria contabil por produto) |
+| PATCH/DELETE | `/api/v1/payment-products/{id}` | Bearer (`payments.write`) | Edita/exclui produto |
+| GET/POST | `/api/v1/payment-charges` | Bearer (`payments.read`/`write`) | Lista/gera cobranca (PIX/boleto/cartao) |
+| POST | `/api/v1/payment-charges/{id}/refund` | Bearer (`payments.write`) | Estorna a cobranca |
 | GET  | `/api/v1/auth/mfa` | Bearer | Estado do MFA |
 | POST | `/api/v1/auth/mfa/setup` | Bearer | Gera segredo TOTP |
 | POST | `/api/v1/auth/mfa/enable` | Bearer | Ativa MFA (codigo) |
@@ -644,6 +795,16 @@ O container roda como UID `65532` (nao-root) e o Dockerfile copia
 `infra/api/uploads/` para `/uploads` com `--chown=65532:65532`. Isso e o que faz o
 volume nomeado de uploads **nascer com o dono certo** e a API conseguir gravar fotos
 de membro e anexos do financeiro - nao remova nem o diretorio nem o `--chown`.
+
+> A imagem e `FROM scratch`, entao o Dockerfile copia o **bundle de CA** de
+> `alpine:3.20` (`/etc/ssl/certs/ca-certificates.crt`) para o stage final. Sem
+> isso, qualquer chamada HTTPS da API falha com `x509: certificate signed by
+> unknown authority` (api.bible, Asaas, WhatsApp Meta). Nao remova esse COPY.
+
+> `docker compose -f infra/docker-compose.yml` **sem `--env-file .env`** ignora o
+> `.env` da raiz (o project dir vira `infra/`) e cai nos defaults - inclusive o
+> `JWT_SECRET`. Suba sempre via `.\start.ps1` ou com
+> `docker compose --env-file .env -f infra/docker-compose.yml up -d`.
 
 ---
 

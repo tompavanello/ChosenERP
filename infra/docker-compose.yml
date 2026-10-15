@@ -139,6 +139,22 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:contato@erpchosen.com.br}
+      PAYMENTS_DEFAULT_PROVIDER: ${PAYMENTS_DEFAULT_PROVIDER:-asaas}
+      ASAAS_BASE_URL: ${ASAAS_BASE_URL:-https://sandbox.asaas.com/api/v3}
+      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
+      PAYMENTS_SUSPEND_ENABLED: ${PAYMENTS_SUSPEND_ENABLED:-true}
+      PAYMENTS_SUSPEND_AFTER_DAYS: ${PAYMENTS_SUSPEND_AFTER_DAYS:-10}
+      PAYMENTS_POLL_SECONDS: ${PAYMENTS_POLL_SECONDS:-300}
+      # Conteudo do membro: IA (devocional) e Biblia (api.bible).
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
+      API_BIBLE_KEY: ${API_BIBLE_KEY:-}
+      API_BIBLE_BASE_URL: ${API_BIBLE_BASE_URL:-}
+      # Backup por igreja: diretorio persistente dos pacotes .zip.
+      BACKUP_DIR: /backups
+      BACKUP_POLL_SECONDS: ${BACKUP_POLL_SECONDS:-3600}
     ports:
       - "${API_HTTP_PORT:-38080}:8080"
     volumes:
@@ -147,6 +163,7 @@ services:
       # down/up` apagava as imagens e o banco continuava apontando para URLs
       # mortas, sem nenhum erro visivel na tela.
       - uploads:/uploads
+      - backups:/backups
 
   ### Webadmin (Next.js 15) - UI do ERP. Build standalone; sobe junto com o stack.
   webadmin:
@@ -277,6 +294,8 @@ services:
 volumes:
   # Anexos do financeiro e fotos de membro (UPLOAD_DIR=/uploads na API).
   uploads:
+  # Pacotes .zip de backup por igreja (BACKUP_DIR=/backups na API).
+  backups:
   pgdata:
   # Sessoes/credenciais das instancias WhatsApp da Evolution API.
   evolution_instances:
