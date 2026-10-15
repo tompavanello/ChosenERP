@@ -13,12 +13,15 @@ func readJSON(r *http.Request, v any) error {
 }
 
 // readJSONMax e o readJSON com limite configuravel (ex.: importacao de planilha).
+//
+// Nao usamos DisallowUnknownFields: varios endpoints fazem round-trip GET->PUT
+// (o cliente devolve o objeto recebido, que pode ter mais campos do que o
+// subconjunto aceito na escrita), e a rejeicao por campo extra viraria 400.
 func readJSONMax(r *http.Request, v any, max int64) error {
 	if r.Body == nil {
 		return errors.New("empty body")
 	}
 	defer r.Body.Close()
 	dec := json.NewDecoder(io.LimitReader(r.Body, max))
-	dec.DisallowUnknownFields()
 	return dec.Decode(v)
 }

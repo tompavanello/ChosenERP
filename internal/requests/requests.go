@@ -20,7 +20,7 @@ var (
 var Kinds = map[string]bool{
 	"cadastro": true, "carta": true, "visita": true, "batismo": true,
 	"profissao_fe": true, "transferencia": true, "casamento": true,
-	"evento": true, "outro": true,
+	"evento": true, "outro": true, "quero_ser_membro": true,
 }
 
 // Request e uma solicitacao do membro.
@@ -28,6 +28,7 @@ type Request struct {
 	ID          string     `json:"id"`
 	MemberID    *string    `json:"member_id,omitempty"`
 	MemberName  *string    `json:"member_name,omitempty"`
+	UserID      *string    `json:"user_id,omitempty"`
 	Kind        string     `json:"kind"`
 	Subject     string     `json:"subject"`
 	Message     *string    `json:"message,omitempty"`
@@ -51,12 +52,12 @@ type UpdateInput struct {
 
 type Repo struct{}
 
-const cols = `r.id::text, r.member_id::text, mb.full_name, r.kind, r.subject, r.message,
+const cols = `r.id::text, r.member_id::text, mb.full_name, r.user_id::text, r.kind, r.subject, r.message,
 	r.status, r.response, r.created_at, r.updated_at, r.responded_at`
 
 func scan(row pgx.Row) (*Request, error) {
 	var r Request
-	err := row.Scan(&r.ID, &r.MemberID, &r.MemberName, &r.Kind, &r.Subject, &r.Message,
+	err := row.Scan(&r.ID, &r.MemberID, &r.MemberName, &r.UserID, &r.Kind, &r.Subject, &r.Message,
 		&r.Status, &r.Response, &r.CreatedAt, &r.UpdatedAt, &r.RespondedAt)
 	if err != nil {
 		return nil, err
@@ -91,6 +92,27 @@ func (r *Repo) ListForMember(ctx context.Context, tx pgx.Tx, memberID string) ([
 	rows, err := tx.Query(ctx, `SELECT `+cols+` `+fromJoin+`
 		WHERE r.member_id = $1::uuid
 		ORDER BY r.created_at DESC`, memberID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Request{}
+	for rows.Next() {
+		it, err := scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *it)
+	}
+	return out, rows.Err()
+}
+
+// ListByUser lista as solicitacoes abertas por uma identidade (visitante sem
+// cadastro de membro). Para membros, use ListForMember.
+func (r *Repo) ListByUser(ctx context.Context, tx pgx.Tx, userID string) ([]Request, error) {
+	rows, err := tx.Query(ctx, `SELECT `+cols+` `+fromJoin+`
+		WHERE r.user_id = $1::uuid
+		ORDER BY r.created_at DESC`, userID)
 	if err != nil {
 		return nil, err
 	}

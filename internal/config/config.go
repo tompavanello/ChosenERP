@@ -1,10 +1,24 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
+
+// DefaultJWTSecret e o segredo de desenvolvimento. O boot falha se JWT_SECRET
+// estiver vazio e avisa quando permanecer neste valor.
+const DefaultJWTSecret = "dev-insecure-secret-change-me"
+
+// Validate confere configuracoes obrigatorias.
+func (c Config) Validate() error {
+	if strings.TrimSpace(c.JWTSecret) == "" {
+		return errors.New("JWT_SECRET obrigatorio")
+	}
+	return nil
+}
 
 // Config agrega as variaveis de ambiente da API.
 type Config struct {
@@ -49,6 +63,42 @@ type Config struct {
 	VAPIDPublicKey  string
 	VAPIDPrivateKey string
 	VAPIDSubject    string
+
+	// ---- Pagamentos / gateways (Asaas e afins) ----
+	// PaymentsDefaultProvider e o provider usado pela plataforma (Fluxo A: a
+	// Chosen ERP cobrando as igrejas).
+	PaymentsDefaultProvider string
+	// AsaasAPIKey/AsaasBaseURL configuram a conta da plataforma no Asaas.
+	// Base URL de sandbox: https://sandbox.asaas.com/api/v3
+	// Base URL de producao: https://api.asaas.com/v3
+	AsaasAPIKey       string
+	AsaasBaseURL      string
+	AsaasWebhookToken string
+	// PaymentsCredentialsKey cifra as credenciais de gateway por igreja no banco
+	// (AES-GCM). Vazio => deriva do JWT_SECRET (recomendado definir um proprio).
+	PaymentsCredentialsKey string
+	// PaymentsSuspendEnabled liga a suspensao automatica da igreja inadimplente
+	// (tenants.is_active = false) apos PaymentsSuspendAfterDays de atraso.
+	PaymentsSuspendEnabled   bool
+	PaymentsSuspendAfterDays int
+	// PaymentsPollInterval e o intervalo do worker de cobranca (reconciliacao).
+	PaymentsPollInterval time.Duration
+
+	// ---- Conteudo do membro (IA + Biblia) ----
+	// IA OpenAI-compativel (devocional). Sem AI_API_KEY o recurso fica off.
+	AIBaseURL string
+	AIAPIKey  string
+	AIModel   string
+	// api.bible (Biblia licenciada). Sem API_BIBLE_KEY o recurso fica off.
+	APIBibleKey     string
+	APIBibleBaseURL string
+
+	// ---- Backup por igreja ----
+	// BackupDir e o diretorio onde os pacotes .zip sao persistidos.
+	BackupDir string
+	// BackupPollInterval e a cadencia com que o worker verifica se e hora de
+	// rodar o backup agendado (a periodicidade real vem de backup_settings).
+	BackupPollInterval time.Duration
 }
 
 func getenv(key, fallback string) string {
@@ -62,6 +112,15 @@ func getenvInt(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
+		}
+	}
+	return fallback
+}
+
+func getenvBool(key string, fallback bool) bool {
+	if v := os.Getenv(key); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
 		}
 	}
 	return fallback
@@ -88,7 +147,7 @@ func Load() Config {
 		WhatsAppToken:        getenv("WHATSAPP_TOKEN", ""),
 		WhatsAppPhoneID:      getenv("WHATSAPP_PHONE_ID", ""),
 		WhatsAppAPIVersion:   getenv("WHATSAPP_API_VERSION", "v19.0"),
-		WhatsAppProvider:     getenv("WHATSAPP_PROVIDER", "meta"),
+		WhatsAppProvider:     getenv("WHATSAPP_PROVIDER", "evolution"),
 		EvolutionAPIURL:      getenv("EVOLUTION_API_URL", ""),
 		EvolutionAPIKey:      getenv("EVOLUTION_API_KEY", ""),
 		EvolutionInstance:    getenv("EVOLUTION_INSTANCE", ""),
@@ -100,5 +159,23 @@ func Load() Config {
 		VAPIDPublicKey:       getenv("VAPID_PUBLIC_KEY", ""),
 		VAPIDPrivateKey:      getenv("VAPID_PRIVATE_KEY", ""),
 		VAPIDSubject:         getenv("VAPID_SUBJECT", "mailto:contato@erpchosen.com.br"),
+
+		PaymentsDefaultProvider:  getenv("PAYMENTS_DEFAULT_PROVIDER", "asaas"),
+		AsaasAPIKey:              getenv("ASAAS_API_KEY", ""),
+		AsaasBaseURL:             getenv("ASAAS_BASE_URL", "https://sandbox.asaas.com/api/v3"),
+		AsaasWebhookToken:        getenv("ASAAS_WEBHOOK_TOKEN", ""),
+		PaymentsCredentialsKey:   getenv("PAYMENTS_CREDENTIALS_KEY", ""),
+		PaymentsSuspendEnabled:   getenvBool("PAYMENTS_SUSPEND_ENABLED", true),
+		PaymentsSuspendAfterDays: getenvInt("PAYMENTS_SUSPEND_AFTER_DAYS", 10),
+		PaymentsPollInterval:     time.Duration(getenvInt("PAYMENTS_POLL_SECONDS", 300)) * time.Second,
+
+		AIBaseURL:       getenv("AI_BASE_URL", ""),
+		AIAPIKey:        getenv("AI_API_KEY", ""),
+		AIModel:         getenv("AI_MODEL", "gpt-4o-mini"),
+		APIBibleKey:     getenv("API_BIBLE_KEY", ""),
+		APIBibleBaseURL: getenv("API_BIBLE_BASE_URL", ""),
+
+		BackupDir:          getenv("BACKUP_DIR", "/tmp/chosenerp/backups"),
+		BackupPollInterval: time.Duration(getenvInt("BACKUP_POLL_SECONDS", 3600)) * time.Second,
 	}
 }

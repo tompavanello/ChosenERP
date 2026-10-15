@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"chosenerp/internal/announcements"
 	"chosenerp/internal/audit"
 	"chosenerp/internal/auth"
+	"chosenerp/internal/backup"
 	"chosenerp/internal/benefactors"
 	"chosenerp/internal/cargos"
 	"chosenerp/internal/config"
@@ -30,6 +32,8 @@ import (
 	"chosenerp/internal/members"
 	"chosenerp/internal/ministries"
 	"chosenerp/internal/org"
+	"chosenerp/internal/payments"
+	"chosenerp/internal/payments/asaas"
 	"chosenerp/internal/prayer"
 	"chosenerp/internal/programacao"
 	"chosenerp/internal/push"
@@ -44,6 +48,12 @@ import (
 func main() {
 	ctx := context.Background()
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("config: %v", err)
+	}
+	if cfg.JWTSecret == config.DefaultJWTSecret {
+		log.Println("AVISO: JWT_SECRET esta no valor default de desenvolvimento. Defina um segredo forte em producao.")
+	}
 
 	st, err := store.New(ctx, cfg.DatabaseURL, cfg.MigrateURL)
 	if err != nil {
@@ -85,6 +95,28 @@ func main() {
 
 	docRepo := &documents.Repo{}
 	finRepo := &finance.Repo{}
+
+	// Pagamentos / gateways (Asaas). O Factory evita o ciclo de import entre
+	// payments e payments/asaas.
+	paymentsSvc := payments.NewService(st, payments.Config{
+		DefaultProvider:   cfg.PaymentsDefaultProvider,
+		AsaasBaseURL:      cfg.AsaasBaseURL,
+		AsaasAPIKey:       cfg.AsaasAPIKey,
+		AsaasWebhookToken: cfg.AsaasWebhookToken,
+		CredentialsKey:    cfg.PaymentsCredentialsKey,
+		JWTSecret:         cfg.JWTSecret,
+		SuspendEnabled:    cfg.PaymentsSuspendEnabled,
+		SuspendAfterDays:  cfg.PaymentsSuspendAfterDays,
+	})
+	paymentsSvc.Factory = func(provider string, c payments.Credentials) (payments.Gateway, error) {
+		switch provider {
+		case "asaas", "":
+			return asaas.New(c.BaseURL, c.APIKey), nil
+		default:
+			return nil, fmt.Errorf("provedor de pagamento nao suportado: %s", provider)
+		}
+	}
+
 	router := httpapi.NewRouter(&httpapi.Config{
 		JWTSecret:           cfg.JWTSecret,
 		AppBaseURL:          cfg.AppBaseURL,
@@ -93,11 +125,17 @@ func main() {
 		EvolutionAPIURL:     cfg.EvolutionAPIURL,
 		EvolutionAPIKey:     cfg.EvolutionAPIKey,
 		PublicBaseDomain:    cfg.PublicBaseDomain,
+		AIBaseURL:           cfg.AIBaseURL,
+		AIAPIKey:            cfg.AIAPIKey,
+		AIModel:             cfg.AIModel,
+		APIBibleKey:         cfg.APIBibleKey,
+		APIBibleBaseURL:     cfg.APIBibleBaseURL,
+		BackupDir:           cfg.BackupDir,
 	}, st, authSvc,
 		&members.Repo{}, finRepo, &audit.Repo{}, docRepo,
 		&families.Repo{}, &visitors.Repo{}, &benefactors.Repo{}, &suppliers.Repo{},
 		&ministries.Repo{}, &groups.Repo{}, &announcements.Repo{},
-		&cargos.Repo{}, &programacao.Repo{}, &users.Repo{}, &events.Repo{}, &lgpd.Repo{}, &governance.Repo{}, &org.Repo{}, &rosters.Repo{}, &kids.Repo{}, &memberevents.Repo{}, &prayer.Repo{}, &materials.Repo{}, pushRepo, &requests.Repo{}, dispatcher)
+		&cargos.Repo{}, &programacao.Repo{}, &users.Repo{}, &events.Repo{}, &lgpd.Repo{}, &governance.Repo{}, &org.Repo{}, &rosters.Repo{}, &kids.Repo{}, &memberevents.Repo{}, &prayer.Repo{}, &materials.Repo{}, pushRepo, &requests.Repo{}, dispatcher, paymentsSvc)
 
 	// Worker da outbox de envio (retry de pendentes/falhos)
 	worker := &delivery.Worker{
@@ -147,6 +185,24 @@ func main() {
 		Interval:  cfg.RecurringInterval,
 	}
 	go recWorker.Run(ctx)
+
+	// Worker de cobranca: reconcilia assinaturas no gateway e suspende as
+	// igrejas inadimplentes apos a tolerancia configurada.
+	payWorker := &payments.Worker{
+		Store:            st,
+		Service:          paymentsSvc,
+		Interval:         cfg.PaymentsPollInterval,
+		SuspendEnabled:   cfg.PaymentsSuspendEnabled,
+		SuspendAfterDays: cfg.PaymentsSuspendAfterDays,
+		OnEvent: func(_ context.Context, tenantID, tenantName, event string) {
+			log.Printf("payments: igreja %q (%s) -> %s", tenantName, tenantID, event)
+		},
+	}
+	go payWorker.Run(ctx)
+
+	// Worker de backup agendado por igreja (le backup_settings e aplica retencao).
+	backupMgr := &backup.Manager{Store: st, Dir: cfg.BackupDir, UploadDir: cfg.UploadDir}
+	go (&backup.Worker{Manager: backupMgr, Interval: cfg.BackupPollInterval}).Run(ctx)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.HTTPPort,

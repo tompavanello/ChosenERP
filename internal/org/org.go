@@ -301,6 +301,8 @@ type Tenant struct {
 	// (e a chave usada para doar), por isso aparece tambem no public_tenant.
 	PixKey  *string `json:"pix_key,omitempty"`
 	PixName *string `json:"pix_name,omitempty"`
+	// BibleVersionID e a traducao padrao do leitor da Biblia (api.bible).
+	BibleVersionID *string `json:"bible_version_id,omitempty"`
 	// Limits sao overrides por igreja (jsonb) usados pelo console da plataforma;
 	// NULL => usa os limites do plano.
 	Limits json.RawMessage `json:"limits,omitempty"`
@@ -325,6 +327,7 @@ type TenantInput struct {
 	CustomDomain *string `json:"custom_domain"`
 	PixKey       *string `json:"pix_key"`
 	PixName      *string `json:"pix_name"`
+	BibleVersionID *string `json:"bible_version_id"`
 }
 
 // Erros de validacao do slug (subdominio da igreja).
@@ -368,10 +371,12 @@ func (r *Repo) GetTenant(ctx context.Context, tx pgx.Tx) (*Tenant, error) {
 	err := tx.QueryRow(ctx, `
 		SELECT id::text, name, slug, legal_name, cnpj, plan, locale, timezone,
 		       logo_url, brand_color, favicon_url, custom_domain, pix_key, pix_name,
+		       bible_version_id,
 		       COALESCE(limits::text,''), is_active, updated_at
 		FROM tenants WHERE id = current_tenant()`).
 		Scan(&t.ID, &t.Name, &t.Slug, &t.LegalName, &t.CNPJ, &t.Plan, &t.Locale, &t.Timezone,
 			&t.LogoURL, &t.BrandColor, &t.FaviconURL, &t.CustomDomain, &t.PixKey, &t.PixName,
+			&t.BibleVersionID,
 			&limits, &t.IsActive, &t.UpdatedAt)
 	if limits != "" {
 		t.Limits = json.RawMessage(limits)
@@ -406,10 +411,12 @@ func (r *Repo) UpdateTenant(ctx context.Context, tx pgx.Tx, in TenantInput) (*Te
 			custom_domain = COALESCE($11, custom_domain),
 			pix_key = COALESCE($12, pix_key),
 			pix_name = COALESCE($13, pix_name),
+			bible_version_id = COALESCE($14, bible_version_id),
 			updated_at = now()
 		WHERE id = current_tenant()`,
 		in.Name, slugArg, in.LegalName, in.CNPJ, in.Plan, in.Locale, in.Timezone,
-		in.LogoURL, in.BrandColor, in.FaviconURL, in.CustomDomain, in.PixKey, in.PixName)
+		in.LogoURL, in.BrandColor, in.FaviconURL, in.CustomDomain, in.PixKey, in.PixName,
+		in.BibleVersionID)
 	if err != nil {
 		return nil, err
 	}

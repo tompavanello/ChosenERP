@@ -5,20 +5,22 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
 
-// issueReceipt gera um recibo digital (documento) para um lancamento e retorna
-// o id do documento, ref e token (o id permite enfileirar o envio automatico).
-func (r *Repo) issueReceipt(ctx context.Context, tx pgx.Tx, tenantID, branchID string, t Transaction) (string, string, string, error) {
+// buildReceiptContent monta o content (JSON) do recibo de um lancamento e
+// devolve tambem a ref estavel derivada do hash. O token entra no href: na
+// emissao e um token novo; na edicao e o token ja existente, para o link/QR do
+// recibo continuar valido.
+//
+// Identificacao das partes (snapshot): o recibo guarda quem doou e quem recebeu
+// COM os documentos, para ter validade de comprovacao mesmo se o cadastro mudar.
+func (r *Repo) buildReceiptContent(ctx context.Context, tx pgx.Tx, tenantID string, t Transaction, token string) ([]byte, string) {
 	ref := "REC-" + hex.EncodeToString([]byte(t.Hash))[:8]
-	token := randomToken(12)
 
-	// Identificacao das partes (snapshot): o recibo deve guardar quem doou e
-	// quem recebeu COM os documentos, para ter validade de comprovacao mesmo se
-	// o cadastro mudar depois.
 	var churchName, churchLegal, churchDoc string
 	_ = tx.QueryRow(ctx, `
 		SELECT name, COALESCE(legal_name,''), COALESCE(cnpj,'')
@@ -58,6 +60,15 @@ func (r *Repo) issueReceipt(ctx context.Context, tx pgx.Tx, tenantID, branchID s
 		"church_legal_name": churchLegal,
 		"church_doc":        churchDoc,
 	})
+	return content, ref
+}
+
+// issueReceipt gera um recibo digital (documento) para um lancamento e retorna
+// o id do documento, ref e token (o id permite enfileirar o envio automatico).
+func (r *Repo) issueReceipt(ctx context.Context, tx pgx.Tx, tenantID, branchID string, t Transaction) (string, string, string, error) {
+	token := randomToken(12)
+	content, ref := r.buildReceiptContent(ctx, tx, tenantID, t, token)
+
 	var docID string
 	err := tx.QueryRow(ctx, `
 		INSERT INTO documents (tenant_id, branch_id, kind, title, document_ref, qr_token, content)
@@ -69,6 +80,27 @@ func (r *Repo) issueReceipt(ctx context.Context, tx pgx.Tx, tenantID, branchID s
 		return "", "", "", err
 	}
 	return docID, ref, token, nil
+}
+
+// updateReceipt atualiza o conteudo do recibo ja emitido quando o lancamento e
+// editado. Mantem o mesmo documento/token (o QR/link continua valido) e
+// atualiza ref/titulo (que derivam do novo hash). Sem recibo emitido, e no-op.
+func (r *Repo) updateReceipt(ctx context.Context, tx pgx.Tx, tenantID string, t Transaction) error {
+	var docID, token string
+	err := tx.QueryRow(ctx, `
+		SELECT id::text, qr_token FROM documents
+		WHERE kind = 'receipt' AND content->>'tx_id' = $1`, t.ID).Scan(&docID, &token)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	content, ref := r.buildReceiptContent(ctx, tx, tenantID, t, token)
+	_, err = tx.Exec(ctx, `
+		UPDATE documents SET content = $2, document_ref = $3, title = $4
+		WHERE id = $1::uuid`, docID, content, ref, "Recibo "+ref)
+	return err
 }
 
 // CardRef devolve o numero estavel da carteirinha de um membro.

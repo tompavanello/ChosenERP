@@ -41,6 +41,13 @@ func (a *App) Authenticator(next http.Handler) http.Handler {
 			writeErr(w, http.StatusUnauthorized, "expected access token")
 			return
 		}
+		// Acesso de visitante expirado/desativado nao vale mais.
+		if claims.Role == auth.VisitorRole && claims.TenantID != "" {
+			if !a.Auth.VisitorActive(r.Context(), claims.UserID, claims.TenantID) {
+				writeErr(w, http.StatusForbidden, "visitor_access_expired")
+				return
+			}
+		}
 		// A igreja primeiro (muda o papel), depois a filial (usa o papel atual).
 		a.applyTenantContext(r, claims)
 		applyBranchContext(r, claims)
@@ -67,6 +74,10 @@ func (a *App) applyTenantContext(r *http.Request, claims *auth.Claims) {
 			continue
 		}
 		if (tid != "" && m.TenantID == tid) || (slug != "" && m.TenantSlug == slug) {
+			// Nao permite assumir o contexto de uma igreja suspensa.
+			if active, err := a.Auth.TenantActive(r.Context(), m.TenantID); err == nil && !active {
+				continue
+			}
 			claims.TenantID = m.TenantID
 			claims.BranchID = m.BranchID
 			claims.Role = m.Role

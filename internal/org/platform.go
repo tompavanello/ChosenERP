@@ -131,6 +131,8 @@ type Plan struct {
 	MaxUsers     *int            `json:"max_users,omitempty"`
 	MaxStorageMB *int            `json:"max_storage_mb,omitempty"`
 	Features     json.RawMessage `json:"features,omitempty"`
+	Cycle        string          `json:"cycle"`
+	GatewayRefs  json.RawMessage `json:"gateway_refs,omitempty"`
 	IsActive     bool            `json:"is_active"`
 	SortOrder    int             `json:"sort_order"`
 	UpdatedAt    time.Time       `json:"updated_at"`
@@ -149,23 +151,27 @@ type PlanInput struct {
 	MaxUsers     *int            `json:"max_users"`
 	MaxStorageMB *int            `json:"max_storage_mb"`
 	Features     json.RawMessage `json:"features"`
+	Cycle        *string         `json:"cycle"`
+	GatewayRefs  json.RawMessage `json:"gateway_refs"`
 	IsActive     *bool           `json:"is_active"`
 	SortOrder    *int            `json:"sort_order"`
 }
 
 const planCols = `key, name, description, price_cents, currency, max_members, max_branches,
-	max_users, max_storage_mb, COALESCE(features::text,'{}'), is_active, sort_order, updated_at`
+	max_users, max_storage_mb, COALESCE(features::text,'{}'), COALESCE(NULLIF(cycle,''),'MONTHLY'),
+	COALESCE(gateway_refs::text,'{}'), is_active, sort_order, updated_at`
 
 func scanPlan(row pgx.Row) (*Plan, error) {
 	var p Plan
-	var features string
+	var features, gatewayRefs string
 	err := row.Scan(&p.Key, &p.Name, &p.Description, &p.PriceCents, &p.Currency,
 		&p.MaxMembers, &p.MaxBranches, &p.MaxUsers, &p.MaxStorageMB, &features,
-		&p.IsActive, &p.SortOrder, &p.UpdatedAt)
+		&p.Cycle, &gatewayRefs, &p.IsActive, &p.SortOrder, &p.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
 	p.Features = json.RawMessage(features)
+	p.GatewayRefs = json.RawMessage(gatewayRefs)
 	return &p, nil
 }
 
@@ -203,15 +209,21 @@ func (r *Repo) CreatePlan(ctx context.Context, tx pgx.Tx, in PlanInput) (*Plan, 
 	if len(in.Features) > 0 {
 		features = string(in.Features)
 	}
+	gatewayRefs := "{}"
+	if len(in.GatewayRefs) > 0 {
+		gatewayRefs = string(in.GatewayRefs)
+	}
 	_, err := tx.Exec(ctx, `
 		INSERT INTO plans (key, name, description, price_cents, currency,
-		                   max_members, max_branches, max_users, max_storage_mb, features, is_active, sort_order)
+		                   max_members, max_branches, max_users, max_storage_mb, features,
+		                   cycle, gateway_refs, is_active, sort_order)
 		VALUES ($1, $2, $3, COALESCE($4,0), COALESCE($5,'BRL'),
-		        $6, $7, $8, $9, $10::jsonb, COALESCE($11,true), COALESCE($12,0))`,
+		        $6, $7, $8, $9, $10::jsonb,
+		        COALESCE(NULLIF($11,''),'MONTHLY'), $12::jsonb, COALESCE($13,true), COALESCE($14,0))`,
 		key, name, in.Description, in.PriceCents, in.Currency,
 		nullIfNonPositive(in.MaxMembers), nullIfNonPositive(in.MaxBranches),
 		nullIfNonPositive(in.MaxUsers), nullIfNonPositive(in.MaxStorageMB),
-		features, in.IsActive, in.SortOrder)
+		features, in.Cycle, gatewayRefs, in.IsActive, in.SortOrder)
 	if err != nil {
 		return nil, err
 	}
@@ -231,6 +243,8 @@ func (r *Repo) UpdatePlan(ctx context.Context, tx pgx.Tx, key string, in PlanInp
 			max_users = CASE WHEN $10::boolean THEN $11 ELSE max_users END,
 			max_storage_mb = CASE WHEN $12::boolean THEN $13 ELSE max_storage_mb END,
 			features = CASE WHEN $14::boolean THEN $15::jsonb ELSE features END,
+			cycle = COALESCE(NULLIF($18,''), cycle),
+			gateway_refs = CASE WHEN $19::boolean THEN $20::jsonb ELSE gateway_refs END,
 			is_active = COALESCE($16::boolean, is_active),
 			sort_order = COALESCE($17, sort_order),
 			updated_at = now()
@@ -240,7 +254,8 @@ func (r *Repo) UpdatePlan(ctx context.Context, tx pgx.Tx, key string, in PlanInp
 		in.MaxBranches != nil, nullIfNonPositive(in.MaxBranches),
 		in.MaxUsers != nil, nullIfNonPositive(in.MaxUsers),
 		in.MaxStorageMB != nil, nullIfNonPositive(in.MaxStorageMB),
-		len(in.Features) > 0, featuresArg(in.Features), in.IsActive, in.SortOrder)
+		len(in.Features) > 0, featuresArg(in.Features), in.IsActive, in.SortOrder,
+		in.Cycle, len(in.GatewayRefs) > 0, featuresArg(in.GatewayRefs))
 	if err != nil {
 		return nil, err
 	}

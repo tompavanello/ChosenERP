@@ -95,20 +95,58 @@ func (r *Repo) ListPending(ctx context.Context, tx pgx.Tx, limit, maxAttempts in
 	return out, rows.Err()
 }
 
+// ClaimPending reivindica atomicamente um lote da outbox: transiciona os itens
+// elegiveis para 'sending' (com FOR UPDATE SKIP LOCKED) e devolve o que esta
+// pronto para envio. `staleAfter` recupera itens presos em 'sending' (crash no
+// meio do envio). Só assim duas instancias da API nao enviam o mesmo item.
+func (r *Repo) ClaimPending(ctx context.Context, tx pgx.Tx, limit, maxAttempts int, staleAfter time.Duration) ([]PendingDelivery, error) {
+	rows, err := tx.Query(ctx, `
+		UPDATE document_deliveries d
+		SET status='sending', locked_at=now()
+		WHERE d.id IN (
+			SELECT id FROM document_deliveries
+			WHERE (status IN ('pending','failed')
+			       AND COALESCE(next_attempt_at, now()) <= now()
+			       AND attempts < $1)
+			   OR (status = 'sending' AND locked_at < now() - $3::interval)
+			ORDER BY created_at
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		)
+		RETURNING d.id::text, d.tenant_id::text, COALESCE(d.branch_id::text,''),
+		          d.document_id::text, d.channel, d.recipient`,
+		maxAttempts, limit, staleAfter.String())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []PendingDelivery{}
+	for rows.Next() {
+		var p PendingDelivery
+		if err := rows.Scan(&p.ID, &p.TenantID, &p.BranchID, &p.DocumentID, &p.Channel, &p.Recipient); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // MarkSent registra a entrega bem-sucedida de um item da outbox.
 func (r *Repo) MarkSent(ctx context.Context, tx pgx.Tx, id string) error {
 	_, err := tx.Exec(ctx, `
 		UPDATE document_deliveries
-		SET status='sent', attempts = attempts + 1, sent_at=$2, error=NULL
+		SET status='sent', attempts = attempts + 1, sent_at=$2, error=NULL, locked_at=NULL
 		WHERE id = $1::uuid`, id, time.Now().UTC())
 	return err
 }
 
-// MarkFailed registra a falha de entrega, tornando o item elegivel a retry.
+// MarkFailed registra a falha de entrega, tornando o item elegivel a retry com
+// backoff exponencial (1, 2, 4, 8, 16 min).
 func (r *Repo) MarkFailed(ctx context.Context, tx pgx.Tx, id, errMessage string) error {
 	_, err := tx.Exec(ctx, `
 		UPDATE document_deliveries
-		SET status='failed', attempts = attempts + 1, error=$2
+		SET status='failed', attempts = attempts + 1, error=$2, locked_at=NULL,
+		    next_attempt_at = now() + (LEAST(attempts, 5) * interval '1 minute')
 		WHERE id = $1::uuid`, id, errMessage)
 	return err
 }

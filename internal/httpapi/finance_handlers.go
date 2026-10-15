@@ -280,6 +280,47 @@ func (a *App) handleCreateTxn(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleUpdateTxn edita um lancamento EM VIGOR (preserva id, entry_seq, recibo e
+// anexos). A posicao (entry_seq) nao muda por aqui; reposicionar e via
+// POST /finance/transactions/reorder.
+func (a *App) handleUpdateTxn(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	id := r.PathValue("id")
+	var in finance.UpdateTxnInput
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if in.Amount <= 0 {
+		writeErr(w, http.StatusBadRequest, "amount must be positive")
+		return
+	}
+	b := boundsFromClaims(claims)
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		if err := a.Finance.Update(r.Context(), tx, claims.TenantID, id, in); err != nil {
+			return err
+		}
+		_, err := tx.Exec(r.Context(), `
+			INSERT INTO audit_log (tenant_id, actor_id, action, entity, entity_id, payload)
+			SELECT $1, $2::uuid, 'finance.tx.updated', 'financial_transactions', $3::uuid, $4
+			FROM users WHERE id = $2`, claims.TenantID, claims.UserID, id, []byte(`{}`))
+		return err
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) || store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "lancamento nao encontrado")
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 // handleCreateTxnBatch cria varios lancamentos em uma unica chamada (grid de
 // entrada rapida). Linhas invalidas sao devolvidas individualmente, sem
 // derrubar as demais.
@@ -1032,7 +1073,9 @@ func (a *App) handleUploadAttachment(w http.ResponseWriter, r *http.Request) {
 	transactionID := r.PathValue("id")
 	b := boundsFromClaims(claims)
 
-	// Limite 50 MB em uploads multipart.
+	// Limite 50 MB em uploads multipart. MaxBytesReader corta a leitura no limite
+	// antes de bufferizar (ParseMultipartForm so limita a parte em memoria).
+	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
 	if err := r.ParseMultipartForm(50 << 20); err != nil {
 		writeErr(w, http.StatusBadRequest, "upload muito grande (max 50MB)")
 		return
@@ -1146,12 +1189,57 @@ func (a *App) handleListAttachments(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"attachments": out})
 }
 
-// handleDownloadAttachment serve o arquivo do disco. O nome do arquivo (uuid)
-// e opaco - nao expoe caminho real nem credenciais. A autenticacao nao e
-// exigida porque o URL e um token implicito; o verdadeiro controle de acesso
-// e feito pela RLS no momento da criacao do attachment.
+// handleDownloadAttachment serve, sem autenticacao, SOMENTE as fotos de membro
+// (nome opaco de 32 hex + extensao de imagem). E o que a carteirinha publica
+// precisa exibir. Qualquer outro arquivo (ex.: comprovante financeiro) e
+// servido apenas por rotas autenticadas - ver handleDownloadFinanceAttachment.
 func (a *App) handleDownloadAttachment(w http.ResponseWriter, r *http.Request) {
-	filename := r.PathValue("filename")
+	filename := filepath.Base(r.PathValue("filename"))
+	if !isOwnUploadName(filename) {
+		// Nao e uma foto de membro: nao existe publicamente.
+		writeErr(w, http.StatusNotFound, "arquivo nao encontrado")
+		return
+	}
+	a.serveUploadedFile(w, r, filename)
+}
+
+// handleDownloadFinanceAttachment serve um anexo do financeiro, exigindo
+// permissao e escopo: so entrega o arquivo se ele estiver registrado em
+// financial_attachments do tenant (e filial) do solicitante (via RLS).
+func (a *App) handleDownloadFinanceAttachment(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	filename := filepath.Base(r.PathValue("filename"))
+	if filename == "" || filename == "." || filename == string(filepath.Separator) {
+		writeErr(w, http.StatusBadRequest, "arquivo invalido")
+		return
+	}
+	b := boundsFromClaims(claims)
+	var exists bool
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT EXISTS(SELECT 1 FROM financial_attachments
+			  WHERE file_url = $1 AND tenant_id = $2)`,
+			"/api/v1/attachments/"+filename, claims.TenantID).Scan(&exists)
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao acessar arquivo")
+		return
+	}
+	if !exists {
+		writeErr(w, http.StatusNotFound, "arquivo nao encontrado")
+		return
+	}
+	a.serveUploadedFile(w, r, filename)
+}
+
+// serveUploadedFile entrega um arquivo do diretorio de uploads (nome ja
+// higienizado com filepath.Base). Compartilhado pelas rotas publica (fotos) e
+// autenticada (financeiro).
+func (a *App) serveUploadedFile(w http.ResponseWriter, r *http.Request, filename string) {
 	diskPath := filepath.Join(a.Config.UploadDir, filename)
 	if _, err := os.Stat(diskPath); err != nil {
 		if os.IsNotExist(err) {
@@ -1167,11 +1255,16 @@ func (a *App) handleDownloadAttachment(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", ct)
 	// nosniff impede o browser de "adivinhar" um tipo executavel para um arquivo
-	// enviado por usuario; o cache e seguro porque o nome e unico por upload
-	// (trocar a foto gera outra URL).
+	// enviado por usuario; o cache e seguro porque o nome e unico por upload.
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "private, max-age=86400")
-	w.Header().Set("Content-Disposition", "inline; filename="+strconv.Quote(filename))
+	// Imagens podem ser exibidas inline (foto em <img>); o resto e forçado a
+	// download, evitando execucao/renderizacao de HTML/SVG na mesma origem.
+	if strings.HasPrefix(ct, "image/") {
+		w.Header().Set("Content-Disposition", "inline; filename="+strconv.Quote(filename))
+	} else {
+		w.Header().Set("Content-Disposition", "attachment; filename="+strconv.Quote(filename))
+	}
 	http.ServeFile(w, r, diskPath)
 }
 

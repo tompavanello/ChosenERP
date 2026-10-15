@@ -38,7 +38,7 @@ func (a *App) handleAdminListTenantUsers(w http.ResponseWriter, r *http.Request)
 		return e
 	})
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeServerError(w, err)
 		return
 	}
 	if out == nil {
@@ -81,7 +81,7 @@ func (a *App) handleAdminCreateTenantUser(w http.ResponseWriter, r *http.Request
 		if writePlatformUserErr(w, err) {
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeServerError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
@@ -116,7 +116,7 @@ func (a *App) handleAdminUpdateTenantUser(w http.ResponseWriter, r *http.Request
 		if writePlatformUserErr(w, err) {
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeServerError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, updated)
@@ -147,7 +147,7 @@ func (a *App) handleAdminResetTenantUserPassword(w http.ResponseWriter, r *http.
 			writeErr(w, http.StatusNotFound, "usuario nao encontrado nesta igreja")
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeServerError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -165,7 +165,7 @@ func (a *App) handleAdminListTenantRoles(w http.ResponseWriter, r *http.Request)
 		return e
 	})
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeServerError(w, err)
 		return
 	}
 	if out == nil {
@@ -188,7 +188,7 @@ func (a *App) handleAdminListTenantBranches(w http.ResponseWriter, r *http.Reque
 		return e
 	})
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeServerError(w, err)
 		return
 	}
 	if out == nil {

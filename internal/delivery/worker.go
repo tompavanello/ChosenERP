@@ -51,13 +51,20 @@ func (w *Worker) Run(ctx context.Context) {
 	}
 }
 
-// ProcessPending varre a outbox (visao "Sede") e tenta entregar cada item
-// dentro do contexto RLS da sua propria filial.
+const (
+	// sendTimeout limita cada envio (SMTP/WhatsApp) para nao travar o loop.
+	sendTimeout = 60 * time.Second
+	// staleAfter recupera itens presos em 'sending' (crash no meio do envio).
+	staleAfter = 10 * time.Minute
+)
+
+// ProcessPending reivindica um lote da outbox (claim atomico) e tenta entregar
+// cada item dentro do contexto RLS da sua propria filial.
 func (w *Worker) ProcessPending(ctx context.Context) error {
 	var pending []documents.PendingDelivery
 	err := w.Store.WithSystem(ctx, func(tx pgx.Tx) error {
 		var err error
-		pending, err = w.Documents.ListPending(ctx, tx, w.Batch, w.MaxAttempts)
+		pending, err = w.Documents.ClaimPending(ctx, tx, w.Batch, w.MaxAttempts, staleAfter)
 		return err
 	})
 	if err != nil {
@@ -75,9 +82,11 @@ func (w *Worker) process(ctx context.Context, p documents.PendingDelivery) error
 	bounds := store.Bounds{TenantID: p.TenantID, BranchID: p.BranchID, Role: "system"}
 	msg, err := w.buildMessage(ctx, bounds, p)
 	if err != nil {
-		return err
+		return w.mark(ctx, bounds, p.ID, err)
 	}
-	if err := w.Dispatcher.Send(ctx, msg); err != nil {
+	sendCtx, cancel := context.WithTimeout(ctx, sendTimeout)
+	defer cancel()
+	if err := w.Dispatcher.Send(sendCtx, msg); err != nil {
 		return w.mark(ctx, bounds, p.ID, err)
 	}
 	return w.mark(ctx, bounds, p.ID, nil)

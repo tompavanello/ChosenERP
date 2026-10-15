@@ -29,7 +29,7 @@ func (a *App) handleAdminGetTenant(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusNotFound, "igreja nao encontrada")
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeServerError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, t)
@@ -82,7 +82,7 @@ func (a *App) handleAdminTenantUsage(w http.ResponseWriter, r *http.Request) {
 		return e
 	})
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeServerError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, u)
@@ -101,7 +101,7 @@ func (a *App) handleAdminStats(w http.ResponseWriter, r *http.Request) {
 		return e
 	})
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeServerError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, s)
@@ -129,13 +129,35 @@ func (a *App) handleListPlans(w http.ResponseWriter, r *http.Request) {
 		return e
 	})
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeServerError(w, err)
 		return
 	}
 	if out == nil {
 		out = []org.Plan{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"plans": out})
+}
+
+func (a *App) handleGetPlan(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.platformAdminClaims(w, r); !ok {
+		return
+	}
+	key := r.PathValue("key")
+	var p *org.Plan
+	err := a.Store.WithSystem(r.Context(), func(tx pgx.Tx) error {
+		var e error
+		p, e = a.Org.GetPlan(r.Context(), tx, key)
+		return e
+	})
+	if err != nil {
+		if store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "plano nao encontrado")
+			return
+		}
+		writeServerError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
 }
 
 func (a *App) handleCreatePlan(w http.ResponseWriter, r *http.Request) {
@@ -163,7 +185,7 @@ func (a *App) handleCreatePlan(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusConflict, "ja existe um plano com esta chave")
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeServerError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, p)
@@ -190,7 +212,7 @@ func (a *App) handleUpdatePlan(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusNotFound, "plano nao encontrado")
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeServerError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, p)

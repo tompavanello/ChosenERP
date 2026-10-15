@@ -27,6 +27,14 @@ type Config struct {
 	// PublicBaseDomain e o dominio do white-label (ex.: erpchosen.com.br), usado
 	// para montar o subdominio da igreja na resposta do onboarding.
 	PublicBaseDomain string
+	// Conteudo do membro: IA (devocional) e Biblia (api.bible).
+	AIBaseURL       string
+	AIAPIKey        string
+	AIModel         string
+	APIBibleKey     string
+	APIBibleBaseURL string
+	// BackupDir e o diretorio dos pacotes de backup por igreja.
+	BackupDir string
 }
 
 // boundsFromClaims converte claims em Bounds para RLS.
@@ -51,7 +59,7 @@ func profilePayload(p *auth.Profile) map[string]any {
 	return map[string]any{
 		"id": p.UserID, "user_id": p.UserID, "email": p.Email, "full_name": p.FullName,
 		"tenant_id": p.TenantID, "branch_id": p.BranchID, "role": p.Role,
-		"member_id": p.MemberID, "phone": p.Phone,
+		"member_id": p.MemberID, "visitor_id": p.VisitorID, "phone": p.Phone,
 		"must_change_password": p.MustChangePassword,
 		"is_platform_admin":    p.IsPlatformAdmin,
 		"permissions":          perms, "features": feats,
@@ -103,6 +111,8 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusUnauthorized, "mfa_invalid")
 		case errors.Is(err, auth.ErrTenantForbidden):
 			writeErr(w, http.StatusForbidden, "tenant_forbidden")
+		case errors.Is(err, auth.ErrTenantSuspended):
+			writeErr(w, http.StatusForbidden, "tenant_suspended")
 		default:
 			writeErr(w, http.StatusUnauthorized, "invalid credentials")
 		}
@@ -138,6 +148,10 @@ func (a *App) handleSelectTenant(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusForbidden, "tenant_forbidden")
 			return
 		}
+		if errors.Is(err, auth.ErrTenantSuspended) {
+			writeErr(w, http.StatusForbidden, "tenant_suspended")
+			return
+		}
 		writeErr(w, http.StatusUnauthorized, "invalid selection token")
 		return
 	}
@@ -162,6 +176,10 @@ func (a *App) handleSwitchTenant(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, auth.ErrTenantForbidden) {
 			writeErr(w, http.StatusForbidden, "tenant_forbidden")
+			return
+		}
+		if errors.Is(err, auth.ErrTenantSuspended) {
+			writeErr(w, http.StatusForbidden, "tenant_suspended")
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -196,6 +214,10 @@ func (a *App) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 	tokens, err := a.Auth.Refresh(r.Context(), in.Refresh)
 	if err != nil {
+		if errors.Is(err, auth.ErrTenantSuspended) {
+			writeErr(w, http.StatusForbidden, "tenant_suspended")
+			return
+		}
 		writeErr(w, http.StatusUnauthorized, "invalid refresh token")
 		return
 	}

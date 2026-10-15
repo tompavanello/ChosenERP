@@ -25,6 +25,10 @@ var (
 // igreja pedida (subdominio/seletor).
 var ErrTenantForbidden = errors.New("tenant_forbidden")
 
+// ErrTenantSuspended sinaliza que a igreja esta suspensa por inadimplencia
+// (billing_status 'suspended' / tenants.is_active = false).
+var ErrTenantSuspended = errors.New("tenant_suspended")
+
 // selectionTTL e a validade do token de selecao de igreja (curto de proposito:
 // so serve para completar o login).
 const selectionTTL = 5 * time.Minute
@@ -41,7 +45,14 @@ type Membership struct {
 	// a identidade nao e um membro, ex.: staff/visitante). Liga o app do membro
 	// ao proprio cadastro.
 	MemberID string `json:"member_id"`
+	// VisitorID e o registro em `visitors` quando o acesso e de visitante.
+	VisitorID string `json:"visitor_id"`
+	// ExpiresAt marca o fim do acesso temporario (visitante); nil = sem prazo.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
+
+// VisitorRole e o papel do acesso temporario de visitante (sem permissoes).
+const VisitorRole = "visitante"
 
 // TenantOption e uma igreja oferecida no seletor apos o login.
 type TenantOption struct {
@@ -84,6 +95,8 @@ type Profile struct {
 	// MemberID e o registro em `members` vinculado nesta igreja (para o app do
 	// membro); vazio para identidades sem cadastro de membro.
 	MemberID string
+	// VisitorID e o registro em `visitors` quando o acesso e de visitante.
+	VisitorID string
 	// Memberships lista todas as igrejas da identidade (para o seletor).
 	Memberships []Membership
 }
@@ -158,7 +171,7 @@ func (s *Service) findIdentityByID(ctx context.Context, userID string) (*identit
 func (s *Service) Memberships(ctx context.Context, userID string) ([]Membership, error) {
 	rows, err := s.store.Pool().Query(ctx, `
 		SELECT tenant_id, tenant_name, tenant_slug, role_key, COALESCE(branch_id,''), is_active,
-		       COALESCE(member_id, '')
+		       COALESCE(member_id, ''), COALESCE(visitor_id, ''), expires_at
 		FROM auth_memberships($1::uuid)`, userID)
 	if err != nil {
 		return nil, err
@@ -167,7 +180,7 @@ func (s *Service) Memberships(ctx context.Context, userID string) ([]Membership,
 	out := []Membership{}
 	for rows.Next() {
 		var m Membership
-		if err := rows.Scan(&m.TenantID, &m.TenantName, &m.TenantSlug, &m.Role, &m.BranchID, &m.IsActive, &m.MemberID); err != nil {
+		if err := rows.Scan(&m.TenantID, &m.TenantName, &m.TenantSlug, &m.Role, &m.BranchID, &m.IsActive, &m.MemberID, &m.VisitorID, &m.ExpiresAt); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -191,6 +204,17 @@ func tenantOptions(ms []Membership) []TenantOption {
 		out = append(out, TenantOption{ID: m.TenantID, Name: m.TenantName, Slug: m.TenantSlug, Role: m.Role})
 	}
 	return out
+}
+
+// TenantActive informa se a igreja esta ativa (nao suspensa por inadimplencia).
+// Usa funcao SECURITY DEFINER porque no login a igreja ainda nao esta no RLS.
+func (s *Service) TenantActive(ctx context.Context, tenantID string) (bool, error) {
+	if tenantID == "" {
+		return true, nil
+	}
+	var active bool
+	err := s.store.Pool().QueryRow(ctx, `SELECT tenant_is_active($1::uuid)`, tenantID).Scan(&active)
+	return active, err
 }
 
 func findMembership(ms []Membership, tenantID string) (Membership, bool) {
@@ -269,6 +293,10 @@ func (s *Service) Login(ctx context.Context, identifier, password, code, tenantS
 
 // issueForMembership monta o perfil e emite o par de tokens para a igreja escolhida.
 func (s *Service) issueForMembership(ctx context.Context, id *identityRow, all []Membership, m Membership) (*LoginResult, error) {
+	// Igreja suspensa por inadimplencia: bloqueia a emissao de tokens.
+	if active, err := s.TenantActive(ctx, m.TenantID); err == nil && !active {
+		return nil, ErrTenantSuspended
+	}
 	prof := &Profile{
 		UserID:             id.UserID,
 		Email:              id.Email,
@@ -280,6 +308,7 @@ func (s *Service) issueForMembership(ctx context.Context, id *identityRow, all [
 		Phone:              id.Phone,
 		MustChangePassword: id.MustChangePassword,
 		MemberID:           m.MemberID,
+		VisitorID:          m.VisitorID,
 		Memberships:        all,
 	}
 	err := s.store.WithTenant(ctx, store.Bounds{
@@ -448,8 +477,39 @@ func (s *Service) Me(ctx context.Context, userID, tenantID, branchID, role strin
 	// Resolve o cadastro de membro da igreja ativa (app do membro).
 	if m, ok := findMembership(prof.Memberships, tenantID); ok {
 		prof.MemberID = m.MemberID
+		prof.VisitorID = m.VisitorID
 	}
 	return prof, nil
+}
+
+// IssueVisitor emite tokens para o acesso temporario de visitante, a partir da
+// identidade criada/atualizada por user_attach_visitor. Reusa a emissao padrao
+// (papel `visitante`, sem permissoes).
+func (s *Service) IssueVisitor(ctx context.Context, userID, tenantID string) (*LoginResult, error) {
+	id, err := s.findIdentityByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	all, err := s.Memberships(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	m, ok := findMembership(all, tenantID)
+	if !ok {
+		return nil, ErrTenantForbidden
+	}
+	return s.issueForMembership(ctx, id, all, m)
+}
+
+// VisitorActive informa se o acesso de visitante ainda vale (nao expirou nem foi
+// desativado). Usado no refresh e no middleware.
+func (s *Service) VisitorActive(ctx context.Context, userID, tenantID string) bool {
+	var ok bool
+	if err := s.store.Pool().QueryRow(ctx,
+		`SELECT visitor_access_active($1::uuid, $2::uuid)`, userID, tenantID).Scan(&ok); err != nil {
+		return false
+	}
+	return ok
 }
 
 // Refresh troca um refresh token valido por um novo par de tokens.
@@ -460,6 +520,18 @@ func (s *Service) Refresh(ctx context.Context, raw string) (*Tokens, error) {
 	}
 	if claims.Type != RefreshTokenType {
 		return nil, fmt.Errorf("not a refresh token")
+	}
+	// Nao renova sessao de igreja suspensa.
+	if claims.TenantID != "" {
+		if active, err := s.TenantActive(ctx, claims.TenantID); err == nil && !active {
+			return nil, ErrTenantSuspended
+		}
+	}
+	// Acesso de visitante expirado nao se renova: precisa de um novo codigo.
+	if claims.Role == VisitorRole && claims.TenantID != "" {
+		if !s.VisitorActive(ctx, claims.UserID, claims.TenantID) {
+			return nil, ErrTenantForbidden
+		}
 	}
 	access, err := NewToken(s.secret, Claims{
 		UserID: claims.UserID, TenantID: claims.TenantID, BranchID: claims.BranchID,
@@ -478,7 +550,35 @@ func (s *Service) Refresh(ctx context.Context, raw string) (*Tokens, error) {
 	return &Tokens{Access: access, Refresh: refresh, ExpiresIn: int64(s.accessTTL.Seconds())}, nil
 }
 
+// IsHQRole indica os papeis de administracao da igreja (Sede). Eles sao donos do
+// tenant e, por definicao, acessam TODOS os modulos liberados para a igreja -
+// sem depender de cada permissao ter sido concedida explicitamente (o que
+// deixava os papeis sem modulos novos ate uma migracao de backfill).
+func IsHQRole(role string) bool {
+	return role == "super_admin" || role == "admin_sede"
+}
+
 func (s *Service) rolePermissions(ctx context.Context, tx pgx.Tx, roleKey, tenantID string) ([]string, error) {
+	// Sede (super_admin/admin_sede): todas as permissoes do catalogo.
+	// `permissions` e catalogo global (sem RLS), entao a leitura vale em
+	// qualquer escopo.
+	if IsHQRole(roleKey) {
+		rows, err := tx.Query(ctx, `SELECT key FROM permissions ORDER BY key`)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var all []string
+		for rows.Next() {
+			var k string
+			if err := rows.Scan(&k); err != nil {
+				return nil, err
+			}
+			all = append(all, k)
+		}
+		return all, rows.Err()
+	}
+
 	rows, err := tx.Query(ctx, `
 		SELECT p.key
 		FROM role_permissions rp

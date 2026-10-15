@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -12,11 +13,16 @@ import (
 	"chosenerp/internal/auth"
 	"chosenerp/internal/members"
 	"chosenerp/internal/store"
+	"chosenerp/internal/visitors"
 )
 
 // errNoMemberLink indica que a identidade autenticada nao tem cadastro de
 // membro vinculado nesta igreja (ver memberships.member_id).
 var errNoMemberLink = errors.New("identidade sem vinculo de membro nesta igreja")
+
+// errNoVisitorLink indica que a identidade autenticada nao tem cadastro de
+// visitante vinculado nesta igreja (ver memberships.visitor_id).
+var errNoVisitorLink = errors.New("identidade sem vinculo de visitante nesta igreja")
 
 // errPlanLimit sinaliza que um teto do plano foi atingido.
 var errPlanLimit = errors.New("limite do plano atingido")
@@ -26,14 +32,17 @@ var errPlanLimit = errors.New("limite do plano atingido")
 func featureForPath(path string) string {
 	rest := strings.TrimPrefix(path, "/api/v1/")
 	switch {
-	case strings.HasPrefix(rest, "finance/"), strings.HasPrefix(rest, "receipts/"):
+	case strings.HasPrefix(rest, "finance/"), strings.HasPrefix(rest, "receipts/"),
+		strings.HasPrefix(rest, "payment-gateways"), strings.HasPrefix(rest, "payment-products"),
+		strings.HasPrefix(rest, "payment-charges"), strings.HasPrefix(rest, "suppliers"):
 		return "finance"
 	case strings.HasPrefix(rest, "reports/"):
 		return "reports"
 	case strings.HasPrefix(rest, "minutes"), strings.HasPrefix(rest, "votes"),
 		strings.HasPrefix(rest, "legal-documents"), strings.HasPrefix(rest, "governance/"):
 		return "governance"
-	case strings.HasPrefix(rest, "ministries"), strings.HasPrefix(rest, "groups"):
+	case strings.HasPrefix(rest, "ministries"), strings.HasPrefix(rest, "groups"),
+		strings.HasPrefix(rest, "materials"):
 		return "ministries"
 	case strings.HasPrefix(rest, "rosters"):
 		return "rosters"
@@ -41,7 +50,8 @@ func featureForPath(path string) string {
 		return "events"
 	case strings.HasPrefix(rest, "kids/"):
 		return "kids"
-	case strings.HasPrefix(rest, "prayer-requests"), strings.HasPrefix(rest, "me/prayer-"):
+	case strings.HasPrefix(rest, "prayer-requests"), strings.HasPrefix(rest, "me/prayer-"),
+		strings.HasPrefix(rest, "me/visitor/prayer-"):
 		return "prayer"
 	case strings.HasPrefix(rest, "announcements"), strings.HasPrefix(rest, "notifications/"):
 		return "whatsapp"
@@ -78,7 +88,7 @@ func (a *App) featureHandler(next http.Handler) http.Handler {
 			return nil
 		})
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
+			writeServerError(w, err)
 			return
 		}
 		if !allowed {
@@ -129,6 +139,62 @@ func writeQuotaErr(w http.ResponseWriter, err error) bool {
 	return false
 }
 
+// writeServerError registra o erro internamente e devolve uma mensagem generica
+// (nunca vaza err.Error()/SQL ao cliente em 5xx).
+func writeServerError(w http.ResponseWriter, err error) {
+	log.Printf("httpapi: erro interno: %v", err)
+	writeErr(w, http.StatusInternalServerError, "erro interno")
+}
+
+// validatePathUUIDs confere que os parametros de rota informados sao UUIDs.
+// Devolve false (e escreve 400) quando algum for invalido - evita que um cast
+// `::uuid` sem tratamento vire 500 (pgx 22P02).
+func validatePathUUIDs(w http.ResponseWriter, r *http.Request, names ...string) bool {
+	for _, n := range names {
+		v := strings.TrimSpace(r.PathValue(n))
+		if !uuidRe.MatchString(v) {
+			writeErr(w, http.StatusBadRequest, "identificador invalido")
+			return false
+		}
+	}
+	return true
+}
+
+// uuidParams e um middleware que valida os parametros de rota informados como
+// UUID antes de chamar o handler.
+func (a *App) uuidParams(names ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !validatePathUUIDs(w, r, names...) {
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// uuidGuard valida globalmente os parametros de rota que sao SEMPRE UUID,
+// evitando que um id malformado chegue a um cast `::uuid` e vire 500. Rotas
+// cujo `{id}` NAO e UUID (a Biblia usa ids externos) ficam de fora.
+func (a *App) uuidGuard(next http.Handler) http.Handler {
+	names := []string{"id", "userId", "linkId", "memberId", "entryId", "assignmentId"}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/bible/") {
+			for _, n := range names {
+				v := strings.TrimSpace(r.PathValue(n))
+				if v == "" {
+					continue
+				}
+				if !uuidRe.MatchString(v) {
+					writeErr(w, http.StatusBadRequest, "identificador invalido")
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // isPlatformAdmin informa (sem escrever resposta) se a identidade e operador
 // da plataforma. Usado para permitir acoes reservadas (ex.: trocar o plano).
 func (a *App) isPlatformAdmin(ctx context.Context, claims *auth.Claims) bool {
@@ -168,6 +234,11 @@ func writeMemberErr(w http.ResponseWriter, err error) {
 // carrega o papel, entao a permissao e resolvida no banco
 // (roles -> role_permissions -> permissions) dentro do escopo do tenant.
 func (a *App) hasPerm(ctx context.Context, tx pgx.Tx, claims *auth.Claims, perm string) (bool, error) {
+	// Sede (super_admin/admin_sede) acessa todos os modulos liberados para a
+	// igreja; o gate de plano (featureHandler) continua valendo separadamente.
+	if auth.IsHQRole(claims.Role) {
+		return true, nil
+	}
 	var ok bool
 	err := tx.QueryRow(ctx, `
 		SELECT EXISTS (
@@ -201,28 +272,44 @@ func (a *App) adminOnly(next http.HandlerFunc) http.Handler {
 // sessao; nega com 403 quando o papel nao possui a permissao. Serve para
 // proteger rotas sensiveis (ex.: moderacao de pedidos de oracao).
 func (a *App) perm(permission string, next http.HandlerFunc) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		claims, ok := claimsFrom(r.Context())
-		if !ok {
-			writeErr(w, http.StatusUnauthorized, "unauthenticated")
-			return
-		}
-		allowed := false
-		err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
-			var e error
-			allowed, e = a.hasPerm(r.Context(), tx, claims, permission)
-			return e
+	return a.permAny(permission)(next)
+}
+
+// permAny exige AO MENOS UMA das permissoes informadas. Usado quando a rota e
+// consumida por papeis diferentes (ex.: seletor de filiais em varias telas).
+func (a *App) permAny(permissions ...string) func(http.HandlerFunc) http.Handler {
+	return func(next http.HandlerFunc) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims, ok := claimsFrom(r.Context())
+			if !ok {
+				writeErr(w, http.StatusUnauthorized, "unauthenticated")
+				return
+			}
+			allowed := false
+			err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+				for _, p := range permissions {
+					okp, e := a.hasPerm(r.Context(), tx, claims, p)
+					if e != nil {
+						return e
+					}
+					if okp {
+						allowed = true
+						return nil
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				writeServerError(w, err)
+				return
+			}
+			if !allowed {
+				writeErr(w, http.StatusForbidden, "forbidden")
+				return
+			}
+			next(w, r)
 		})
-		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		if !allowed {
-			writeErr(w, http.StatusForbidden, "forbidden")
-			return
-		}
-		next(w, r)
-	})
+	}
 }
 
 // memberIDForClaims resolve o registro em `members` vinculado a identidade na
@@ -234,6 +321,52 @@ func memberIDForClaims(ctx context.Context, tx pgx.Tx, claims *auth.Claims) (str
 	var id *string
 	err := tx.QueryRow(ctx, `
 		SELECT member_id::text
+		FROM memberships
+		WHERE user_id = $1::uuid AND tenant_id = $2::uuid`,
+		claims.UserID, claims.TenantID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if id == nil {
+		return "", nil
+	}
+	return *id, nil
+}
+
+// visitorForClaims resolve o VISITANTE da sessao (memberships.visitor_id). E o
+// ponto unico de resolucao do escopo self do app do visitante.
+func (a *App) visitorForClaims(ctx context.Context, tx pgx.Tx, claims *auth.Claims) (*visitors.Visitor, error) {
+	id, err := visitorIDForClaims(ctx, tx, claims)
+	if err != nil {
+		return nil, err
+	}
+	if id == "" {
+		return nil, errNoVisitorLink
+	}
+	return a.Visitors.Get(ctx, tx, id)
+}
+
+// writeVisitorErr traduz os erros comuns das rotas self do visitante para HTTP.
+func writeVisitorErr(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, errNoVisitorLink):
+		writeErr(w, http.StatusForbidden, err.Error())
+	case store.IsNotFound(err):
+		writeErr(w, http.StatusNotFound, "visitante nao encontrado")
+	default:
+		writeErr(w, http.StatusInternalServerError, err.Error())
+	}
+}
+
+// visitorIDForClaims resolve o registro em `visitors` vinculado a identidade na
+// igreja ativa (memberships.visitor_id). Devolve "" quando nao ha vinculo.
+func visitorIDForClaims(ctx context.Context, tx pgx.Tx, claims *auth.Claims) (string, error) {
+	var id *string
+	err := tx.QueryRow(ctx, `
+		SELECT visitor_id::text
 		FROM memberships
 		WHERE user_id = $1::uuid AND tenant_id = $2::uuid`,
 		claims.UserID, claims.TenantID).Scan(&id)

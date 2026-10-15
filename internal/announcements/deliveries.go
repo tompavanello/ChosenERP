@@ -190,6 +190,44 @@ func (r *Repo) PendingDeliveries(ctx context.Context, tx pgx.Tx, limit, maxAttem
 	return out, rows.Err()
 }
 
+// ClaimPendingDeliveries reivindica atomicamente um lote da fila (FOR UPDATE
+// SKIP LOCKED -> status 'sending'), evitando envio duplicado entre instancias.
+func (r *Repo) ClaimPendingDeliveries(ctx context.Context, tx pgx.Tx, limit, maxAttempts int, staleAfter time.Duration) ([]PendingAnnouncementDelivery, error) {
+	rows, err := tx.Query(ctx, `
+		UPDATE announcement_deliveries ad
+		SET status='sending', locked_at=now()
+		WHERE ad.id IN (
+			SELECT id FROM announcement_deliveries
+			WHERE (status IN ('pending','failed')
+			       AND COALESCE(next_attempt_at, now()) <= now()
+			       AND attempts < $1)
+			   OR (status = 'sending' AND locked_at < now() - $3::interval)
+			ORDER BY created_at
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		)
+		RETURNING ad.id::text, ad.tenant_id::text, COALESCE(ad.branch_id::text,''),
+		          COALESCE(ad.announcement_id::text,''),
+		          COALESCE(ad.title, ''), COALESCE(ad.body, ''),
+		          ad.channel, ad.recipient, COALESCE(ad.recipient_name,''), ad.provider, ad.source`,
+		maxAttempts, limit, staleAfter.String())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []PendingAnnouncementDelivery{}
+	for rows.Next() {
+		var p PendingAnnouncementDelivery
+		if err := rows.Scan(&p.ID, &p.TenantID, &p.BranchID,
+			&p.AnnouncementID, &p.Title, &p.Body,
+			&p.Channel, &p.Recipient, &p.RecipientName, &p.Provider, &p.Source); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 func (r *Repo) MarkSent(ctx context.Context, tx pgx.Tx, id, providerMessageID string) error {
 	var pid *string
 	if providerMessageID != "" {
@@ -198,7 +236,7 @@ func (r *Repo) MarkSent(ctx context.Context, tx pgx.Tx, id, providerMessageID st
 	_, err := tx.Exec(ctx, `
 		UPDATE announcement_deliveries
 		SET status='sent', attempts = attempts + 1, sent_at=$2,
-		    provider_message_id = COALESCE($3, provider_message_id), error=NULL
+		    provider_message_id = COALESCE($3, provider_message_id), error=NULL, locked_at=NULL
 		WHERE id = $1::uuid`, id, time.Now().UTC(), pid)
 	return err
 }
@@ -206,7 +244,8 @@ func (r *Repo) MarkSent(ctx context.Context, tx pgx.Tx, id, providerMessageID st
 func (r *Repo) MarkFailed(ctx context.Context, tx pgx.Tx, id, errMessage string) error {
 	_, err := tx.Exec(ctx, `
 		UPDATE announcement_deliveries
-		SET status='failed', attempts = attempts + 1, error=$2
+		SET status='failed', attempts = attempts + 1, error=$2, locked_at=NULL,
+		    next_attempt_at = now() + (LEAST(attempts, 5) * interval '1 minute')
 		WHERE id = $1::uuid`, id, errMessage)
 	return err
 }

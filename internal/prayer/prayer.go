@@ -121,8 +121,20 @@ func (r *Repo) ListMine(ctx context.Context, tx pgx.Tx, memberID, viewerUserID s
 	return collect(rows)
 }
 
-// Wall devolve o mural publico: pedidos com visibilidade "igreja" e nao
-// arquivados. Os demais escopos sao privados e so aparecem na moderacao.
+// ListByUser devolve os pedidos enviados por uma identidade (visitante sem
+// cadastro de membro). Para membros, use ListMine.
+func (r *Repo) ListByUser(ctx context.Context, tx pgx.Tx, viewerUserID string) ([]Request, error) {
+	rows, err := tx.Query(ctx, `SELECT `+cols+`
+		FROM prayer_requests p
+		WHERE p.created_by = NULLIF($2,'')::uuid
+		ORDER BY p.created_at DESC`, viewerUserID, viewerUserID)
+	if err != nil {
+		return nil, err
+	}
+	return collect(rows)
+}
+
+// Wall devolve o mural publico: pedidos com visibilidade "igreja" e nao// arquivados. Os demais escopos sao privados e so aparecem na moderacao.
 func (r *Repo) Wall(ctx context.Context, tx pgx.Tx, viewerUserID string) ([]Request, error) {
 	rows, err := tx.Query(ctx, `SELECT `+cols+`
 		FROM prayer_requests p

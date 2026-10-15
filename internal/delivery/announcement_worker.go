@@ -51,7 +51,7 @@ func (w *AnnouncementWorker) ProcessPending(ctx context.Context) error {
 	var pending []announcements.PendingAnnouncementDelivery
 	err := w.Store.WithSystem(ctx, func(tx pgx.Tx) error {
 		var err error
-		pending, err = w.Announcements.PendingDeliveries(ctx, tx, w.Batch, w.MaxAttempts)
+		pending, err = w.Announcements.ClaimPendingDeliveries(ctx, tx, w.Batch, w.MaxAttempts, staleAfter)
 		return err
 	})
 	if err != nil {
@@ -82,7 +82,9 @@ func (w *AnnouncementWorker) process(ctx context.Context, p announcements.Pendin
 		msg.Text = p.Title
 	}
 
-	if err := w.Dispatcher.Send(ctx, msg); err != nil {
+	sendCtx, cancel := context.WithTimeout(ctx, sendTimeout)
+	defer cancel()
+	if err := w.Dispatcher.Send(sendCtx, msg); err != nil {
 		return w.mark(ctx, bounds, p.ID, err.Error(), "")
 	}
 	return w.mark(ctx, bounds, p.ID, "", "")

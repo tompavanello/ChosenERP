@@ -135,3 +135,80 @@ func (r *Repo) RevertConversion(ctx context.Context, tx pgx.Tx, visitorID string
 
 	return nil
 }
+
+// ContactInput e o que o proprio visitante pode editar no app (nome/e-mail e
+// WhatsApp). O telefone e identificador de login e nao muda por aqui.
+type ContactInput struct {
+	FirstName *string `json:"first_name"`
+	LastName  *string `json:"last_name"`
+	Email     *string `json:"email"`
+	Whatsapp  *string `json:"whatsapp"`
+}
+
+// UpdateContact atualiza os dados de contato do visitante (escopo self).
+func (r *Repo) UpdateContact(ctx context.Context, tx pgx.Tx, visitorID string, in ContactInput) (*Visitor, error) {
+	var v Visitor
+	err := tx.QueryRow(ctx, `
+		UPDATE visitors SET
+			first_name = COALESCE(NULLIF(btrim($2),''), first_name),
+			last_name  = COALESCE(NULLIF(btrim($3),''), last_name),
+			email      = COALESCE($4, email),
+			whatsapp   = COALESCE($5, whatsapp),
+			updated_at = now()
+		WHERE id = $1::uuid
+		RETURNING id::text, branch_id::text, first_name, last_name,
+		          (first_name || ' ' || last_name) AS full_name, email, phone, whatsapp,
+		          source, journey_stage, created_at`,
+		visitorID, deref(in.FirstName), deref(in.LastName), in.Email, in.Whatsapp).
+		Scan(&v.ID, &v.BranchID, &v.FirstName, &v.LastName, &v.FullName,
+			&v.Email, &v.Phone, &v.Whatsapp, &v.Source, &v.JourneyStage, &v.CreatedAt)
+	return &v, err
+}
+
+// JourneyStep e uma transicao registrada na trilha de acolhimento.
+type JourneyStep struct {
+	ID         string    `json:"id"`
+	FromStage  *string   `json:"from_stage,omitempty"`
+	ToStage    string    `json:"to_stage"`
+	Notes      *string   `json:"notes,omitempty"`
+	ChangedBy  *string   `json:"changed_by,omitempty"`
+	OccurredAt time.Time `json:"occurred_at"`
+}
+
+// ListJourney devolve a trilha de etapas do visitante (mais recente primeiro).
+func (r *Repo) ListJourney(ctx context.Context, tx pgx.Tx, visitorID string) ([]JourneyStep, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT id::text, from_stage, to_stage, notes, changed_by::text, occurred_at
+		FROM visitor_journey
+		WHERE visitor_id = $1::uuid
+		ORDER BY occurred_at DESC, created_at DESC`, visitorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []JourneyStep{}
+	for rows.Next() {
+		var s JourneyStep
+		if err := rows.Scan(&s.ID, &s.FromStage, &s.ToStage, &s.Notes, &s.ChangedBy, &s.OccurredAt); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// PromoteToMember promove o acesso do visitante a membro (aprovacao da
+// secretaria), preservando a identidade e ligando o cadastro de membro.
+func (r *Repo) PromoteToMember(ctx context.Context, tx pgx.Tx, userID, tenantID, memberID string) error {
+	_, err := tx.Exec(ctx,
+		`SELECT promote_visitor_to_member($1::uuid, $2::uuid, $3::uuid)`,
+		userID, tenantID, memberID)
+	return err
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}

@@ -96,7 +96,10 @@ func (r *Repo) SetSplit(ctx context.Context, tx pgx.Tx, tenantID string, enabled
 // ApplySplit cria os repasses automaticos de uma ENTRADA conforme as regras
 // ativas (quando o split esta ligado). Roda dentro da transacao do lancamento,
 // entao e aplicado uma unica vez.
-func (r *Repo) ApplySplit(ctx context.Context, tx pgx.Tx, tenantID, fromBranchID, txID string, amount float64) error {
+//
+// O calculo (amount * percent / 100, arredondado a 2 casas) roda em SQL com
+// `numeric`, evitando o erro de ponto flutuante que nao fechava a soma (FIN-1).
+func (r *Repo) ApplySplit(ctx context.Context, tx pgx.Tx, tenantID, fromBranchID, txID string, _ float64) error {
 	var enabled bool
 	if err := tx.QueryRow(ctx, `SELECT split_enabled FROM tenants WHERE id = $1::uuid`, tenantID).Scan(&enabled); err != nil {
 		if err == pgx.ErrNoRows {
@@ -107,53 +110,22 @@ func (r *Repo) ApplySplit(ctx context.Context, tx pgx.Tx, tenantID, fromBranchID
 	if !enabled {
 		return nil
 	}
-	rows, err := tx.Query(ctx, `
-		SELECT tr.destination_branch_id::text, COALESCE(tr.name,''), tr.percent::float8
-		FROM transfer_rules tr
-		WHERE tr.tenant_id = $1::uuid AND tr.is_active`, tenantID)
-	if err != nil {
-		return err
-	}
-	type rule struct {
-		dest string
-		name string
-		pct  float64
-	}
-	list := []rule{}
-	for rows.Next() {
-		var rr rule
-		if err := rows.Scan(&rr.dest, &rr.name, &rr.pct); err != nil {
-			rows.Close()
-			return err
-		}
-		list = append(list, rr)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	for _, rr := range list {
-		if rr.dest == "" || rr.dest == fromBranchID || rr.pct <= 0 {
-			continue
-		}
-		val := splitRound2(amount * rr.pct / 100)
-		if val <= 0 {
-			continue
-		}
-		name := rr.name
-		if name == "" {
-			name = "Split"
-		}
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO transfers (tenant_id, from_branch_id, to_branch_id, financial_transaction_id, amount, rule_name)
-			VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6)`,
-			tenantID, fromBranchID, rr.dest, txID, val, name); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func splitRound2(v float64) float64 {
-	return float64(int64(v*100+0.5)) / 100
+	_, err := tx.Exec(ctx, `
+		WITH calc AS (
+			SELECT tr.tenant_id,
+			       tr.destination_branch_id AS dest,
+			       COALESCE(NULLIF(tr.name,''), 'Split') AS rule_name,
+			       ROUND((SELECT amount FROM financial_transactions WHERE id = $4::uuid)
+			             * tr.percent / 100, 2) AS amount
+			FROM transfer_rules tr
+			WHERE tr.tenant_id = $1::uuid AND tr.is_active
+			  AND tr.percent > 0
+			  AND tr.destination_branch_id IS NOT NULL
+			  AND tr.destination_branch_id <> $2::uuid
+		)
+		INSERT INTO transfers (tenant_id, from_branch_id, to_branch_id, financial_transaction_id, amount, rule_name)
+		SELECT tenant_id, $2::uuid, dest, $4::uuid, amount, rule_name
+		FROM calc WHERE amount > 0`,
+		tenantID, fromBranchID, txID)
+	return err
 }

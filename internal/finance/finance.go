@@ -436,7 +436,7 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 		return nil, "", "", "", err
 	}
 	// Rateio entre eventos (opcional).
-	if err := r.insertEventAllocations(ctx, tx, tenantID, branchID, t.ID, in.Amount, in.EventAllocations); err != nil {
+	if err := r.insertEventAllocations(ctx, tx, tenantID, branchID, t.ID, in.EventAllocations); err != nil {
 		return nil, "", "", "", err
 	}
 	// Split automatico de repasses (somente ENTRADAS, quando ligado).
@@ -446,6 +446,125 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 		}
 	}
 	return &t, docID, ref, token, nil
+}
+
+// UpdateTxnInput e o corpo da edicao de um lancamento (PATCH). Nao inclui
+// entry_seq: a posicao do lancamento NAO muda ao editar (reposicionar e feito
+// por POST /finance/transactions/reorder).
+type UpdateTxnInput struct {
+	Type          string  `json:"type"`
+	Amount        float64 `json:"amount"`
+	CategoryID    *string `json:"category_id"`
+	AccountID     *string `json:"account_id"`
+	PaymentMethod *string `json:"payment_method"`
+	IsAnonymous   bool    `json:"is_anonymous"`
+	Description   *string `json:"description"`
+	DonorMemberID *string `json:"donor_member_id"`
+	BenefactorID  *string `json:"benefactor_id"`
+	DonorName     *string `json:"donor_name"`
+	SupplierID    *string `json:"supplier_id"`
+	OccurredAt    *string `json:"occurred_at"`
+	// Rateio opcional do lancamento entre eventos (substitui o anterior).
+	EventAllocations []EventAllocationInput `json:"event_allocations"`
+	// Contas a pagar (opcional).
+	DueDate    *string `json:"due_date"`
+	CostCenter *string `json:"cost_center"`
+	Paid       *bool   `json:"paid"`
+}
+
+// Update edita um lancamento EM VIGOR, preservando id, entry_seq, recibo e
+// anexos. Diferente do fluxo antigo (excluir + recriar), aqui a linha e alterada
+// por fin_tx_edit (SECURITY DEFINER), que tambem recalcula a hash-chain. A trava
+// de periodo conciliado continua valendo.
+func (r *Repo) Update(ctx context.Context, tx pgx.Tx, tenantID, id string, in UpdateTxnInput) error {
+	if in.CategoryID == nil || *in.CategoryID == "" {
+		return ErrCategoryRequired
+	}
+	// O RLS esconde contas fora do escopo; id invalido cai em ErrNoRows.
+	var catType string
+	if err := tx.QueryRow(ctx, `SELECT type FROM financial_categories WHERE id = $1::uuid`, *in.CategoryID).Scan(&catType); err != nil {
+		return err
+	}
+	if catType != in.Type {
+		return fmt.Errorf("a conta selecionada e de %s, mas o lancamento e de %s", catType, in.Type)
+	}
+	// Identificacao livre so vale sem membro/benfeitor (igual ao Create).
+	if (in.DonorMemberID != nil && *in.DonorMemberID != "") ||
+		(in.BenefactorID != nil && *in.BenefactorID != "") {
+		in.DonorName = nil
+	}
+	when, err := parseOccurredAt(in.OccurredAt)
+	if err != nil {
+		return err
+	}
+
+	// Confirma existencia/escopo (RLS) e a filial do lancamento antes de editar.
+	var branchID string
+	if err := tx.QueryRow(ctx, `
+		SELECT branch_id::text FROM financial_transactions WHERE id = $1::uuid`, id).Scan(&branchID); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		SELECT fin_tx_edit($1::uuid, $2, $3, $4::numeric, $5, $6, $7, $8, $9, $10, $11, $12::timestamptz, $13, $14, $15, $16)`,
+		id, strOr(in.CategoryID), in.Type, in.Amount, strOr(in.PaymentMethod),
+		strOr(in.DonorMemberID), strOr(in.BenefactorID), strOr(in.DonorName), strOr(in.SupplierID),
+		in.IsAnonymous, strOr(in.Description), when, strOr(in.AccountID), strOr(in.DueDate),
+		strOr(in.CostCenter), in.Paid != nil && *in.Paid); err != nil {
+		return err
+	}
+
+	// Rateio de eventos: substitui o conjunto anterior.
+	if _, err := tx.Exec(ctx, `DELETE FROM financial_event_allocations WHERE transaction_id = $1::uuid`, id); err != nil {
+		return err
+	}
+	if len(in.EventAllocations) > 0 {
+		if err := r.insertEventAllocations(ctx, tx, tenantID, branchID, id, in.EventAllocations); err != nil {
+			return err
+		}
+	}
+
+	// Split de repasses: apaga os antigos e reaplica (somente entradas).
+	if _, err := tx.Exec(ctx, `DELETE FROM transfers WHERE financial_transaction_id = $1::uuid`, id); err != nil {
+		return err
+	}
+	if in.Type == "income" {
+		if err := r.ApplySplit(ctx, tx, tenantID, branchID, id, in.Amount); err != nil {
+			return err
+		}
+	}
+
+	// Recibo: o corpo do hash mudou; atualiza o documento emitido (mesmo token).
+	t, err := r.txnForReceipt(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	return r.updateReceipt(ctx, tx, tenantID, *t)
+}
+
+// txnForReceipt carrega os campos do lancamento usados na montagem do recibo.
+func (r *Repo) txnForReceipt(ctx context.Context, tx pgx.Tx, id string) (*Transaction, error) {
+	var t Transaction
+	err := tx.QueryRow(ctx, `
+		SELECT id::text, branch_id::text, type, amount::float8, currency, hash,
+		       donor_member_id::text, benefactor_id::text, donor_name, is_anonymous,
+		       description, occurred_at
+		FROM financial_transactions WHERE id = $1::uuid`, id).
+		Scan(&t.ID, &t.BranchID, &t.Type, &t.Amount, &t.Currency, &t.Hash,
+			&t.DonorMemberID, &t.BenefactorID, &t.DonorName, &t.IsAnonymous,
+			&t.Description, &t.OccurredAt)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+// strOr devolve o valor apontado ou "" (NULL no SQL via NULLIF).
+func strOr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }
 
 // Reorder renumera os lancamentos informados (1..N) na ordem exata do slice,
@@ -504,43 +623,57 @@ func (r *Repo) Reorder(ctx context.Context, tx pgx.Tx, ids []string) error {
 
 // insertEventAllocations grava o rateio do lancamento entre eventos. Valores nao
 // informados dividem o restante igualmente; eventos fora do escopo sao recusados.
-func (r *Repo) insertEventAllocations(ctx context.Context, tx pgx.Tx, tenantID, branchID, txID string, total float64, allocs []EventAllocationInput) error {
+//
+// A aritmetica (soma dos fixos, divisao do restante e arredondamento) roda em
+// SQL com `numeric` - dinheiro nunca deve ser dividido em ponto flutuante, senao
+// a soma dos rateios nao fecha com o total (FIN-1).
+func (r *Repo) insertEventAllocations(ctx context.Context, tx pgx.Tx, tenantID, branchID, txID string, allocs []EventAllocationInput) error {
 	if len(allocs) == 0 {
 		return nil
 	}
-	var fixed float64
-	missing := 0
-	for _, a := range allocs {
+	eventIDs := make([]string, len(allocs))
+	amounts := make([]string, len(allocs))
+	for i, a := range allocs {
+		eventIDs[i] = a.EventID
 		if a.Amount != nil {
-			fixed += *a.Amount
-		} else {
-			missing++
+			amounts[i] = strconv.FormatFloat(*a.Amount, 'f', 2, 64)
 		}
 	}
-	perMissing := 0.0
-	if missing > 0 {
-		perMissing = (total - fixed) / float64(missing)
-		if perMissing < 0 {
-			perMissing = 0
-		}
+	rows, err := tx.Query(ctx, `
+		WITH inp AS (
+			SELECT unnest($4::text[])::uuid AS event_id,
+			       NULLIF(unnest($5::text[]), '')::numeric AS amount
+		),
+		agg AS (
+			SELECT COALESCE(SUM(amount), 0) AS fixed,
+			       COUNT(*) FILTER (WHERE amount IS NULL) AS missing
+			FROM inp
+		),
+		tot AS (
+			SELECT amount FROM financial_transactions WHERE id = $3::uuid
+		)
+		INSERT INTO financial_event_allocations (tenant_id, branch_id, transaction_id, event_id, amount)
+		SELECT $1::uuid, $2::uuid, $3::uuid, e.id,
+		       COALESCE(i.amount, GREATEST(ROUND((t.amount - a.fixed) / NULLIF(a.missing, 0), 2), 0))
+		FROM inp i
+		CROSS JOIN agg a
+		CROSS JOIN tot t
+		JOIN church_events e ON e.id = i.event_id AND e.tenant_id = $1::uuid AND e.branch_id = $2::uuid
+		RETURNING event_id`,
+		tenantID, branchID, txID, eventIDs, amounts)
+	if err != nil {
+		return err
 	}
-	for _, a := range allocs {
-		amt := perMissing
-		if a.Amount != nil {
-			amt = *a.Amount
-		}
-		tag, err := tx.Exec(ctx, `
-			INSERT INTO financial_event_allocations (tenant_id, branch_id, transaction_id, event_id, amount)
-			SELECT $1, $2::uuid, $3::uuid, e.id, $5
-			FROM church_events e
-			WHERE e.id = $4::uuid AND e.tenant_id = $1::uuid AND e.branch_id = $2::uuid`,
-			tenantID, branchID, txID, a.EventID, amt)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return fmt.Errorf("evento %s nao encontrado no escopo", a.EventID)
-		}
+	defer rows.Close()
+	n := 0
+	for rows.Next() {
+		n++
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if n != len(allocs) {
+		return errors.New("um ou mais eventos do rateio nao pertencem ao escopo")
 	}
 	return nil
 }
@@ -745,6 +878,9 @@ func (r *Repo) SumBalance(ctx context.Context, tx pgx.Tx, kind string) (Balance,
 		return b, err
 	}
 	b.Net = b.Income - b.Expense + initialBalance
+	// Nunca devolver nil: `by_category` e serializado como null e quebra os
+	// consumidores que chamam .filter/.map direto no JSON.
+	b.ByCategory = []BalanceItem{}
 
 	rows, err := tx.Query(ctx, `
 		SELECT COALESCE(t.category_id::text,''), COALESCE(c.name,'Sem categoria'), t.type, SUM(t.amount)::float8
