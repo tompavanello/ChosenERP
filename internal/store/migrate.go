@@ -26,6 +26,15 @@ func (s *Store) Migrate(ctx context.Context) error {
 		return fmt.Errorf("create schema_migrations: %w", err)
 	}
 
+	// Advisory lock: impede que dois migradores concorrentes (ex.: duas replicas
+	// subindo ao mesmo tempo) apliquem a mesma versao em paralelo. A sessao segura
+	// o lock ate o fim de Migrate(); pg_advisory_unlock e explicito no defer.
+	const migrateLockKey int64 = 7_534_233_190_001
+	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, migrateLockKey); err != nil {
+		return fmt.Errorf("advisory lock: %w", err)
+	}
+	defer func() { _, _ = conn.Exec(ctx, `SELECT pg_advisory_unlock($1)`, migrateLockKey) }()
+
 	applied := map[string]bool{}
 	rows, err := conn.Query(ctx, `SELECT version FROM schema_migrations`)
 	if err != nil {

@@ -1,0 +1,4 @@
+-- 000098_tenant_backup_fix.down.sql
+-- Nao ha rollback util: a versao anterior (000097) tinha um bug de chave
+-- duplicada no restore. Recriar a funcao defeituosa nao e desejavel.
+-- (Mantido por convencao do runner.)
