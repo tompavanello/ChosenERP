@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Drawer } from "@/components/ui/modal";
-import { Field, Input } from "@/components/ui/input";
+import { Field, Input, Select } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { EmptyState, SkeletonRows } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -19,6 +19,7 @@ type FormState = {
   key: string; name: string; description: string; price: string; currency: string;
   max_members: string; max_branches: string; max_users: string; max_storage_mb: string;
   features: Record<string, boolean>;
+  cycle: string;
   is_active: boolean; sort_order: string;
 };
 
@@ -26,6 +27,7 @@ const EMPTY: FormState = {
   key: "", name: "", description: "", price: "", currency: "BRL",
   max_members: "", max_branches: "", max_users: "", max_storage_mb: "",
   features: {},
+  cycle: "MONTHLY",
   is_active: true, sort_order: "0",
 };
 
@@ -37,6 +39,7 @@ function toForm(p: Plan): FormState {
     max_members: num(p.max_members), max_branches: num(p.max_branches),
     max_users: num(p.max_users), max_storage_mb: num(p.max_storage_mb),
     features: { ...(p.features ?? {}) },
+    cycle: p.cycle ?? "MONTHLY",
     is_active: p.is_active, sort_order: String(p.sort_order ?? 0),
   };
 }
@@ -88,6 +91,7 @@ export default function PlatformPlansPage() {
         price_cents: Math.round(Number(form.price || 0) * 100),
         currency: form.currency,
         features: form.features,
+        cycle: form.cycle,
         max_members: Number(form.max_members || 0),
         max_branches: Number(form.max_branches || 0),
         max_users: Number(form.max_users || 0),
@@ -176,6 +180,12 @@ export default function PlatformPlansPage() {
             </Field>
             <Field label="Moeda">
               <Input className="h-8 text-sm" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} />
+            </Field>
+            <Field label="Ciclo de cobranca" hint="Usado ao criar a assinatura no gateway">
+              <Select className="h-8 text-sm" value={form.cycle} onChange={(e) => setForm({ ...form, cycle: e.target.value })}>
+                <option value="MONTHLY">Mensal</option>
+                <option value="YEARLY">Anual</option>
+              </Select>
             </Field>
             <Field label="Max. membros" hint="0 = ilimitado">
               <Input type="number" min={0} className="h-8 text-sm" value={form.max_members} onChange={(e) => setForm({ ...form, max_members: e.target.value })} />

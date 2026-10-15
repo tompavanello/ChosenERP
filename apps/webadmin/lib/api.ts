@@ -630,6 +630,12 @@ async function errorMessage(res: Response): Promise<string> {
     if (parsed?.error === "plan_feature_disabled") {
       return "Este modulo nao esta incluido no plano da sua igreja.";
     }
+    if (parsed?.error === "tenant_suspended") {
+      return "O acesso desta igreja esta suspenso por pendencia financeira. Regularize a assinatura para reativar.";
+    }
+    if (parsed?.error === "tenant_forbidden") {
+      return "Sua conta nao tem acesso a esta igreja.";
+    }
     if (parsed?.error) return parsed.error;
   } catch {
     /* corpo nao-JSON */
@@ -747,6 +753,24 @@ export const createMember = (data: Record<string, unknown>) =>
   api<Member>("/api/v1/members", { method: "POST", body: JSON.stringify(data) });
 export const updateMember = (id: string, data: Record<string, unknown>) =>
   api<Member>(`/api/v1/members/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+
+/** Le a planilha de membros (base64) e devolve as primeiras linhas para mapear. */
+export const previewMembers = (data: string, filename: string) =>
+  api<{ rows: string[][] }>("/api/v1/members/import/preview", {
+    method: "POST",
+    body: JSON.stringify({ data, filename }),
+  });
+/** Importa membros em lote (CSV/XLSX em base64) com mapeamento de colunas. */
+export const importMembersFile = (
+  data: string,
+  filename: string,
+  startRow: number,
+  mapping: Record<string, number>,
+) =>
+  api<ImportResult>("/api/v1/members/import", {
+    method: "POST",
+    body: JSON.stringify({ data, filename, start_row: startRow, mapping }),
+  });
 
 /** Exclui definitivamente o membro. Restrito a Sede (super_admin/admin_sede). */
 export const deleteMember = (id: string) =>
@@ -938,6 +962,17 @@ export const convertVisitorToMember = (visitorId: string, data: Record<string, u
   api<Member>(`/api/v1/visitors/${visitorId}/convert`, { method: "POST", body: JSON.stringify(data) });
 export const revertVisitorConversion = (visitorId: string) =>
   api<{ ok: boolean }>(`/api/v1/visitors/${visitorId}/revert`, { method: "POST" });
+
+export interface VisitorJourneyStep {
+  id: string;
+  from_stage?: string | null;
+  to_stage: string;
+  notes?: string | null;
+  changed_by?: string | null;
+  occurred_at: string;
+}
+export const getVisitorJourney = (visitorId: string) =>
+  api<{ journey: VisitorJourneyStep[] }>(`/api/v1/visitors/${visitorId}/journey`);
 
 // ---- Busca de pessoas para ministry multi-select ----
 export const searchMembers = (q: string) =>
@@ -1141,6 +1176,13 @@ export const createTransaction = (data: Record<string, unknown>) =>
     body: JSON.stringify(data),
   });
 
+/** Edita um lancamento EM VIGOR (preserva id, posicao/Seq., recibo e anexos). */
+export const updateTransaction = (id: string, data: Record<string, unknown>) =>
+  api<{ ok: boolean }>(`/api/v1/finance/transactions/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+
 /** Renumera os lancamentos da mesma conta/data na ordem enviada. */
 export const reorderTransactions = (orderedIds: string[]) =>
   api<{ ok: boolean }>("/api/v1/finance/transactions/reorder", {
@@ -1229,6 +1271,26 @@ export async function uploadAttachment(transactionId: string, file: File): Promi
 }
 export const listAttachments = (transactionId: string) =>
   api<{ attachments: FinancialAttachment[] }>(`/api/v1/finance/transactions/${transactionId}/attachments`);
+
+/**
+ * Baixa/abre um anexo do financeiro. O arquivo em si NAO e publico (so fotos de
+ * membro sao): a rota exige sessao e escopo, entao o link nao pode ser aberto
+ * direto pelo browser. Buscamos o blob autenticado e disparamos o download.
+ */
+export async function downloadFinancialAttachment(fileUrl: string, fileName: string): Promise<void> {
+  const name = fileUrl.split("/").filter(Boolean).pop() ?? "";
+  if (!name) throw new Error("anexo invalido");
+  const res = await apiRaw(`/api/v1/finance/attachments/${encodeURIComponent(name)}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName || name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
 export const getBalance = () => api<Balance>("/api/v1/finance/balance");
 
 // ---- Relatorios ----
@@ -1703,6 +1765,8 @@ export interface Plan {
   max_users?: number | null;
   max_storage_mb?: number | null;
   features?: Record<string, boolean> | null;
+  cycle: string;
+  gateway_refs?: Record<string, unknown> | null;
   is_active: boolean;
   sort_order: number;
   updated_at: string;
@@ -1718,6 +1782,8 @@ export interface PlanInput {
   max_users?: number;
   max_storage_mb?: number;
   features?: Record<string, boolean>;
+  cycle?: string;
+  gateway_refs?: Record<string, unknown>;
   is_active?: boolean;
   sort_order?: number;
 }
@@ -1747,6 +1813,285 @@ export const createPlan = (data: PlanInput) =>
   api<Plan>("/api/v1/admin/plans", { method: "POST", body: JSON.stringify(data) });
 export const updatePlan = (key: string, data: Partial<PlanInput>) =>
   api<Plan>(`/api/v1/admin/plans/${key}`, { method: "PATCH", body: JSON.stringify(data) });
+
+// ---- Backup por igreja (console da plataforma) ----
+export interface TenantBackup {
+  id: string;
+  tenant_id: string;
+  filename: string;
+  size_bytes: number;
+  kind: "manual" | "scheduled" | "pre_restore" | string;
+  status: "creating" | "ready" | "failed" | string;
+  error?: string;
+  counts?: Record<string, number>;
+  created_by?: string;
+  created_at: string;
+}
+export interface BackupSettings {
+  enabled: boolean;
+  interval_hours: number;
+  retention_days: number;
+  updated_at: string;
+}
+export interface RestoreResult {
+  tenant_id: string;
+  counts: Record<string, number>;
+  files: number;
+}
+export interface RestoreResponse {
+  ok: boolean;
+  restore: RestoreResult;
+  safety_backup_id: string;
+}
+export const listTenantBackups = (tenantId: string) =>
+  api<{ backups: TenantBackup[] }>(`/api/v1/admin/tenants/${tenantId}/backups`);
+export const listAllBackups = () => api<{ backups: TenantBackup[] }>("/api/v1/admin/backups");
+export const createTenantBackup = (tenantId: string) =>
+  api<TenantBackup>(`/api/v1/admin/tenants/${tenantId}/backups`, { method: "POST" });
+export const deleteBackup = (backupId: string) =>
+  api<{ ok: boolean }>(`/api/v1/admin/backups/${backupId}`, { method: "DELETE" });
+export const downloadBackup = (backupId: string, filename: string) =>
+  downloadExport(`/api/v1/admin/backups/${backupId}/download`, filename);
+
+/** Gera um backup agora e ja dispara o download no navegador. */
+export async function createTenantBackupDownload(tenantId: string, filename: string): Promise<void> {
+  const res = await apiRaw(`/api/v1/admin/tenants/${tenantId}/backups?download=1`, { method: "POST" });
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Restaura um backup (por id OU por arquivo .zip). Operacao destrutiva: exige
+ * `confirm` com o slug da igreja. Gera um backup de seguranca automaticamente.
+ */
+export async function restoreTenantBackup(
+  tenantId: string,
+  opts: { confirm: string; backupId?: string; file?: File },
+): Promise<RestoreResponse> {
+  const form = new FormData();
+  form.append("confirm", opts.confirm);
+  if (opts.backupId) form.append("backup_id", opts.backupId);
+  if (opts.file) form.append("file", opts.file);
+  const res = await apiRaw(`/api/v1/admin/tenants/${tenantId}/restore`, { method: "POST", body: form });
+  const data = (await res.json().catch(() => ({}))) as Partial<RestoreResponse> & { error?: string };
+  if (!res.ok) throw new Error(data?.error ?? "falha ao restaurar o backup");
+  return data as RestoreResponse;
+}
+export const getBackupSettings = () => api<BackupSettings>("/api/v1/admin/backup-settings");
+export const updateBackupSettings = (data: Omit<BackupSettings, "updated_at">) =>
+  api<BackupSettings>("/api/v1/admin/backup-settings", { method: "PUT", body: JSON.stringify(data) });
+
+// ---- Cobranca SaaS (Fluxo A): assinaturas e faturas das igrejas ----
+export interface BillingItem {
+  id: string;
+  provider: string;
+  external_id: string;
+  billing_type: string;
+  status: string;
+  value_cents: number;
+  net_value_cents?: number | null;
+  due_date?: string | null;
+  paid_at?: string | null;
+  invoice_url: string;
+  bank_slip_url: string;
+  pix_payload: string;
+  pix_qr_image: string;
+  description: string;
+  created_at: string;
+}
+export interface BillingSubscription {
+  id: string;
+  plan_key: string;
+  provider: string;
+  external_id: string;
+  billing_type: string;
+  cycle: string;
+  value_cents: number;
+  next_due_date?: string | null;
+  status: string;
+  started_at: string;
+  canceled_at?: string | null;
+}
+export interface BillingCustomer {
+  id: string;
+  provider: string;
+  external_id: string;
+  name: string;
+  email: string;
+  phone: string;
+  cpf_cnpj: string;
+}
+export interface TenantBilling {
+  tenant_id: string;
+  tenant_name: string;
+  plan: string;
+  billing_status: string;
+  billing_exempt: boolean;
+  past_due_since?: string | null;
+  suspended_at?: string | null;
+  customer?: BillingCustomer | null;
+  subscription?: BillingSubscription | null;
+  invoices: BillingItem[];
+}
+export interface BillingSubscriptionRow {
+  tenant_id: string;
+  tenant_name: string;
+  plan: string;
+  billing_status: string;
+  value_cents: number;
+  cycle: string;
+  billing_type: string;
+  status: string;
+  next_due_date?: string | null;
+}
+export interface BillingInvoiceRow extends BillingItem {
+  tenant_id: string;
+  tenant_name: string;
+}
+export interface BillingOverview {
+  active_subscriptions: number;
+  overdue_invoices: number;
+  suspended_tenants: number;
+  mrr_cents: number;
+  overdue_cents: number;
+}
+export interface CardInput {
+  holder_name: string;
+  number: string;
+  expiry_month: string;
+  expiry_year: string;
+  ccv: string;
+  holder_cpf: string;
+  postal_code?: string;
+  address_number?: string;
+}
+export interface SubscribeInput {
+  plan_key: string;
+  billing_type: string;
+  cycle?: string;
+  cpf_cnpj?: string;
+  email?: string;
+  phone?: string;
+  next_due_date?: string;
+  value_cents?: number;
+  card?: CardInput;
+}
+export const getBillingOverview = () => api<BillingOverview>("/api/v1/admin/billing/overview");
+export const listBillingSubscriptions = () =>
+  api<{ subscriptions: BillingSubscriptionRow[] }>("/api/v1/admin/billing/subscriptions");
+export const listBillingInvoices = (status = "") =>
+  api<{ invoices: BillingInvoiceRow[] }>(`/api/v1/admin/billing/invoices${status ? `?status=${status}` : ""}`);
+export const getTenantBilling = (tenantId: string) =>
+  api<TenantBilling>(`/api/v1/admin/tenants/${tenantId}/billing`);
+export const subscribeTenant = (tenantId: string, data: SubscribeInput) =>
+  api<TenantBilling>(`/api/v1/admin/tenants/${tenantId}/billing/subscription`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const cancelTenantSubscription = (tenantId: string) =>
+  api<{ ok: boolean }>(`/api/v1/admin/tenants/${tenantId}/billing/subscription`, { method: "DELETE" });
+export const chargeTenant = (tenantId: string, data: Record<string, unknown>) =>
+  api<BillingItem>(`/api/v1/admin/tenants/${tenantId}/billing/charge`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const syncTenantBilling = (tenantId: string) =>
+  api<TenantBilling>(`/api/v1/admin/tenants/${tenantId}/billing/sync`, { method: "POST" });
+export const refundInvoice = (tenantId: string, invoiceId: string) =>
+  api<{ ok: boolean }>(`/api/v1/admin/billing/invoices/${invoiceId}/refund?tenant_id=${tenantId}`, {
+    method: "POST",
+  });
+/** Assinatura/faturas da propria igreja (area da igreja). */
+export const getOwnBilling = () => api<TenantBilling>("/api/v1/billing");
+
+// ---- Fluxo B: meios de pagamento e cobrancas da igreja ----
+export interface PaymentGatewayConfig {
+  id: string;
+  provider: string;
+  environment: string;
+  is_active: boolean;
+  is_default: boolean;
+  has_credentials: boolean;
+}
+export interface PaymentGatewayInput {
+  provider?: string;
+  environment?: string;
+  api_key?: string;
+  base_url?: string;
+  webhook_token?: string;
+  is_active?: boolean;
+  is_default?: boolean;
+}
+export interface PaymentProduct {
+  id: string;
+  branch_id: string;
+  name: string;
+  description: string;
+  amount_cents?: number | null;
+  allowed_billing_types: string[];
+  category_id: string;
+  category_name: string;
+  account_id?: string | null;
+  is_recurring: boolean;
+  is_active: boolean;
+  sort_order: number;
+}
+export interface PaymentProductInput {
+  name: string;
+  description?: string;
+  amount_cents?: number | null;
+  allowed_billing_types?: string[];
+  category_id: string;
+  account_id?: string;
+  is_recurring?: boolean;
+  is_active?: boolean;
+  sort_order?: number;
+}
+export interface PaymentCharge {
+  id: string;
+  product_id: string;
+  member_id: string;
+  provider: string;
+  external_id: string;
+  billing_type: string;
+  status: string;
+  amount_cents: number;
+  due_date?: string | null;
+  paid_at?: string | null;
+  payer_name: string;
+  payer_cpf_cnpj: string;
+  payer_email: string;
+  description: string;
+  invoice_url: string;
+  bank_slip_url: string;
+  pix_payload: string;
+  pix_qr_image: string;
+  financial_transaction_id?: string | null;
+  created_at: string;
+}
+export const listPaymentGateways = () =>
+  api<{ gateways: PaymentGatewayConfig[] }>("/api/v1/payment-gateways");
+export const savePaymentGateway = (provider: string, data: PaymentGatewayInput) =>
+  api<PaymentGatewayConfig>(`/api/v1/payment-gateways/${provider}`, { method: "PUT", body: JSON.stringify(data) });
+export const listPaymentProducts = () =>
+  api<{ products: PaymentProduct[] }>("/api/v1/payment-products");
+export const createPaymentProduct = (data: PaymentProductInput) =>
+  api<PaymentProduct>("/api/v1/payment-products", { method: "POST", body: JSON.stringify(data) });
+export const updatePaymentProduct = (id: string, data: Partial<PaymentProductInput>) =>
+  api<PaymentProduct>(`/api/v1/payment-products/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export const deletePaymentProduct = (id: string) =>
+  api<{ ok: boolean }>(`/api/v1/payment-products/${id}`, { method: "DELETE" });
+export const listPaymentCharges = (status = "") =>
+  api<{ charges: PaymentCharge[] }>(`/api/v1/payment-charges${status ? `?status=${status}` : ""}`);
+export const createPaymentCharge = (data: Record<string, unknown>) =>
+  api<PaymentCharge>("/api/v1/payment-charges", { method: "POST", body: JSON.stringify(data) });
+export const refundPaymentCharge = (id: string) =>
+  api<{ ok: boolean }>(`/api/v1/payment-charges/${id}/refund`, { method: "POST" });
 
 // ---- Acesso do membro ao app ----
 export interface MemberAccess {
@@ -1990,6 +2335,7 @@ export interface MemberRequest {
   id: string;
   member_id?: string | null;
   member_name?: string | null;
+  user_id?: string | null;
   kind: string;
   subject: string;
   message?: string | null;
@@ -2003,6 +2349,98 @@ export const listRequests = (status?: string) =>
   api<{ requests: MemberRequest[] }>(`/api/v1/requests${status ? `?status=${encodeURIComponent(status)}` : ""}`);
 export const updateRequest = (id: string, data: { status: string; response?: string }) =>
   api<{ request: MemberRequest }>(`/api/v1/requests/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export const approveMembershipRequest = (id: string) =>
+  api<{ request: MemberRequest }>(`/api/v1/requests/${id}/approve-membership`, { method: "POST" });
+
+// ---- Conteúdo: vídeos, devocionais, ao vivo e Bíblia ----
+export interface ContentVideo {
+  id: string;
+  branch_id?: string | null;
+  title: string;
+  description?: string | null;
+  youtube_id: string;
+  kind: string;
+  speaker?: string | null;
+  recorded_at?: string | null;
+  thumbnail_url?: string | null;
+  is_published: boolean;
+  sort_order: number;
+  created_at: string;
+}
+export const listVideos = () => api<{ videos: ContentVideo[] }>("/api/v1/videos");
+export const createVideo = (data: Record<string, unknown>) =>
+  api<ContentVideo>("/api/v1/videos", { method: "POST", body: JSON.stringify(data) });
+export const updateVideo = (id: string, data: Record<string, unknown>) =>
+  api<ContentVideo>(`/api/v1/videos/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export const deleteVideo = (id: string) =>
+  api<{ ok: boolean }>(`/api/v1/videos/${id}`, { method: "DELETE" });
+
+export interface DevotionalPlan {
+  id: string;
+  branch_id?: string | null;
+  title: string;
+  description?: string | null;
+  cover_image_url?: string | null;
+  start_date?: string | null;
+  is_active: boolean;
+  day_count: number;
+  created_at: string;
+}
+export interface DevotionalDay {
+  id?: string;
+  day_number: number;
+  title: string;
+  bible_reference?: string | null;
+  bible_text?: string | null;
+  body: string;
+  prayer?: string | null;
+  video_url?: string | null;
+}
+export const listDevotionalPlans = () => api<{ plans: DevotionalPlan[] }>("/api/v1/devotional-plans");
+export const getDevotionalPlan = (id: string) =>
+  api<{ plan: DevotionalPlan; days: DevotionalDay[] }>(`/api/v1/devotional-plans/${id}`);
+export const createDevotionalPlan = (data: Record<string, unknown>) =>
+  api<DevotionalPlan>("/api/v1/devotional-plans", { method: "POST", body: JSON.stringify(data) });
+export const updateDevotionalPlan = (id: string, data: Record<string, unknown>) =>
+  api<DevotionalPlan>(`/api/v1/devotional-plans/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export const deleteDevotionalPlan = (id: string) =>
+  api<{ ok: boolean }>(`/api/v1/devotional-plans/${id}`, { method: "DELETE" });
+export const putDevotionalDays = (id: string, days: DevotionalDay[]) =>
+  api<{ days: DevotionalDay[] }>(`/api/v1/devotional-plans/${id}/days`, {
+    method: "PUT",
+    body: JSON.stringify({ days }),
+  });
+export const generateDevotional = (data: { theme?: string; reference?: string; audience?: string; days?: number }) =>
+  api<{ days: DevotionalDay[] }>("/api/v1/devotional-plans/generate", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export interface LiveSettings {
+  youtube_channel_id: string;
+  live_stream_url: string;
+  embed_url: string;
+  watch_url: string;
+  configured: boolean;
+}
+export const getLiveSettings = () => api<LiveSettings>("/api/v1/live-settings");
+export const putLiveSettings = (data: { youtube_channel_id: string; live_stream_url: string }) =>
+  api<LiveSettings>("/api/v1/live-settings", { method: "PUT", body: JSON.stringify(data) });
+
+export interface BibleVersion {
+  id: string;
+  name: string;
+  abbreviation: string;
+  language: string;
+}
+export const listBibleVersions = () =>
+  api<{ configured: boolean; versions: BibleVersion[] }>("/api/v1/bible/versions");
+export const getBibleSettings = () => api<{ bible_version_id: string }>("/api/v1/bible-settings");
+export const putBibleSettings = (bible_version_id: string) =>
+  api<{ bible_version_id: string }>("/api/v1/bible-settings", {
+    method: "PUT",
+    body: JSON.stringify({ bible_version_id }),
+  });
 
 // ---- Avisos ----
 export interface Announcement {

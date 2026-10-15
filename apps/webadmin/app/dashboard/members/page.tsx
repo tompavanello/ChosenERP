@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Search, Users, MessageCircle, Phone, Mail, IdCard, GitBranch, Trash2, ListPlus,
+  Search, Users, MessageCircle, Phone, Mail, IdCard, GitBranch, Trash2, ListPlus, Upload,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import {
 } from "@/lib/api";
 import { useBranches } from "@/lib/swr-hooks";
 import { MemberBulkGrid } from "@/components/members/member-bulk-grid";
+import { MemberImport } from "@/components/members/member-import";
 import { CardCell } from "@/components/members/card-cell";
 import { RowActions } from "@/components/people/row-actions";
 import { MEMBERSHIP_STATUS, CARGO_KINDS } from "@/lib/constants";
@@ -40,6 +41,7 @@ export default function MembersPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PER_PAGE);
   const [showQuick, setShowQuick] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [sortColumn, setSortColumn] = useState<string>("full_name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
@@ -348,9 +350,14 @@ export default function MembersPage() {
         description="Cadastro, cargos, familia e carteirinha digital em um so lugar"
         actions={
           canWrite && (
-            <Button variant="outline" onClick={() => setShowQuick((v) => !v)}>
-              <ListPlus className="h-4 w-4" /> {showQuick ? "Fechar cadastro rapido" : "Cadastro rapido"}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setShowImport(true)}>
+                <Upload className="h-4 w-4" /> Importar planilha
+              </Button>
+              <Button variant="outline" onClick={() => setShowQuick((v) => !v)}>
+                <ListPlus className="h-4 w-4" /> {showQuick ? "Fechar cadastro rapido" : "Cadastro rapido"}
+              </Button>
+            </div>
           )
         }
       />
@@ -367,6 +374,10 @@ export default function MembersPage() {
           </div>
           <MemberBulkGrid onSaved={reload} />
         </Card>
+      )}
+
+      {canWrite && (
+        <MemberImport open={showImport} onClose={() => setShowImport(false)} onImported={reload} />
       )}
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

@@ -10,10 +10,11 @@ import {
   getPublicTenant,
   getToken,
   tenantSlugFromHost,
+  VISITOR_ROLE,
   type PublicTenant,
 } from "@/lib/api";
 
-const NAV = [
+const MEMBER_NAV = [
   { href: "/home", label: "Inicio", icon: Home },
   { href: "/agenda", label: "Agenda", icon: Calendar },
   { href: "/avisos", label: "Avisos", icon: Bell },
@@ -21,10 +22,19 @@ const NAV = [
   { href: "/perfil", label: "Perfil", icon: User },
 ];
 
+const VISITOR_NAV = [
+  { href: "/visita", label: "Inicio", icon: Home },
+  { href: "/visita/agenda", label: "Agenda", icon: Calendar },
+  { href: "/visita/avisos", label: "Avisos", icon: Bell },
+  { href: "/visita/oracao", label: "Oracao", icon: Heart },
+  { href: "/visita/perfil", label: "Perfil", icon: User },
+];
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
   const [tenant, setTenant] = useState<PublicTenant | null>(null);
 
   useEffect(() => {
@@ -33,9 +43,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       return;
     }
     setReady(true);
-    // Senha provisoria: forca a troca antes de usar o app.
     fetchMe()
       .then((me) => {
+        setRole(me.role);
+        // Senha provisoria: forca a troca antes de usar o app (so membros).
         if (me.must_change_password) router.replace("/trocar-senha");
       })
       .catch(() => {});
@@ -45,6 +56,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [router]);
 
+  // Visitante so transita na area /visita.
+  useEffect(() => {
+    if (role === VISITOR_ROLE && !pathname.startsWith("/visita")) {
+      router.replace("/visita");
+    }
+  }, [role, pathname, router]);
+
   function logout() {
     clearSession();
     router.replace("/");
@@ -52,6 +70,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   if (!ready) return null;
   const brand = tenant?.brand_color || undefined;
+  const isVisitor = role === VISITOR_ROLE;
+  const nav = isVisitor ? VISITOR_NAV : MEMBER_NAV;
 
   return (
     <div
@@ -68,7 +88,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Church className="h-4 w-4" />
             </span>
           )}
-          <span className="text-sm font-semibold">{tenant?.name ?? "App do Membro"}</span>
+          <span className="text-sm font-semibold">
+            {tenant?.name ?? "App do Membro"}
+            {isVisitor && <span className="ml-2 rounded-full bg-black/5 px-2 py-0.5 text-[10px] text-[var(--muted)]">Visitante</span>}
+          </span>
         </div>
         <button onClick={logout} className="text-[var(--muted)]" aria-label="Sair">
           <LogOut className="h-5 w-5" />
@@ -78,7 +101,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 px-4 pb-24 pt-4">{children}</main>
 
       <nav className="fixed inset-x-0 bottom-0 z-10 mx-auto flex max-w-md items-center justify-around border-t border-[var(--line)] bg-[var(--card)] py-2">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {nav.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
           return (
             <Link

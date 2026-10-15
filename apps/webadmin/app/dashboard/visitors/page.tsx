@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, UserPlus, DoorOpen, ArrowRight, Pencil, UserCheck } from "lucide-react";
+import { Search, UserPlus, DoorOpen, ArrowRight, Pencil, UserCheck, History } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input, Field, Select } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { SkeletonRows, EmptyState } from "@/components/ui/skeleton";
 import { Drawer } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
-import { listVisitors, createVisitor, updateVisitorStage, convertVisitorToMember, type Visitor } from "@/lib/api";
+import { listVisitors, createVisitor, updateVisitorStage, convertVisitorToMember, getVisitorJourney, type Visitor, type VisitorJourneyStep } from "@/lib/api";
 import { JOURNEY_STAGES } from "@/lib/constants";
 import { datePt } from "@/lib/format";
 import { MemberForm } from "@/components/members/member-form";
@@ -34,10 +34,24 @@ export default function VisitorsPage() {
   const [convertVisitor, setConvertVisitor] = useState<Visitor | null>(null);
   const [form, setForm] = useState({ first_name: "", last_name: "", email: "", phone: "", whatsapp: "", source: "" });
   const [saving, setSaving] = useState(false);
+  const [journeyVisitor, setJourneyVisitor] = useState<Visitor | null>(null);
+  const [journey, setJourney] = useState<VisitorJourneyStep[] | null>(null);
 
   useEffect(() => {
     listVisitors().then((r) => setVisitors(r.visitors)).catch((e) => toast(e.message, "error"));
   }, [toast]);
+
+  async function openJourney(v: Visitor) {
+    setJourneyVisitor(v);
+    setJourney(null);
+    try {
+      const r = await getVisitorJourney(v.id);
+      setJourney(r.journey);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro", "error");
+      setJourney([]);
+    }
+  }
 
   const stats = useMemo(() => {
     const all = visitors ?? [];
@@ -166,6 +180,9 @@ export default function VisitorsPage() {
                               <UserCheck className="h-3.5 w-3.5 text-green-600" />
                             </Button>
                           )}
+                          <Button variant="ghost" size="sm" onClick={() => openJourney(v)} title="Ver trilha de acolhimento">
+                            <History className="h-3.5 w-3.5" />
+                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => advance(v)}>
                             Avancar <ArrowRight className="h-3.5 w-3.5" />
                           </Button>
@@ -214,6 +231,30 @@ export default function VisitorsPage() {
           />
           </Modal>
       )}
+
+      <Drawer open={journeyVisitor !== null} onClose={() => { setJourneyVisitor(null); setJourney(null); }} title={`Trilha de ${journeyVisitor?.full_name ?? ""}`}>
+        {journey === null ? (
+          <SkeletonRows rows={3} />
+        ) : journey.length === 0 ? (
+          <p className="text-sm text-zinc-500">Nenhuma mudança de etapa registrada.</p>
+        ) : (
+          <ol className="relative space-y-4 border-l border-zinc-200 pl-4">
+            {journey.map((s) => (
+              <li key={s.id} className="relative">
+                <span className="absolute -left-[1.35rem] top-1 h-2.5 w-2.5 rounded-full bg-sky-500" />
+                <p className="text-sm font-medium">
+                  {JOURNEY_STAGES[s.to_stage]?.label ?? s.to_stage}
+                </p>
+                <p className="text-xs text-zinc-400">
+                  {s.from_stage ? `${JOURNEY_STAGES[s.from_stage]?.label ?? s.from_stage} → ` : "Entrada · "}
+                  {datePt(s.occurred_at)}
+                </p>
+                {s.notes && <p className="mt-1 text-xs text-zinc-500">{s.notes}</p>}
+              </li>
+            ))}
+          </ol>
+        )}
+      </Drawer>
     </div>
   );
 }

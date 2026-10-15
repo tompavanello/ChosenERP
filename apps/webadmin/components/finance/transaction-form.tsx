@@ -68,6 +68,8 @@ export interface TransactionFormProps {
   /** Se nao informado, usa createTransaction e da reload via onSaved. */
   onSaved?: () => void;
   submitLabel?: string;
+  /** Na edicao a posicao (Seq.) nao muda: o campo fica somente leitura. */
+  entrySeqReadOnly?: boolean;
 }
 
 /**
@@ -91,6 +93,7 @@ export function TransactionForm({
   onSubmit,
   onSaved,
   submitLabel = "Lancar",
+  entrySeqReadOnly = false,
 }: TransactionFormProps) {
   const { toast } = useToast();
   const { hasPerm } = useAuth();
@@ -275,14 +278,14 @@ export function TransactionForm({
             disabled={saving}
           />
         </Field>
-        <Field label="Posicao (Seq.)" hint="Opcional - posicao no dia/conta; os demais sao renumerados.">
+        <Field label="Posicao (Seq.)" hint={entrySeqReadOnly ? "A posicao nao muda ao editar; use as setas na lista para reordenar." : "Opcional - posicao no dia/conta; os demais sao renumerados."}>
           <Input
             type="number"
             min={1}
             placeholder="Fim"
             value={form.entry_seq}
             onChange={(e) => set("entry_seq", e.target.value)}
-            disabled={saving}
+            disabled={saving || entrySeqReadOnly}
           />
         </Field>
         <Field label="Forma de pagamento">

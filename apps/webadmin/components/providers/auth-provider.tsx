@@ -129,7 +129,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // `user` pode vir do cache do localStorage (gravado por uma versao anterior
   // do app), entao `permissions` e tratado como opcional em tempo de execucao.
-  const hasPerm = useCallback((perm: string) => !!user && (user.permissions ?? []).includes(perm), [user]);
+  // A Sede (super_admin/admin_sede) acessa todos os modulos liberados para a
+  // igreja; o gate por modulo continua sendo `hasFeature`.
+  const hasPerm = useCallback(
+    (perm: string) => !!user && (isHQRole(user.role) || (user.permissions ?? []).includes(perm)),
+    [user],
+  );
 
   // Sem `features` no cache (versao antiga do app), nao esconde nada.
   const hasFeature = useCallback(

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Church, LogIn } from "lucide-react";
+import { Church, KeyRound, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Field } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -11,16 +11,26 @@ import {
   getPublicTenant,
   getToken,
   login,
+  requestVisitorCode,
   tenantSlugFromHost,
+  verifyVisitorCode,
+  VISITOR_ROLE,
   type PublicTenant,
 } from "@/lib/api";
+
+type Mode = "member" | "visitor";
 
 export default function LoginPage() {
   const router = useRouter();
   const [slug, setSlug] = useState("");
   const [tenant, setTenant] = useState<PublicTenant | null>(null);
+  const [mode, setMode] = useState<Mode>("member");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -29,7 +39,7 @@ export default function LoginPage() {
     setSlug(s);
     if (getToken()) {
       fetchMe()
-        .then(() => router.replace("/home"))
+        .then((me) => router.replace(me.role === VISITOR_ROLE ? "/visita" : "/home"))
         .catch(() => {});
     }
     if (s) {
@@ -39,7 +49,7 @@ export default function LoginPage() {
     }
   }, [router]);
 
-  async function submit(e: React.FormEvent) {
+  async function submitMember(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -57,6 +67,36 @@ export default function LoginPage() {
       router.replace("/home");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nao foi possivel entrar.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function requestCode(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      await requestVisitorCode(phone.trim(), name.trim());
+      setCodeSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Nao foi possivel enviar o codigo.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitCode(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      await verifyVisitorCode(phone.trim(), code.trim());
+      await fetchMe();
+      router.replace("/visita");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Codigo invalido.";
+      setError(msg === "use_password" ? "Este telefone ja tem acesso. Entre com e-mail/telefone e senha." : msg);
     } finally {
       setLoading(false);
     }
@@ -84,39 +124,129 @@ export default function LoginPage() {
         </p>
       </header>
 
+      <div className="mb-4 flex gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setMode("member");
+            setError(null);
+          }}
+          className={`flex-1 rounded-lg py-2 text-sm font-medium ${
+            mode === "member" ? "bg-[var(--brand)] text-white" : "bg-black/5 text-[var(--muted)]"
+          }`}
+        >
+          Sou membro
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMode("visitor");
+            setError(null);
+          }}
+          className={`flex-1 rounded-lg py-2 text-sm font-medium ${
+            mode === "visitor" ? "bg-[var(--brand)] text-white" : "bg-black/5 text-[var(--muted)]"
+          }`}
+        >
+          Sou visitante
+        </button>
+      </div>
+
       <Card>
-        <form onSubmit={submit} className="space-y-4">
-          <Field label="E-mail ou telefone">
-            <Input
-              type="text"
-              autoComplete="username"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="voce@email.com ou (00) 00000-0000"
-            />
-          </Field>
-          <Field label="Senha">
-            <Input
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-            />
-          </Field>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button type="submit" disabled={loading} className="w-full">
-            <LogIn className="h-4 w-4" />
-            {loading ? "Entrando..." : "Entrar"}
-          </Button>
-        </form>
+        {mode === "member" ? (
+          <form onSubmit={submitMember} className="space-y-4">
+            <Field label="E-mail ou telefone">
+              <Input
+                type="text"
+                autoComplete="username"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="voce@email.com ou (00) 00000-0000"
+              />
+            </Field>
+            <Field label="Senha">
+              <Input
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </Field>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <Button type="submit" disabled={loading} className="w-full">
+              <LogIn className="h-4 w-4" />
+              {loading ? "Entrando..." : "Entrar"}
+            </Button>
+          </form>
+        ) : !codeSent ? (
+          <form onSubmit={requestCode} className="space-y-4">
+            <Field label="Seu nome">
+              <Input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Como podemos te chamar?"
+              />
+            </Field>
+            <Field label="WhatsApp">
+              <Input
+                type="tel"
+                autoComplete="tel"
+                required
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="(00) 00000-0000"
+              />
+            </Field>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <Button type="submit" disabled={loading || !phone.trim()} className="w-full">
+              <KeyRound className="h-4 w-4" />
+              {loading ? "Enviando..." : "Receber código por WhatsApp"}
+            </Button>
+            <p className="text-center text-xs text-[var(--muted)]">
+              Enviaremos um código de 6 dígitos para o seu WhatsApp.
+            </p>
+          </form>
+        ) : (
+          <form onSubmit={submitCode} className="space-y-4">
+            <p className="text-sm text-[var(--muted)]">
+              Digite o código enviado para <span className="font-medium">{phone}</span>.
+            </p>
+            <Field label="Código">
+              <Input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                required
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="000000"
+                className="tnum text-center text-lg tracking-[0.4em]"
+              />
+            </Field>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <Button type="submit" disabled={loading || code.length < 6} className="w-full">
+              <LogIn className="h-4 w-4" />
+              {loading ? "Entrando..." : "Entrar"}
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                setCodeSent(false);
+                setCode("");
+                setError(null);
+              }}
+              className="w-full text-center text-xs text-[var(--muted)]"
+            >
+              Trocar número / reenviar
+            </button>
+          </form>
+        )}
       </Card>
 
-      <p className="mt-6 text-center text-xs text-[var(--muted)]">
-        Chosen ERP · App do Membro
-      </p>
+      <p className="mt-6 text-center text-xs text-[var(--muted)]">Chosen ERP · App do Membro</p>
     </main>
   );
 }

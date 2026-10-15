@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Wallet, Plus, Eye, Send, Filter, Tags, Repeat, Banknote, Upload, FileText, Paperclip, Pencil, Trash2, FolderTree, ChevronUp, ChevronDown } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Wallet, Plus, Eye, Send, Filter, Tags, Repeat, Banknote, Upload, Download, FileText, Paperclip, Pencil, Trash2, FolderTree, ChevronUp, ChevronDown } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -21,16 +21,25 @@ import {
    getReceiptHTML, sendReceipt, createCategory, updateCategory, deleteCategory,
    listCategoryGroups, createCategoryGroup, updateCategoryGroup, deleteCategoryGroup,
    listAccounts, createAccount, updateAccount, deleteAccount,
-   uploadAttachment, listAttachments, listDeliveries, createTransaction, deleteTransaction, settleTransaction,
+   uploadAttachment, listAttachments, listDeliveries, updateTransaction, deleteTransaction, settleTransaction,
+   downloadFinancialAttachment,
    listTransactionEvents, previewTransactions, importTransactionsFile, reorderTransactions,
    type Category, type CategoryGroup, type Transaction, type Balance, type BankAccount,
    type FinancialAttachment, type Delivery, type ImportResult, type EventAllocation,
  } from "@/lib/api";
 import { PAYMENT_METHODS, ACCOUNT_TYPES } from "@/lib/constants";
 import { currency, datePt, dateTimePt } from "@/lib/format";
+import { downloadCSVTemplate } from "@/lib/template";
 import { RecurringPanel } from "@/components/finance/recurring-panel";
 import { BulkEntry } from "@/components/finance/bulk-entry";
 import { TransactionForm, type TransactionFormState } from "@/components/finance/transaction-form";
+
+// Modelo de importacao de lancamentos (colunas iguais aos aliases do mapeamento).
+const TX_TEMPLATE: string[][] = [
+  ["data", "tipo", "conta", "valor", "forma_pagamento", "descricao", "anonimo", "conta_bancaria"],
+  ["2026-01-05", "entrada", "Dizimo", "150,00", "pix", "Dizimo do mes", "nao", ""],
+  ["2026-01-06", "saida", "Utilidades", "89,90", "boleto", "Conta de luz", "nao", "Conta Corrente Principal"],
+];
 
 const PER_PAGE = 12;
 
@@ -391,11 +400,11 @@ export default function FinancePage() {
     setShowNew(true);
   }
 
-  // "Alterar" = excluir o original e lancar o novo (o backend recalcula a cadeia).
+  // "Alterar" = editar o lancamento EM VIGOR (preserva id, posicao/Seq., recibo
+  // e anexos). O backend recalcula a hash-chain e mantem o documento do recibo.
   async function amendTxn(data: Record<string, unknown>) {
     if (!editing) return;
-    await deleteTransaction(editing.id);
-    await createTransaction(data);
+    await updateTransaction(editing.id, data);
     toast("Lancamento corrigido.");
     setEditing(null);
     await handleTxnSaved();
@@ -931,9 +940,9 @@ export default function FinancePage() {
                           <p className="text-xs text-zinc-400">{att.content_type} - {(att.file_size / 1024).toFixed(1)} KB</p>
                         </div>
                       </div>
-                      <a href={att.file_url} target="_blank" rel="noopener noreferrer" aria-label={`Ver anexo ${att.file_name}`} title="Ver anexo" className="inline-flex items-center justify-center rounded px-2 py-1 text-xs hover:bg-zinc-100">
+                      <button type="button" onClick={() => downloadFinancialAttachment(att.file_url, att.file_name).catch(() => toast("Nao foi possivel abrir o anexo", "error"))} aria-label={`Ver anexo ${att.file_name}`} title="Ver anexo" className="inline-flex items-center justify-center rounded px-2 py-1 text-xs hover:bg-zinc-100">
                         <Eye className="h-3.5 w-3.5" />
-                      </a>
+                      </button>
                     </div>
                   ))
                 )}
@@ -1029,6 +1038,7 @@ export default function FinancePage() {
             paid: !!editing.paid_at,
           } : undefined}
           submitLabel={editing ? "Salvar alteracoes" : "Lancar"}
+          entrySeqReadOnly={!!editing}
         />
       </Drawer>
 
@@ -1121,6 +1131,12 @@ export default function FinancePage() {
             Envie uma planilha <b>.xlsx</b> ou <b>.csv</b>. Depois de mapear as colunas e escolher a
             <b> linha inicial</b> dos dados, clique em Importar.
           </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" type="button" onClick={() => downloadCSVTemplate("modelo-lancamentos.csv", TX_TEMPLATE)}>
+              <Download className="h-4 w-4" /> Baixar modelo (CSV)
+            </Button>
+            <span className="text-xs text-zinc-400">Abra no Excel/Planilhas Google, preencha e salve como .csv ou .xlsx.</span>
+          </div>
           <input
             type="file"
             accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

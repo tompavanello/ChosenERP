@@ -10,18 +10,21 @@ import { Badge } from "@/components/ui/badge";
 import { SkeletonRows, EmptyState } from "@/components/ui/skeleton";
 import { Tabs } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
+import { useAuth } from "@/components/providers/auth-provider";
+import { MaterialsManager } from "@/components/materials/materials-manager";
 import {
-  getMemberAppOverview, listMaterials,
-  type MemberAppUser, type StudyMaterial,
+  getMemberAppOverview,
+  type MemberAppUser,
 } from "@/lib/api";
 import { dateTimePt } from "@/lib/format";
 
 export default function MemberAppPage() {
   const { toast } = useToast();
+  const { hasPerm } = useAuth();
+  const canMaterials = hasPerm("ministries.read");
   const [tab, setTab] = useState("acessos");
   const [users, setUsers] = useState<MemberAppUser[] | null>(null);
   const [totals, setTotals] = useState({ total: 0, active: 0, never_login: 0 });
-  const [materials, setMaterials] = useState<StudyMaterial[] | null>(null);
   const [q, setQ] = useState("");
 
   useEffect(() => {
@@ -34,9 +37,6 @@ export default function MemberAppPage() {
         toast(e instanceof Error ? e.message : "Erro ao carregar", "error");
         setUsers([]);
       });
-    listMaterials()
-      .then((r) => setMaterials(r.materials))
-      .catch(() => setMaterials([]));
   }, [toast]);
 
   const filtered = useMemo(() => {
@@ -61,7 +61,9 @@ export default function MemberAppPage() {
       <Tabs
         tabs={[
           { key: "acessos", label: "Acessos", icon: <Users className="h-4 w-4" /> },
-          { key: "materiais", label: "Materiais", icon: <BookOpen className="h-4 w-4" /> },
+          ...(canMaterials
+            ? [{ key: "materiais", label: "Materiais", icon: <BookOpen className="h-4 w-4" /> }]
+            : []),
         ]}
         active={tab}
         onChange={setTab}
@@ -119,29 +121,7 @@ export default function MemberAppPage() {
         </>
       )}
 
-      {tab === "materiais" && (
-        <Card className="overflow-hidden p-0">
-          {materials === null ? (
-            <SkeletonRows rows={5} />
-          ) : materials.length === 0 ? (
-            <EmptyState icon={<BookOpen className="h-10 w-10" />} title="Nenhum material" description="Publique materiais em Materiais." />
-          ) : (
-            <Table>
-              <THead><TRow><TH>Material</TH><TH>Destino</TH><TH>Tipo</TH><TH>Situação</TH></TRow></THead>
-              <TBody>
-                {materials.map((m) => (
-                  <TRow key={m.id}>
-                    <TD className="font-medium">{m.title}</TD>
-                    <TD className="text-zinc-500">{m.group_name ?? "Igreja (todos)"}</TD>
-                    <TD className="text-zinc-500">{m.kind === "link" ? "Link" : "Arquivo"}</TD>
-                    <TD><Badge tone={m.is_published ? "green" : "zinc"}>{m.is_published ? "Publicado" : "Rascunho"}</Badge></TD>
-                  </TRow>
-                ))}
-              </TBody>
-            </Table>
-          )}
-        </Card>
-      )}
+      {tab === "materiais" && <MaterialsManager />}
     </div>
   );
 }

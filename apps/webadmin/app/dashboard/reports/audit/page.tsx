@@ -14,6 +14,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import {
   listAudits, createAudit, getAudit, markAudit, closeAudit, deleteAudit, listAttachments,
+  downloadFinancialAttachment,
   type FinancialAudit, type AuditItem, type FinancialAttachment,
 } from "@/lib/api";
 import { PAYMENT_METHODS } from "@/lib/constants";
@@ -460,11 +461,12 @@ export default function AuditReportPage() {
                 ) : (
                   <div className="mt-1 space-y-2">
                     {detailAtts.map((att) => (
-                      <a key={att.id} href={att.file_url} target="_blank" rel="noopener noreferrer"
-                         className="flex items-center justify-between rounded border border-zinc-200 p-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
+                      <button key={att.id} type="button"
+                         onClick={() => downloadFinancialAttachment(att.file_url, att.file_name).catch(() => toast("Nao foi possivel abrir o anexo", "error"))}
+                         className="flex w-full items-center justify-between rounded border border-zinc-200 p-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
                         <span className="flex items-center gap-2 truncate"><Paperclip className="h-4 w-4 text-zinc-500" /> {att.file_name}</span>
                         <span className="text-xs text-zinc-400">{(att.file_size / 1024).toFixed(1)} KB</span>
-                      </a>
+                      </button>
                     ))}
                   </div>
                 )}

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Church, LayoutDashboard, Users, Wallet, LogOut, HeartHandshake, DoorOpen,
-  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, TrendingDown, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, CalendarCheck, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight, Globe, Layers, BookOpen, Inbox, Smartphone,
+  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, TrendingDown, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, CalendarCheck, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight, Globe, Layers, BookOpen, BookMarked, BookText, Play, Radio, Inbox, Smartphone, CreditCard, DatabaseBackup,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -40,7 +40,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
     title: "Pessoas",
     items: [
       { key: "members", href: "/dashboard/members", label: "Membros", icon: Users, perms: ["members.read"] },
-      { key: "visitors", href: "/dashboard/visitors", label: "Visitantes", icon: DoorOpen, perms: ["members.read"] },
+      { key: "visitors", href: "/dashboard/visitors", label: "Visitantes", icon: DoorOpen, perms: ["visitors.read"] },
       { key: "requests", href: "/dashboard/requests", label: "Solicitações", icon: Inbox, perms: ["members.read"] },
       { key: "member-app", href: "/dashboard/member-app", label: "Área do Membro", icon: Smartphone, perms: ["members.read"] },
       { key: "benefactors", href: "/dashboard/benefactors", label: "Benfeitores", icon: HeartHandshake, perms: ["members.read"] },
@@ -52,6 +52,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
     items: [
       { key: "finance", href: "/dashboard/finance", label: "Financeiro", icon: Wallet, perms: ["finance.read"], feature: "finance" },
       { key: "reconciliation", href: "/dashboard/finance/reconciliation", label: "Conciliacao", icon: ClipboardCheck, perms: ["finance.read"], feature: "finance" },
+      { key: "payments", href: "/dashboard/finance/payments", label: "Meios de pagamento", icon: CreditCard, perms: ["payments.read"], feature: "finance" },
       { key: "audit", href: "/dashboard/reports/audit", label: "Auditoria financeira", icon: ShieldCheck, perms: ["finance.read"], feature: "finance" },
       { key: "transfers", href: "/dashboard/transfers", label: "Repasses", icon: ArrowLeftRight, perms: ["finance.write"], feature: "finance" },
     ],
@@ -69,6 +70,15 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
       { key: "users", href: "/dashboard/users", label: "Usuarios", icon: UserCog, perms: ["users.read"] },
       { key: "settings", href: "/dashboard/settings", label: "Configuracoes", icon: Settings, perms: ["settings.read"] },
       { key: "announcements", href: "/dashboard/announcements", label: "Comunicados", icon: Bell, perms: ["announcements.read"], feature: "whatsapp" },
+    ],
+  },
+  {
+    title: "Conteúdo",
+    items: [
+      { key: "devotionals", href: "/dashboard/content/devotionals", label: "Devocionais", icon: BookMarked, perms: ["content.read"] },
+      { key: "videos", href: "/dashboard/content/videos", label: "Vídeos", icon: Play, perms: ["content.read"] },
+      { key: "live", href: "/dashboard/content/live", label: "Culto ao vivo", icon: Radio, perms: ["content.read"] },
+      { key: "bible", href: "/dashboard/content/bible", label: "Bíblia", icon: BookText, perms: ["content.read"] },
     ],
   },
   {
@@ -92,6 +102,8 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
       { key: "platform-overview", href: "/dashboard/platform", label: "Visao geral", icon: BarChart3, perms: [], platformOnly: true },
       { key: "platform-churches", href: "/dashboard/platform/churches", label: "Igrejas", icon: Globe, perms: [], platformOnly: true },
       { key: "platform-plans", href: "/dashboard/platform/plans", label: "Planos", icon: Layers, perms: [], platformOnly: true },
+      { key: "platform-billing", href: "/dashboard/platform/billing", label: "Cobranca", icon: CreditCard, perms: [], platformOnly: true },
+      { key: "platform-backups", href: "/dashboard/platform/backups", label: "Backups", icon: DatabaseBackup, perms: [], platformOnly: true },
     ],
   },
 ];

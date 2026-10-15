@@ -13,6 +13,8 @@ import { Field, Input, Select } from "@/components/ui/input";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { TenantUsers } from "@/components/platform/tenant-users";
+import { TenantBilling } from "@/components/platform/tenant-billing";
+import { TenantBackups } from "@/components/platform/tenant-backups";
 import {
   getAdminTenant, getAdminTenantUsage, listPlans, updateAdminTenant, getFeatures,
   type AdminTenantDetail, type Plan, type TenantUsage, type FeatureInfo,
@@ -72,6 +74,13 @@ export default function ChurchDetailPage() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Deep-link: /dashboard/platform/churches/{id}?tab=cobranca
+  useEffect(() => {
+    const valid = new Set(["dados", "plano", "cobranca", "usuarios", "backup", "branding", "situacao"]);
+    const q = new URLSearchParams(window.location.search).get("tab");
+    if (q && valid.has(q)) setTab(q);
+  }, []);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -134,7 +143,9 @@ export default function ChurchDetailPage() {
         tabs={[
           { key: "dados", label: "Dados" },
           { key: "plano", label: "Plano & Limites" },
+          { key: "cobranca", label: "Cobranca" },
           { key: "usuarios", label: "Usuarios" },
+          { key: "backup", label: "Backup" },
           { key: "branding", label: "Branding" },
           { key: "situacao", label: "Situacao" },
         ]}
@@ -144,6 +155,10 @@ export default function ChurchDetailPage() {
 
       {tab === "usuarios" ? (
         <TenantUsers tenantId={detail.id} />
+      ) : tab === "cobranca" ? (
+        <TenantBilling tenantId={detail.id} />
+      ) : tab === "backup" ? (
+        <TenantBackups tenantId={detail.id} tenantSlug={detail.slug} />
       ) : (
         <form onSubmit={save} className="max-w-2xl space-y-4">
           {tab === "dados" && (

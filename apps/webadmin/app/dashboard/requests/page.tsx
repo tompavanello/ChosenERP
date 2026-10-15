@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Inbox, MessageSquare } from "lucide-react";
+import { Inbox, MessageSquare, UserPlus } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Field, Select, Textarea } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import { SkeletonRows, EmptyState } from "@/components/ui/skeleton";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
-import { listRequests, updateRequest, type MemberRequest } from "@/lib/api";
+import { approveMembershipRequest, listRequests, updateRequest, type MemberRequest } from "@/lib/api";
 import { dateTimePt } from "@/lib/format";
 
 const KIND_LABELS: Record<string, string> = {
@@ -25,6 +25,7 @@ const KIND_LABELS: Record<string, string> = {
   casamento: "Casamento",
   evento: "Inscrição em evento",
   outro: "Outro",
+  quero_ser_membro: "Quero ser membro",
 };
 const STATUS_LABELS: Record<string, string> = {
   pendente: "Pendente",
@@ -49,6 +50,7 @@ export default function RequestsPage() {
   const [editing, setEditing] = useState<MemberRequest | null>(null);
   const [form, setForm] = useState({ status: "em_andamento", response: "" });
   const [saving, setSaving] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -67,8 +69,20 @@ export default function RequestsPage() {
     setForm({ status: r.status === "pendente" ? "em_andamento" : r.status, response: r.response ?? "" });
   }
 
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
+  async function approve(r: MemberRequest) {
+    setApprovingId(r.id);
+    try {
+      await approveMembershipRequest(r.id);
+      toast("Solicitação aprovada e visitante promovido a membro.");
+      await load();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao aprovar", "error");
+    } finally {
+      setApprovingId(null);
+    }
+  }
+
+  async function save(e: React.FormEvent) {    e.preventDefault();
     if (!editing) return;
     setSaving(true);
     try {
@@ -107,7 +121,7 @@ export default function RequestsPage() {
             <TBody>
               {items.map((r) => (
                 <TRow key={r.id}>
-                  <TD className="font-medium">{r.member_name ?? "-"}</TD>
+                  <TD className="font-medium">{r.member_name ?? (r.user_id ? "Visitante (app)" : "-")}</TD>
                   <TD className="text-zinc-500">{KIND_LABELS[r.kind] ?? r.kind}</TD>
                   <TD>
                     <div>{r.subject}</div>
@@ -116,6 +130,11 @@ export default function RequestsPage() {
                   <TD><Badge tone={STATUS_TONE[r.status] ?? "zinc"}>{STATUS_LABELS[r.status] ?? r.status}</Badge></TD>
                   <TD className="text-xs text-zinc-500">{dateTimePt(r.created_at)}</TD>
                   <TD className="text-right">
+                    {r.kind === "quero_ser_membro" && r.status !== "concluida" && (
+                      <Button variant="ghost" size="sm" disabled={!canWrite || approvingId === r.id} onClick={() => approve(r)}>
+                        <UserPlus className="h-3.5 w-3.5" /> {approvingId === r.id ? "..." : "Aprovar"}
+                      </Button>
+                    )}
                     <Button variant="ghost" size="sm" onClick={() => openRespond(r)}><MessageSquare className="h-3.5 w-3.5" /> Responder</Button>
                   </TD>
                 </TRow>

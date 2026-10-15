@@ -43,8 +43,8 @@ export default function AssemblyReportPage() {
 
   const bal = report?.balance;
   const months = report?.months ?? [];
-  const income = bal?.by_category.filter((c) => c.type === "income") ?? [];
-  const expense = bal?.by_category.filter((c) => c.type === "expense") ?? [];
+  const income = (bal?.by_category ?? []).filter((c) => c.type === "income");
+  const expense = (bal?.by_category ?? []).filter((c) => c.type === "expense");
   const monthly = months.map((p) => ({ name: monthLabel(p.month), Entradas: p.income, Saidas: p.expense }));
 
   return (

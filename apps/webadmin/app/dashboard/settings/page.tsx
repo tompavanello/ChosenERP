@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Award, Building2, CalendarHeart, Church, Pencil, Plus, Trash2 } from "lucide-react";
+import { Award, Building2, CalendarHeart, Church, CreditCard, Pencil, Plus, Trash2 } from "lucide-react";
 import { EventKindsSection } from "@/components/settings/event-kinds-section";
 import { CargosSection } from "@/components/settings/cargos-section";
+import { OwnBilling } from "@/components/settings/own-billing";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -288,10 +289,17 @@ export default function SettingsPage() {
           { key: "filiais", label: "Filiais", icon: <Building2 className="h-4 w-4" /> },
           { key: "eventos", label: "Eventos eclesiasticos", icon: <CalendarHeart className="h-4 w-4" /> },
           { key: "cargos", label: "Cargos e funcoes", icon: <Award className="h-4 w-4" /> },
+          ...(hasPerm("billing.read")
+            ? [{ key: "assinatura", label: "Assinatura", icon: <CreditCard className="h-4 w-4" /> }]
+            : []),
         ]}
         active={tab}
         onChange={setTab}
       />
+
+      {tab === "assinatura" ? (
+        <OwnBilling />
+      ) : null}
 
       {tab === "igreja" && (
         tenant === null ? <Card className="p-4"><SkeletonRows rows={5} /></Card> : (

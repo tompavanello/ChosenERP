@@ -73,6 +73,7 @@ export interface Membership {
   branch_id: string;
   is_active: boolean;
   member_id?: string;
+  visitor_id?: string;
 }
 export interface User {
   id: string;
@@ -82,6 +83,7 @@ export interface User {
   branch_id: string;
   role: string;
   member_id?: string;
+  visitor_id?: string;
   phone?: string;
   must_change_password?: boolean;
   permissions?: string[];
@@ -436,12 +438,24 @@ export async function getMeMaterials(): Promise<StudyMaterial[]> {
 
 /** Baixa o arquivo do material com o token da sessao e dispara o download. */
 export async function downloadMaterial(id: string, filename: string): Promise<void> {
-  const headers = new Headers();
-  const token = getToken();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  const slug = tenantSlugFromHost();
-  if (slug) headers.set("X-Tenant-Slug", slug);
-  const res = await fetch(`/api/v1/me/materials/${id}/file`, { headers });
+  const buildHeaders = (): Headers => {
+    const headers = new Headers();
+    const token = getToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const slug = tenantSlugFromHost();
+    if (slug) headers.set("X-Tenant-Slug", slug);
+    return headers;
+  };
+  const path = `/api/v1/me/materials/${id}/file`;
+  let res = await fetch(path, { headers: buildHeaders() });
+  if (res.status === 401 && getRefresh()) {
+    if (await refreshTokens()) {
+      res = await fetch(path, { headers: buildHeaders() });
+    } else {
+      clearSession();
+      onSessionLost?.();
+    }
+  }
   if (!res.ok) throw new Error("nao foi possivel baixar o material");
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
@@ -547,6 +561,211 @@ export async function createRequest(input: {
     body: JSON.stringify(input),
   });
   return data.request;
+}
+
+// ---- Acesso de visitante por codigo (WhatsApp) ----
+
+export const VISITOR_ROLE = "visitante";
+
+/** Pede um codigo de acesso ao app (enviado por WhatsApp para o telefone). */
+export async function requestVisitorCode(phone: string, name?: string): Promise<void> {
+  const slug = tenantSlugFromHost();
+  if (!slug) throw new Error("Acesse pelo endereco da sua igreja.");
+  await api<{ ok: boolean }>(
+    `/api/v1/public/tenant/${encodeURIComponent(slug)}/visitor/request-code`,
+    { method: "POST", body: JSON.stringify({ phone, name }) },
+  );
+}
+
+/** Valida o codigo e entra como visitante (guarda a sessao). */
+export async function verifyVisitorCode(phone: string, code: string): Promise<User> {
+  const slug = tenantSlugFromHost();
+  if (!slug) throw new Error("Acesse pelo endereco da sua igreja.");
+  const data = await api<{ tokens: Tokens; user: User }>(
+    `/api/v1/public/tenant/${encodeURIComponent(slug)}/visitor/verify-code`,
+    { method: "POST", body: JSON.stringify({ phone, code }) },
+  );
+  storeSession(data.tokens.access_token, data.tokens.refresh_token, data.user);
+  return data.user;
+}
+
+export interface VisitorProfile {
+  id: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  email?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  journey_stage: string;
+}
+
+export async function getMeVisitor(): Promise<VisitorProfile> {
+  const data = await api<{ visitor: VisitorProfile }>("/api/v1/me/visitor");
+  return data.visitor;
+}
+export async function updateMeVisitor(input: Partial<VisitorProfile>): Promise<VisitorProfile> {
+  const data = await api<{ visitor: VisitorProfile }>("/api/v1/me/visitor", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+  return data.visitor;
+}
+export async function getVisitorAnnouncements(): Promise<Announcement[]> {
+  const data = await api<{ announcements: Announcement[] }>("/api/v1/me/visitor/announcements");
+  return data.announcements ?? [];
+}
+export async function getVisitorEvents(from?: string, to?: string): Promise<ChurchEvent[]> {
+  const qs = new URLSearchParams();
+  if (from) qs.set("from", from);
+  if (to) qs.set("to", to);
+  const q = qs.toString();
+  const data = await api<{ events: ChurchEvent[] }>(`/api/v1/me/visitor/events${q ? `?${q}` : ""}`);
+  return data.events ?? [];
+}
+export async function getVisitorPrayerWall(): Promise<PrayerRequest[]> {
+  const data = await api<{ prayer_requests: PrayerRequest[] }>("/api/v1/me/visitor/prayer-wall");
+  return data.prayer_requests ?? [];
+}
+export async function getMyVisitorPrayers(): Promise<PrayerRequest[]> {
+  const data = await api<{ prayer_requests: PrayerRequest[] }>("/api/v1/me/visitor/prayer-requests");
+  return data.prayer_requests ?? [];
+}
+export async function createVisitorPrayer(input: {
+  body: string;
+  visibility: string;
+  is_anonymous: boolean;
+}): Promise<PrayerRequest> {
+  return api<PrayerRequest>("/api/v1/me/visitor/prayer-requests", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+export async function reactVisitorPrayer(id: string): Promise<PrayerRequest> {
+  return api<PrayerRequest>(`/api/v1/me/visitor/prayer-requests/${id}/react`, { method: "POST" });
+}
+export async function getMyVisitorRequests(): Promise<MemberRequest[]> {
+  const data = await api<{ requests: MemberRequest[] }>("/api/v1/me/visitor/requests");
+  return data.requests ?? [];
+}
+export async function createVisitorRequest(input: {
+  kind: string;
+  subject: string;
+  message?: string;
+}): Promise<MemberRequest> {
+  const data = await api<{ request: MemberRequest }>("/api/v1/me/visitor/requests", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return data.request;
+}
+
+// ---- Conteúdo: vídeos, ao vivo, devocional e Bíblia ----
+
+export interface Video {
+  id: string;
+  title: string;
+  description?: string | null;
+  youtube_id: string;
+  kind: string;
+  speaker?: string | null;
+  recorded_at?: string | null;
+  thumbnail_url?: string | null;
+  created_at: string;
+}
+
+export interface LiveSettings {
+  youtube_channel_id: string;
+  live_stream_url: string;
+  embed_url: string;
+  watch_url: string;
+  configured: boolean;
+}
+
+export interface DevotionalDay {
+  id: string;
+  day_number: number;
+  title: string;
+  bible_reference?: string | null;
+  bible_text?: string | null;
+  body: string;
+  prayer?: string | null;
+  video_url?: string | null;
+}
+
+export interface DevotionalPlan {
+  id: string;
+  title: string;
+  description?: string | null;
+  cover_image_url?: string | null;
+  start_date?: string | null;
+  is_active: boolean;
+  day_count: number;
+  completed_count?: number;
+}
+
+export async function getMeVideos(): Promise<Video[]> {
+  const data = await api<{ videos: Video[] }>("/api/v1/me/videos");
+  return data.videos ?? [];
+}
+export async function getMeLive(): Promise<LiveSettings> {
+  return api<LiveSettings>("/api/v1/me/live");
+}
+export async function getMeDevotionalPlans(): Promise<DevotionalPlan[]> {
+  const data = await api<{ plans: DevotionalPlan[] }>("/api/v1/me/devotional-plans");
+  return data.plans ?? [];
+}
+export async function getMeDevotionalPlan(id: string): Promise<{
+  plan: DevotionalPlan;
+  days: DevotionalDay[];
+  completed: number[];
+}> {
+  return api(`/api/v1/me/devotional-plans/${id}`);
+}
+export async function completeDevotionalDay(planId: string, day: number): Promise<void> {
+  await api(`/api/v1/me/devotional-plans/${planId}/days/${day}/complete`, { method: "POST" });
+}
+export async function uncompleteDevotionalDay(planId: string, day: number): Promise<void> {
+  await api(`/api/v1/me/devotional-plans/${planId}/days/${day}/complete`, { method: "DELETE" });
+}
+
+export interface BibleVersion {
+  id: string;
+  name: string;
+  abbreviation: string;
+  language: string;
+}
+export interface BibleBook {
+  id: string;
+  name: string;
+}
+export interface BibleChapterRef {
+  id: string;
+  number: string;
+}
+export interface BiblePassage {
+  reference: string;
+  content: string;
+}
+export async function getBibleVersions(): Promise<{ configured: boolean; versions: BibleVersion[] }> {
+  return api("/api/v1/me/bible/versions");
+}
+export async function getBibleBooks(versionId: string): Promise<BibleBook[]> {
+  const data = await api<{ books: BibleBook[] }>(
+    `/api/v1/me/bible/versions/${encodeURIComponent(versionId)}/books`,
+  );
+  return data.books ?? [];
+}
+export async function getBibleChapters(versionId: string, bookId: string): Promise<BibleChapterRef[]> {
+  const data = await api<{ chapters: BibleChapterRef[] }>(
+    `/api/v1/me/bible/versions/${encodeURIComponent(versionId)}/books/${encodeURIComponent(bookId)}/chapters`,
+  );
+  return data.chapters ?? [];
+}
+export async function getBibleChapter(versionId: string, chapterId: string): Promise<BiblePassage> {
+  return api(
+    `/api/v1/me/bible/versions/${encodeURIComponent(versionId)}/chapters/${encodeURIComponent(chapterId)}`,
+  );
 }
 
 // ---- Formatação ----

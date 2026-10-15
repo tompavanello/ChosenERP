@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, BookOpen, Cake, Calendar, CalendarCheck, HandCoins, Heart, Inbox, User, UserCog, Users, UsersRound } from "lucide-react";
+import { Bell, BookOpen, BookMarked, BookText, Cake, Calendar, CalendarCheck, HandCoins, Heart, Inbox, Play, Radio, User, UserCog, Users, UsersRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import {
@@ -147,6 +147,30 @@ export default function HomePage() {
           <Card className="flex h-full flex-col items-center justify-center gap-1 py-5 text-center">
             <BookOpen className="h-5 w-5 text-[var(--brand)]" />
             <span className="text-sm font-medium">Materiais</span>
+          </Card>
+        </Link>
+        <Link href="/devocional">
+          <Card className="flex h-full flex-col items-center justify-center gap-1 py-5 text-center">
+            <BookMarked className="h-5 w-5 text-[var(--brand)]" />
+            <span className="text-sm font-medium">Devocional</span>
+          </Card>
+        </Link>
+        <Link href="/biblia">
+          <Card className="flex h-full flex-col items-center justify-center gap-1 py-5 text-center">
+            <BookText className="h-5 w-5 text-[var(--brand)]" />
+            <span className="text-sm font-medium">Bíblia</span>
+          </Card>
+        </Link>
+        <Link href="/videos">
+          <Card className="flex h-full flex-col items-center justify-center gap-1 py-5 text-center">
+            <Play className="h-5 w-5 text-[var(--brand)]" />
+            <span className="text-sm font-medium">Vídeos</span>
+          </Card>
+        </Link>
+        <Link href="/ao-vivo">
+          <Card className="flex h-full flex-col items-center justify-center gap-1 py-5 text-center">
+            <Radio className="h-5 w-5 text-[var(--brand)]" />
+            <span className="text-sm font-medium">Culto ao vivo</span>
           </Card>
         </Link>
         <Link href="/escalas">
