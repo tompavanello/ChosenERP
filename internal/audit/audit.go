@@ -15,6 +15,10 @@ import (
 // ErrClosed indica que a auditoria ja foi fechada (documento imutavel).
 var ErrClosed = errors.New("auditoria fechada: documento imutavel")
 
+// ErrOpenReconciliation indica que o periodo ainda tem conciliacao aberta e
+// nao pode ser fechado pela auditoria (evita periodos em conflito).
+var ErrOpenReconciliation = errors.New("existe conciliacao aberta no periodo: encerre-a antes de fechar a auditoria")
+
 type Audit struct {
 	ID            string     `json:"id"`
 	BranchID      string     `json:"branch_id"`
@@ -38,6 +42,8 @@ type Audit struct {
 type Item struct {
 	TransactionID   string       `json:"transaction_id"`
 	OccurredAt      time.Time    `json:"occurred_at"`
+	CreatedAt       time.Time    `json:"created_at"`
+	EntrySeq        *int         `json:"entry_seq,omitempty"`
 	Type            string       `json:"type"`
 	Amount          float64      `json:"amount"`
 	Currency        string       `json:"currency"`
@@ -48,6 +54,7 @@ type Item struct {
 	PaymentMethod   *string      `json:"payment_method,omitempty"`
 	IsAnonymous     bool         `json:"is_anonymous"`
 	DonorName       *string      `json:"donor_name,omitempty"`
+	ReceiptID       *string      `json:"receipt_id,omitempty"`
 	ReceiptRef      *string      `json:"receipt_ref,omitempty"`
 	AttachmentCount int          `json:"attachment_count"`
 	Allocations     []Allocation `json:"allocations"`
@@ -151,9 +158,10 @@ func (r *Repo) ListItems(ctx context.Context, tx pgx.Tx, id string) ([]Item, err
 		return nil, err
 	}
 	rows, err := tx.Query(ctx, `
-		SELECT i.transaction_id::text, t.occurred_at, t.type, t.amount::float8, t.currency, t.description,
+		SELECT i.transaction_id::text, t.occurred_at, t.created_at, t.entry_seq,
+		       t.type, t.amount::float8, t.currency, t.description,
 		       c.name, ac.name, s.name, t.payment_method, t.is_anonymous,
-		       COALESCE(dm.full_name, db.name) AS donor_name, doc.document_ref,
+		       COALESCE(dm.full_name, db.name) AS donor_name, doc.id::text, doc.document_ref,
 		       i.audited, i.audited_at, i.notes,
 		       (SELECT count(*) FROM financial_attachments fa WHERE fa.transaction_id = t.id)::int
 		FROM financial_audit_items i
@@ -163,9 +171,15 @@ func (r *Repo) ListItems(ctx context.Context, tx pgx.Tx, id string) ([]Item, err
 		LEFT JOIN suppliers s ON s.id = t.supplier_id
 		LEFT JOIN members dm ON dm.id = t.donor_member_id
 		LEFT JOIN benefactors db ON db.id = t.benefactor_id
-		LEFT JOIN documents doc ON doc.kind = 'receipt' AND doc.content->>'tx_id' = t.id::text
+		LEFT JOIN LATERAL (
+		    SELECT d.id, d.document_ref
+		    FROM documents d
+		    WHERE d.kind = 'receipt' AND d.content->>'tx_id' = t.id::text
+		    ORDER BY d.created_at DESC
+		    LIMIT 1
+		) doc ON true
 		WHERE i.audit_id = $1::uuid
-		ORDER BY t.occurred_at, t.created_at, t.id`, id)
+		ORDER BY t.occurred_at, t.entry_seq NULLS LAST, t.created_at, t.id`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -174,9 +188,10 @@ func (r *Repo) ListItems(ctx context.Context, tx pgx.Tx, id string) ([]Item, err
 	byTx := map[string]int{}
 	for rows.Next() {
 		var it Item
-		if err := rows.Scan(&it.TransactionID, &it.OccurredAt, &it.Type, &it.Amount, &it.Currency, &it.Description,
+		if err := rows.Scan(&it.TransactionID, &it.OccurredAt, &it.CreatedAt, &it.EntrySeq,
+			&it.Type, &it.Amount, &it.Currency, &it.Description,
 			&it.CategoryName, &it.AccountName, &it.SupplierName, &it.PaymentMethod, &it.IsAnonymous,
-			&it.DonorName, &it.ReceiptRef, &it.Audited, &it.AuditedAt, &it.Notes,
+			&it.DonorName, &it.ReceiptID, &it.ReceiptRef, &it.Audited, &it.AuditedAt, &it.Notes,
 			&it.AttachmentCount); err != nil {
 			return nil, err
 		}
@@ -227,6 +242,7 @@ func (r *Repo) syncItems(ctx context.Context, tx pgx.Tx, id string) error {
 		  ON t.occurred_at::date BETWEEN a.period_start AND a.period_end
 		 AND t.voided_at IS NULL
 		 AND t.tenant_id = a.tenant_id
+		 AND t.branch_id = a.branch_id
 		WHERE a.id = $1::uuid AND a.status = 'aberta'
 		ON CONFLICT (audit_id, transaction_id) DO NOTHING`, id)
 	return err
@@ -294,6 +310,22 @@ func (r *Repo) Close(ctx context.Context, tx pgx.Tx, id string, in CloseInput, a
 	}
 	if in.SignerName == "" {
 		return nil, errors.New("signer_name e obrigatorio")
+	}
+	var openReconciliations int
+	if err := tx.QueryRow(ctx, `
+		SELECT count(*)
+		FROM financial_reconciliations fr
+		JOIN financial_audits au ON au.id = $1::uuid
+		WHERE fr.tenant_id = au.tenant_id
+		  AND fr.branch_id = au.branch_id
+		  AND fr.status = 'aberta'
+		  AND daterange(fr.period_start, fr.period_end, '[]')
+		      && daterange($2::date, $3::date, '[]')`,
+		id, a.PeriodStart, a.PeriodEnd).Scan(&openReconciliations); err != nil {
+		return nil, err
+	}
+	if openReconciliations > 0 {
+		return nil, ErrOpenReconciliation
 	}
 	items, err := r.ListItems(ctx, tx, id)
 	if err != nil {

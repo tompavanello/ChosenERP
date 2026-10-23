@@ -26,9 +26,19 @@ type Reconciliation struct {
 	ReconciledAt *string `json:"reconciled_at,omitempty"`
 	CreatedAt    string  `json:"created_at"`
 
-	TotalItems   int     `json:"total_items"`
-	TotalIncome  float64 `json:"total_income"`
-	TotalExpense float64 `json:"total_expense"`
+	TotalItems      int     `json:"total_items"`
+	TotalIncome     float64 `json:"total_income"`
+	TotalExpense    float64 `json:"total_expense"`
+	ReconciledItems int     `json:"reconciled_items"`
+	PendingItems    int     `json:"pending_items"`
+}
+
+// ErrPendingReconciliation indica que o periodo ainda tem lancamentos sem
+// conciliacao individual e por isso nao pode ser encerrado.
+type ErrPendingReconciliation struct{ Count int }
+
+func (e ErrPendingReconciliation) Error() string {
+	return fmt.Sprintf("existem %d lancamento(s) pendente(s) de conciliacao no periodo", e.Count)
 }
 
 // ReconciliationItem e um lancamento do periodo da conciliacao (data efetiva
@@ -36,11 +46,15 @@ type Reconciliation struct {
 type ReconciliationItem struct {
 	ID           string  `json:"id"`
 	OccurredAt   string  `json:"occurred_at"`
+	CreatedAt    string  `json:"created_at"`
+	EntrySeq     *int    `json:"entry_seq,omitempty"`
 	Type         string  `json:"type"`
 	Amount       float64 `json:"amount"`
 	Description  *string `json:"description,omitempty"`
 	CategoryName *string `json:"category_name,omitempty"`
 	AccountName  *string `json:"account_name,omitempty"`
+	Reconciled   bool    `json:"reconciled"`
+	ReconciledAt *string `json:"reconciled_at,omitempty"`
 }
 
 type CreateReconciliationInput struct {
@@ -54,14 +68,17 @@ const reconciliationCols = `fr.id::text, fr.branch_id::text, fr.title,
 	to_char(fr.period_start,'YYYY-MM-DD'), to_char(fr.period_end,'YYYY-MM-DD'),
 	fr.status, fr.notes, to_char(fr.reconciled_at,'YYYY-MM-DD"T"HH24:MI:SSOF'),
 	to_char(fr.created_at,'YYYY-MM-DD"T"HH24:MI:SSOF'),
-	COALESCE(cnt.n,0)::int, COALESCE(cnt.income,0)::float8, COALESCE(cnt.expense,0)::float8`
+	COALESCE(cnt.n,0)::int, COALESCE(cnt.income,0)::float8, COALESCE(cnt.expense,0)::float8,
+	COALESCE(cnt.reconciled,0)::int, COALESCE(cnt.pending,0)::int`
 
 const reconciliationJoin = `
 	FROM financial_reconciliations fr
 	LEFT JOIN LATERAL (
 	    SELECT count(*) AS n,
 	           SUM(t.amount) FILTER (WHERE t.type='income')  AS income,
-	           SUM(t.amount) FILTER (WHERE t.type='expense') AS expense
+	           SUM(t.amount) FILTER (WHERE t.type='expense') AS expense,
+	           count(*) FILTER (WHERE t.reconciled_at IS NOT NULL) AS reconciled,
+	           count(*) FILTER (WHERE t.reconciled_at IS NULL) AS pending
 	    FROM financial_transactions t
 	    WHERE t.tenant_id = fr.tenant_id
 	      AND t.branch_id = fr.branch_id
@@ -74,7 +91,8 @@ func scanReconciliation(row pgx.Row) (*Reconciliation, error) {
 	var reconciled *string
 	err := row.Scan(&rec.ID, &rec.BranchID, &rec.Title, &rec.PeriodStart, &rec.PeriodEnd,
 		&rec.Status, &rec.Notes, &reconciled, &rec.CreatedAt,
-		&rec.TotalItems, &rec.TotalIncome, &rec.TotalExpense)
+		&rec.TotalItems, &rec.TotalIncome, &rec.TotalExpense,
+		&rec.ReconciledItems, &rec.PendingItems)
 	if err != nil {
 		return nil, err
 	}
@@ -117,6 +135,21 @@ func (r *Repo) CreateReconciliation(ctx context.Context, tx pgx.Tx, tenantID, br
 	if in.PeriodStart == "" || in.PeriodEnd == "" {
 		return nil, errors.New("period_start e period_end sao obrigatorios")
 	}
+	var closedAudit bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM financial_audits a
+			WHERE a.tenant_id = $1::uuid
+			  AND a.branch_id = $2::uuid
+			  AND a.status = 'fechada'
+			  AND daterange(a.period_start, a.period_end, '[]')
+			      && daterange($3::date, $4::date, '[]'))`,
+		tenantID, branchID, in.PeriodStart, in.PeriodEnd).Scan(&closedAudit); err != nil {
+		return nil, err
+	}
+	if closedAudit {
+		return nil, errors.New("periodo ja encerrado por auditoria")
+	}
 	var id string
 	err := tx.QueryRow(ctx, `
 		INSERT INTO financial_reconciliations
@@ -133,8 +166,11 @@ func (r *Repo) CreateReconciliation(ctx context.Context, tx pgx.Tx, tenantID, br
 // ListReconciliationItems lista os lancamentos do periodo (nao estornados).
 func (r *Repo) ListReconciliationItems(ctx context.Context, tx pgx.Tx, id string) ([]ReconciliationItem, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT t.id::text, to_char(t.occurred_at,'YYYY-MM-DD'), t.type, t.amount::float8,
-		       t.description, c.name, a.name
+		SELECT t.id::text, to_char(t.occurred_at,'YYYY-MM-DD'),
+		       to_char(t.created_at,'YYYY-MM-DD"T"HH24:MI:SSOF'), t.entry_seq,
+		       t.type, t.amount::float8, t.description, c.name, a.name,
+		       t.reconciled_at IS NOT NULL,
+		       to_char(t.reconciled_at,'YYYY-MM-DD"T"HH24:MI:SSOF')
 		FROM financial_reconciliations fr
 		JOIN financial_transactions t
 		  ON t.tenant_id = fr.tenant_id
@@ -144,7 +180,7 @@ func (r *Repo) ListReconciliationItems(ctx context.Context, tx pgx.Tx, id string
 		LEFT JOIN financial_categories c ON c.id = t.category_id
 		LEFT JOIN financial_accounts a ON a.id = t.account_id
 		WHERE fr.id = $1::uuid
-		ORDER BY t.occurred_at, t.created_at, t.id`, id)
+		ORDER BY t.occurred_at, t.entry_seq NULLS LAST, t.created_at, t.id`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -152,8 +188,9 @@ func (r *Repo) ListReconciliationItems(ctx context.Context, tx pgx.Tx, id string
 	out := []ReconciliationItem{}
 	for rows.Next() {
 		var it ReconciliationItem
-		if err := rows.Scan(&it.ID, &it.OccurredAt, &it.Type, &it.Amount,
-			&it.Description, &it.CategoryName, &it.AccountName); err != nil {
+		if err := rows.Scan(&it.ID, &it.OccurredAt, &it.CreatedAt, &it.EntrySeq,
+			&it.Type, &it.Amount, &it.Description, &it.CategoryName, &it.AccountName,
+			&it.Reconciled, &it.ReconciledAt); err != nil {
 			return nil, err
 		}
 		out = append(out, it)
@@ -171,6 +208,21 @@ func (r *Repo) Conciliate(ctx context.Context, tx pgx.Tx, id, actorID string) (*
 	if rec.Status == "conciliada" {
 		return nil, ErrReconciliationClosed
 	}
+	var pending int
+	if err := tx.QueryRow(ctx, `
+		SELECT count(*)
+		FROM financial_reconciliations fr
+		JOIN financial_transactions t
+		  ON t.tenant_id = fr.tenant_id
+		 AND t.branch_id = fr.branch_id
+		 AND t.voided_at IS NULL
+		 AND t.occurred_at::date BETWEEN fr.period_start AND fr.period_end
+		WHERE fr.id = $1::uuid AND t.reconciled_at IS NULL`, id).Scan(&pending); err != nil {
+		return nil, err
+	}
+	if pending > 0 {
+		return nil, ErrPendingReconciliation{Count: pending}
+	}
 	items, err := r.ListReconciliationItems(ctx, tx, id)
 	if err != nil {
 		return nil, err
@@ -178,7 +230,11 @@ func (r *Repo) Conciliate(ctx context.Context, tx pgx.Tx, id, actorID string) (*
 	h := sha256.New()
 	fmt.Fprintf(h, "%s|%s|%s|%s\n", rec.ID, rec.BranchID, rec.PeriodStart, rec.PeriodEnd)
 	for _, it := range items {
-		fmt.Fprintf(h, "%s|%s|%.2f\n", it.ID, it.OccurredAt, it.Amount)
+		seq := 0
+		if it.EntrySeq != nil {
+			seq = *it.EntrySeq
+		}
+		fmt.Fprintf(h, "%s|%s|%d|%.2f\n", it.ID, it.OccurredAt, seq, it.Amount)
 	}
 	sum := hex.EncodeToString(h.Sum(nil))
 

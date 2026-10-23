@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ShieldCheck, Plus, Search, Paperclip, Lock, ArrowLeft, CheckCircle2, Eye, Trash2 } from "lucide-react";
+import { ShieldCheck, Plus, Search, Paperclip, Lock, ArrowLeft, CheckCircle2, Eye, Trash2, FileText } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import {
   listAudits, createAudit, getAudit, markAudit, closeAudit, deleteAudit, listAttachments,
-  downloadFinancialAttachment,
+  downloadFinancialAttachment, getReceiptHTML,
   type FinancialAudit, type AuditItem, type FinancialAttachment,
 } from "@/lib/api";
 import { PAYMENT_METHODS } from "@/lib/constants";
@@ -177,6 +177,21 @@ export default function AuditReportPage() {
     }
   }
 
+  async function viewReceipt(it: AuditItem) {
+    if (!it.receipt_id) return;
+    const w = window.open("", "_blank", "width=540,height=760");
+    try {
+      const html = await getReceiptHTML(it.receipt_id);
+      if (w) {
+        w.document.write(html);
+        w.document.close();
+      }
+    } catch (err) {
+      w?.close();
+      toast(err instanceof Error ? err.message : "Erro ao abrir o recibo", "error");
+    }
+  }
+
   const isOpen = selected?.status === "aberta";
   const auditedCount = items.filter((i) => i.audited).length;
 
@@ -247,7 +262,16 @@ export default function AuditReportPage() {
       label: "Data",
       sortable: true,
       width: "w-28",
+      sortValue: (it) => `${it.occurred_at}|${String(it.entry_seq ?? 999999999).padStart(9, "0")}|${it.created_at}`,
       render: (it) => <span className="text-zinc-500">{datePt(it.occurred_at)}</span>,
+    },
+    {
+      key: "entry_seq",
+      label: "Seq.",
+      sortable: true,
+      width: "w-16",
+      sortValue: (it) => it.entry_seq ?? 999999999,
+      render: (it) => <span className="text-xs tabular-nums text-zinc-400">{it.entry_seq ?? "-"}</span>,
     },
     {
       key: "type",
@@ -285,14 +309,34 @@ export default function AuditReportPage() {
     },
     {
       key: "actions",
-      label: "",
-      width: "w-16",
+      label: "Acesso rapido",
+      width: "w-32",
       align: "center",
       render: (it) => (
-        <Button variant="ghost" className="h-7 px-2 text-xs" title="Detalhes do lancamento" onClick={() => openDetail(it)}>
-          <Eye className="h-4 w-4" />
-          {it.attachment_count > 0 && <span className="ml-0.5 text-[10px]">{it.attachment_count}</span>}
-        </Button>
+        <div className="flex items-center justify-center gap-0.5">
+          <Button variant="ghost" className="h-7 px-1.5" title="Detalhes do lancamento" onClick={() => openDetail(it)}>
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            className="h-7 px-1.5"
+            title={it.attachment_count > 0 ? "Ver anexos" : "Sem anexos"}
+            disabled={it.attachment_count === 0}
+            onClick={() => openDetail(it)}
+          >
+            <Paperclip className="h-4 w-4" />
+            {it.attachment_count > 0 && <span className="ml-0.5 text-[10px]">{it.attachment_count}</span>}
+          </Button>
+          <Button
+            variant="ghost"
+            className="h-7 px-1.5"
+            title={it.receipt_id ? "Ver recibo" : "Sem recibo"}
+            disabled={!it.receipt_id}
+            onClick={() => viewReceipt(it)}
+          >
+            <FileText className="h-4 w-4" />
+          </Button>
+        </div>
       ),
     },
   ];
@@ -434,7 +478,19 @@ export default function AuditReportPage() {
               <DetRow label="Fornecedor" value={detailItem.supplier_name ?? "-"} />
               <DetRow label="Forma de pagamento" value={detailItem.payment_method ? (PAYMENT_METHODS[detailItem.payment_method] ?? detailItem.payment_method) : "-"} />
               <DetRow label="Origem" value={detailItem.is_anonymous ? "Anonimo" : (detailItem.donor_name ?? "-")} />
-              {detailItem.receipt_ref && <DetRow label="Recibo" value={detailItem.receipt_ref} />}
+              {detailItem.receipt_ref && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-zinc-500">Recibo</span>
+                  <div className="flex items-center gap-2">
+                    <span>{detailItem.receipt_ref}</span>
+                    {detailItem.receipt_id && (
+                      <Button variant="outline" size="sm" onClick={() => viewReceipt(detailItem)}>
+                        <FileText className="h-3.5 w-3.5" /> Abrir
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
               <div>
                 <span className="text-zinc-500">Descricao</span>
                 <p className="mt-0.5 whitespace-pre-wrap">{detailItem.description ?? "-"}</p>

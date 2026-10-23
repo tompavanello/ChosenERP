@@ -294,6 +294,27 @@ Camada `internal/payments` com a interface `Gateway` (abstracao de provider) e o
 - **Permissoes**: `payments.read`/`payments.write` (Fluxo B) e `billing.read`
   (Fluxo A na area da igreja) — `000092`.
 
+### Conciliacao individual e encerramento de periodo (`000104`)
+
+- `financial_transactions.reconciled_at/reconciled_by` guardam a conciliacao
+  **por lancamento**, independente de periodo. O lancamento conciliado fica
+  imutavel (UPDATE/DELETE, inclusive `paid_at` e `entry_seq`); anexos continuam
+  permitidos. A RPC `fin_tx_reconcile` e o endpoint
+  `POST /finance/transactions/{id}/reconcile` fazem conciliar/desconciliar.
+- O formulario de novo lancamento tem **"Lancar como conciliado"** (exige
+  `finance.reconcile`). O mesmo flag pode ser enviado no lote.
+- `financial_reconciliations.status='conciliada'` e o **encerramento do periodo**:
+  exige 100% dos lancamentos nao estornados conciliados, sela o hash e trava
+  INSERT/UPDATE/DELETE no intervalo (inclusive mover lancamento para dentro ou
+  para fora). Auditoria fechada (`financial_audits.status='fechada'`) tambem
+  trava o periodo; por isso a conciliacao deve ser encerrada antes da auditoria
+  quando os periodos se sobrepoem.
+- Excluir uma conciliacao (Sede) destrava o periodo, mas preserva as conciliacoes
+  individuais ja marcadas.
+- Conciliacao e auditoria listam os lancamentos na mesma ordem:
+  `occurred_at, entry_seq NULLS LAST, created_at, id`.
+- Na auditoria, a acao de cada linha tem atalhos para anexos e recibo.
+
 ### 3. Servico Go localmente (para depurar)
 
 ```bash
@@ -684,6 +705,12 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | POST | `/api/v1/finance/transactions/{id}/attachments` | Bearer | Anexa documento (multipart, ate 50MB) |
 | GET  | `/api/v1/attachments/{filename}` | - | Download de anexo (nome opaco) |
 | GET  | `/api/v1/finance/balance` | Bearer | Balancete/DRE (entradas, saidas, por categoria) |
+| POST | `/api/v1/finance/transactions/{id}/reconcile` | Bearer (`finance.reconcile`) | Concilia/desconcilia um unico lancamento (`{"reconciled":true}`) |
+| POST | `/api/v1/finance/transactions/reconcile-batch` | Bearer (`finance.reconcile`) | Concilia/desconcilia varios lancamentos de forma atomica |
+| GET/POST | `/api/v1/finance/reconciliations` | Bearer (`finance.read`/`reconcile`) | Lista/cria conciliacoes de periodo |
+| GET  | `/api/v1/finance/reconciliations/{id}` | Bearer (`finance.read`) | Conciliacao + lancamentos do periodo |
+| POST | `/api/v1/finance/reconciliations/{id}/conciliate` | Bearer (`finance.reconcile`) | Encerra o periodo (exige 100% conciliado) |
+| DELETE | `/api/v1/finance/reconciliations/{id}` | Bearer (Sede) | Exclui a conciliacao e destrava o periodo |
 | GET  | `/api/v1/finance/audits` | Bearer | Lista auditorias financeiras |
 | POST | `/api/v1/finance/audits` | Bearer | Cria auditoria (periodo) |
 | GET  | `/api/v1/finance/audits/{id}` | Bearer | Auditoria + lancamentos do periodo |

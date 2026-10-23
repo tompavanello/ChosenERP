@@ -324,6 +324,9 @@ export interface Transaction {
   /** Preenchido quando o lancamento foi estornado (continua no historico). */
   voided_at?: string;
   void_reason?: string;
+  /** Conciliacao individual: quando preenchida, o lancamento fica imutavel. */
+  reconciled: boolean;
+  reconciled_at?: string;
   attachment_count?: number;
   attachment_url?: string;
 }
@@ -1041,6 +1044,8 @@ export interface AuditAllocation { event_id: string; event_name: string; amount:
 export interface AuditItem {
   transaction_id: string;
   occurred_at: string;
+  created_at: string;
+  entry_seq?: number;
   type: "income" | "expense";
   amount: number;
   currency: string;
@@ -1051,6 +1056,7 @@ export interface AuditItem {
   payment_method?: string;
   is_anonymous: boolean;
   donor_name?: string;
+  receipt_id?: string;
   receipt_ref?: string;
   attachment_count: number;
   allocations: AuditAllocation[];
@@ -1084,15 +1090,21 @@ export interface FinancialReconciliation {
   total_items: number;
   total_income: number;
   total_expense: number;
+  reconciled_items: number;
+  pending_items: number;
 }
 export interface ReconciliationItem {
   id: string;
   occurred_at: string;
+  created_at: string;
+  entry_seq?: number;
   type: "income" | "expense";
   amount: number;
   description?: string;
   category_name?: string;
   account_name?: string;
+  reconciled: boolean;
+  reconciled_at?: string;
 }
 export const listReconciliations = () =>
   api<{ reconciliations: FinancialReconciliation[] }>("/api/v1/finance/reconciliations");
@@ -1181,6 +1193,20 @@ export const updateTransaction = (id: string, data: Record<string, unknown>) =>
   api<{ ok: boolean }>(`/api/v1/finance/transactions/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),
+  });
+
+/** Concilia/desconcilia um unico lancamento. */
+export const reconcileTransaction = (id: string, reconciled: boolean) =>
+  api<{ ok: boolean }>(`/api/v1/finance/transactions/${id}/reconcile`, {
+    method: "POST",
+    body: JSON.stringify({ reconciled }),
+  });
+
+/** Concilia/desconcilia varios lancamentos de forma atomica. */
+export const reconcileTransactions = (transactionIds: string[], reconciled: boolean) =>
+  api<{ ok: boolean }>("/api/v1/finance/transactions/reconcile-batch", {
+    method: "POST",
+    body: JSON.stringify({ transaction_ids: transactionIds, reconciled }),
   });
 
 /** Renumera os lancamentos da mesma conta/data na ordem enviada. */

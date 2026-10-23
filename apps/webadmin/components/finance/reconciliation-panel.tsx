@@ -13,7 +13,7 @@ import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
 import {
   listReconciliations, createReconciliation, getReconciliation,
-  conciliateReconciliation, deleteReconciliation,
+  conciliateReconciliation, deleteReconciliation, reconcileTransaction, reconcileTransactions,
   type FinancialReconciliation, type ReconciliationItem,
 } from "@/lib/api";
 import { currency, datePt, dateTimePt, todayISO } from "@/lib/format";
@@ -29,6 +29,10 @@ export function ReconciliationPanel() {
   const [items, setItems] = useState<ReconciliationItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [query, setQuery] = useState("");
+  const [reconcilingId, setReconcilingId] = useState("");
+  const [reconcilingAll, setReconcilingAll] = useState(false);
+  const [sortColumn, setSortColumn] = useState("occurred_at");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   const [showNew, setShowNew] = useState(false);
   const now = new Date();
@@ -55,6 +59,8 @@ export function ReconciliationPanel() {
   async function openReconciliation(rec: FinancialReconciliation) {
     setSelected(rec);
     setLoadingItems(true);
+    setSortColumn("occurred_at");
+    setSortDirection("asc");
     try {
       const res = await getReconciliation(rec.id);
       setSelected(res.reconciliation);
@@ -103,6 +109,50 @@ export function ReconciliationPanel() {
     }
   }
 
+  async function toggleItem(it: ReconciliationItem) {
+    if (!selected) return;
+    if (selected.status === "conciliada") return;
+    setReconcilingId(it.id);
+    try {
+      await reconcileTransaction(it.id, !it.reconciled);
+      const res = await getReconciliation(selected.id);
+      setSelected(res.reconciliation);
+      setItems(res.items);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao conciliar lancamento", "error");
+    } finally {
+      setReconcilingId("");
+    }
+  }
+
+  async function reconcileAllPending() {
+    if (!selected) return;
+    const pending = items.filter((it) => !it.reconciled).map((it) => it.id);
+    if (pending.length === 0) return;
+    if (!confirm(`Conciliar ${pending.length} lancamento(s) pendente(s) deste periodo?`)) return;
+    setReconcilingAll(true);
+    try {
+      await reconcileTransactions(pending, true);
+      const res = await getReconciliation(selected.id);
+      setSelected(res.reconciliation);
+      setItems(res.items);
+      toast("Lancamentos pendentes conciliados.");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao conciliar lancamentos", "error");
+    } finally {
+      setReconcilingAll(false);
+    }
+  }
+
+  const handleItemSort = (col: string) => {
+    if (sortColumn === col) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(col);
+      setSortDirection("asc");
+    }
+  };
+
   async function remove(rec: FinancialReconciliation) {
     if (!confirm(`Excluir a conciliacao "${rec.title}" (${datePt(rec.period_start)} a ${datePt(rec.period_end)})? O periodo sera DESTRAVADO.`)) return;
     try {
@@ -135,11 +185,24 @@ export function ReconciliationPanel() {
       width: "w-32",
       render: (r) => (
         <Badge tone={r.status === "conciliada" ? "green" : "amber"}>
-          {r.status === "conciliada" ? "Conciliada (travada)" : "Aberta"}
+          {r.status === "conciliada" ? "Encerrado" : "Aberto"}
         </Badge>
       ),
     },
     { key: "total_items", label: "Lancamentos", sortable: true, align: "right", width: "w-28", render: (r) => <span className="text-zinc-500">{r.total_items}</span> },
+    {
+      key: "reconciled_items",
+      label: "Conciliados",
+      sortable: true,
+      align: "right",
+      width: "w-32",
+      render: (r) => (
+        <span className={r.pending_items > 0 ? "text-amber-600" : "text-emerald-600"}>
+          {r.reconciled_items}/{r.total_items}
+          {r.pending_items > 0 ? ` (${r.pending_items} pend.)` : ""}
+        </span>
+      ),
+    },
     {
       key: "net",
       label: "Saldo",
@@ -173,7 +236,37 @@ export function ReconciliationPanel() {
   ];
 
   const itemColumns: Column<ReconciliationItem>[] = [
-    { key: "occurred_at", label: "Data", sortable: true, width: "w-28", render: (it) => <span className="text-zinc-500">{datePt(it.occurred_at)}</span> },
+    {
+      key: "reconciled",
+      label: "Conciliado",
+      width: "w-24",
+      render: (it) => (
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-zinc-300 text-sky-600"
+          checked={it.reconciled}
+          disabled={selected?.status === "conciliada" || !canReconcile || reconcilingId === it.id}
+          onChange={() => toggleItem(it)}
+          title={it.reconciled ? "Desconciliar" : "Conciliar"}
+        />
+      ),
+    },
+    {
+      key: "occurred_at",
+      label: "Data",
+      sortable: true,
+      width: "w-28",
+      sortValue: (it) => `${it.occurred_at}|${String(it.entry_seq ?? 999999999).padStart(9, "0")}|${it.created_at}`,
+      render: (it) => <span className="text-zinc-500">{datePt(it.occurred_at)}</span>,
+    },
+    {
+      key: "entry_seq",
+      label: "Seq.",
+      sortable: true,
+      width: "w-16",
+      sortValue: (it) => it.entry_seq ?? 999999999,
+      render: (it) => <span className="text-xs tabular-nums text-zinc-400">{it.entry_seq ?? "-"}</span>,
+    },
     { key: "type", label: "Tipo", sortable: true, width: "w-24", render: (it) => <Badge tone={it.type === "income" ? "green" : "red"}>{it.type === "income" ? "Entrada" : "Saida"}</Badge> },
     { key: "category_name", label: "Conta contabil", sortable: true, render: (it) => <span className="text-zinc-500">{it.category_name ?? "-"}</span> },
     { key: "description", label: "Descricao", sortable: true, render: (it) => <span className="text-zinc-500">{it.description ?? "-"}</span> },
@@ -209,25 +302,47 @@ export function ReconciliationPanel() {
         />
 
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          <Badge tone={locked ? "green" : "amber"}>{locked ? "Conciliada (travada)" : "Aberta"}</Badge>
+          <Badge tone={locked ? "green" : "amber"}>{locked ? "Encerrado" : "Aberto"}</Badge>
           <span className="text-sm text-zinc-500">
             {selected.total_items} lancamento(s) - Entradas {currency(selected.total_income)} - Saidas {currency(selected.total_expense)} - Saldo {currency(net)}
           </span>
+          <span className="text-sm text-zinc-500">
+            Conciliados {selected.reconciled_items}/{selected.total_items}
+            {selected.pending_items > 0 ? ` - ${selected.pending_items} pendente(s)` : ""}
+          </span>
           {canReconcile && !locked && (
-            <Button size="sm" className="ml-auto" onClick={() => setConfirmConciliate(true)}>
-              <Lock className="h-4 w-4" /> Conciliar e travar periodo
-            </Button>
+            <div className="ml-auto flex gap-2">
+              {selected.pending_items > 0 && (
+                <Button size="sm" variant="outline" onClick={reconcileAllPending} disabled={reconcilingAll}>
+                  <CheckCircle2 className="h-4 w-4" /> {reconcilingAll ? "Conciliando..." : "Conciliar pendentes"}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={() => setConfirmConciliate(true)}
+                disabled={selected.pending_items > 0}
+                title={selected.pending_items > 0 ? "Concilie todos os lancamentos antes de encerrar" : "Encerrar periodo"}
+              >
+                <Lock className="h-4 w-4" /> Encerrar periodo
+              </Button>
+            </div>
           )}
         </div>
+
+        {selected.pending_items > 0 && !locked && (
+          <p className="mb-3 text-xs text-amber-600">
+            Encerramento bloqueado: concilie os {selected.pending_items} lancamento(s) pendente(s) primeiro.
+          </p>
+        )}
 
         {locked && (
           <Card className="mb-4 text-sm">
             <p className="flex items-center gap-2 font-medium text-emerald-700">
-              <CheckCircle2 className="h-4 w-4" /> Periodo conciliado e travado
+              <CheckCircle2 className="h-4 w-4" /> Periodo encerrado e travado
             </p>
             <p className="mt-1 text-zinc-500">
               Nenhum lancamento pode ser criado, alterado, estornado ou excluido neste periodo
-              {selected.reconciled_at ? ` (conciliado em ${dateTimePt(selected.reconciled_at)})` : ""}.
+              {selected.reconciled_at ? ` (encerrado em ${dateTimePt(selected.reconciled_at)})` : ""}.
             </p>
           </Card>
         )}
@@ -237,22 +352,24 @@ export function ReconciliationPanel() {
           data={items}
           keyExtractor={(it) => it.id}
           loading={loadingItems}
+          sort={{ column: sortColumn, direction: sortDirection, onSort: handleItemSort }}
           emptyMessage="Sem lancamentos"
           emptyDescription="Nenhum lancamento no periodo desta conciliacao."
           compact
         />
 
-        <Modal open={confirmConciliate} onClose={() => setConfirmConciliate(false)} title="Conciliar e travar periodo">
+        <Modal open={confirmConciliate} onClose={() => setConfirmConciliate(false)} title="Encerrar periodo">
           <div className="space-y-3 text-sm">
             <p className="text-zinc-600">
-              Ao conciliar, o periodo <strong>{datePt(selected.period_start)} a {datePt(selected.period_end)}</strong> sera
+              Ao encerrar, o periodo <strong>{datePt(selected.period_start)} a {datePt(selected.period_end)}</strong> sera
               <strong> travado</strong>: nao sera possivel lancar, editar, estornar ou excluir lancamentos nesse intervalo.
+              Todos os lancamentos devem estar conciliados antes do encerramento.
               Apenas a Sede podera excluir esta conciliacao para destravar.
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="ghost" type="button" onClick={() => setConfirmConciliate(false)}>Cancelar</Button>
-              <Button onClick={doConciliate} disabled={conciliating}>
-                {conciliating ? "Conciliando..." : "Conciliar e travar"}
+              <Button onClick={doConciliate} disabled={conciliating || selected.pending_items > 0}>
+                {conciliating ? "Encerrando..." : "Encerrar periodo"}
               </Button>
             </div>
           </div>

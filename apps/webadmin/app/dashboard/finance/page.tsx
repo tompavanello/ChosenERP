@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Wallet, Plus, Eye, Send, Filter, Tags, Repeat, Banknote, Upload, Download, FileText, Paperclip, Pencil, Trash2, FolderTree, ChevronUp, ChevronDown } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Wallet, Plus, Eye, Send, Filter, Tags, Repeat, Banknote, Upload, Download, FileText, Paperclip, Pencil, Trash2, FolderTree, ChevronUp, ChevronDown, CheckCircle2, RotateCcw, Lock } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,7 +22,7 @@ import {
    listCategoryGroups, createCategoryGroup, updateCategoryGroup, deleteCategoryGroup,
    listAccounts, createAccount, updateAccount, deleteAccount,
    uploadAttachment, listAttachments, listDeliveries, updateTransaction, deleteTransaction, settleTransaction,
-   downloadFinancialAttachment,
+   reconcileTransaction, downloadFinancialAttachment,
    listTransactionEvents, previewTransactions, importTransactionsFile, reorderTransactions,
    type Category, type CategoryGroup, type Transaction, type Balance, type BankAccount,
    type FinancialAttachment, type Delivery, type ImportResult, type EventAllocation,
@@ -109,6 +109,7 @@ export default function FinancePage() {
   const [filterType, setFilterType] = useState("");
   const [filterCat, setFilterCat] = useState("");
   const [filterAcct, setFilterAcct] = useState("");
+  const [filterRecon, setFilterRecon] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PER_PAGE);
@@ -175,12 +176,13 @@ export default function FinancePage() {
         (!filterType || t.type === filterType) &&
          (!filterCat || t.category_id === filterCat) &&
          (!filterAcct || t.account_id === filterAcct) &&
+        (!filterRecon || (filterRecon === "reconciled" ? t.reconciled : !t.reconciled)) &&
         (!q || t.description?.toLowerCase().includes(q))
       );
     });
-  }, [txns, filterType, filterCat, filterAcct, query]);
+  }, [txns, filterType, filterCat, filterAcct, filterRecon, query]);
 
-  useEffect(() => setPage(1), [filterType, filterCat, query]);
+  useEffect(() => setPage(1), [filterType, filterCat, filterAcct, filterRecon, query]);
 
   const handleSort = (col: string) => {
     if (sortColumn === col) {
@@ -211,7 +213,7 @@ export default function FinancePage() {
       render: (t) => (
         <div className="flex items-center gap-1">
           <span className="w-6 text-right text-xs font-medium tabular-nums text-zinc-500">{t.entry_seq ?? "-"}</span>
-          {hasPerm("finance.write") && !t.voided_at && (
+          {hasPerm("finance.write") && !t.voided_at && !t.reconciled && (
             <div className="flex flex-col">
               <button
                 type="button"
@@ -320,10 +322,24 @@ export default function FinancePage() {
       },
     },
     {
+      key: "reconciled",
+      label: "Conciliacao",
+      sortable: true,
+      width: "w-32",
+      sortValue: (t) => (t.reconciled ? 1 : 0),
+      render: (t) => (
+        t.reconciled ? (
+          <Badge tone="green" className="gap-1"><Lock className="h-3 w-3" /> Conciliado</Badge>
+        ) : (
+          <Badge tone="zinc" variant="soft">Pendente</Badge>
+        )
+      ),
+    },
+    {
       key: "id",
       label: "",
       sortable: false,
-      width: "w-40",
+      width: "w-52",
       align: "right" as const,
       render: (t) => (
         <div className="flex items-center justify-end gap-0.5">
@@ -331,7 +347,18 @@ export default function FinancePage() {
             <Button variant="ghost" size="sm" onClick={() => viewReceipt(t)} aria-label="Ver recibo" title="Ver recibo"><Eye className="h-3.5 w-3.5" /> Ver</Button>
           )}
           <Button variant="ghost" size="sm" onClick={() => openDetail(t)} aria-label="Ver detalhes" title="Detalhes"><Eye className="h-3.5 w-3.5" /></Button>
-          {!t.voided_at && hasPerm("finance.write") && (
+          {!t.voided_at && hasPerm("finance.reconcile") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => toggleReconciled(t)}
+              title={t.reconciled ? "Desconciliar" : "Conciliar"}
+              aria-label={t.reconciled ? "Desconciliar" : "Conciliar"}
+            >
+              {t.reconciled ? <RotateCcw className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
+            </Button>
+          )}
+          {!t.voided_at && !t.reconciled && hasPerm("finance.write") && (
             <>
               {t.type === "expense" && (
                 <Button variant="ghost" size="sm" onClick={() => togglePaid(t)} title={t.paid_at ? "Reabrir" : "Quitar"}>
@@ -367,6 +394,10 @@ export default function FinancePage() {
         (a.entry_seq ?? Number.MAX_SAFE_INTEGER) - (b.entry_seq ?? Number.MAX_SAFE_INTEGER) ||
         a.occurred_at.localeCompare(b.occurred_at) ||
         (a.created_at ?? "").localeCompare(b.created_at ?? ""));
+    if (group.some((x) => x.reconciled)) {
+      toast("O escopo tem lancamento conciliado; desconcile antes de reordenar.", "error");
+      return;
+    }
     const idx = group.findIndex((x) => x.id === t.id);
     const swap = idx + dir;
     if (idx < 0 || swap < 0 || swap >= group.length) return;
@@ -397,6 +428,10 @@ export default function FinancePage() {
   }
 
   async function openEdit(t: Transaction) {
+    if (t.reconciled) {
+      toast("Lancamento conciliado: desconcile antes de editar.", "error");
+      return;
+    }
     setEditing(t);
     setShowNew(true);
   }
@@ -412,6 +447,10 @@ export default function FinancePage() {
   }
 
   async function removeTxn(t: Transaction) {
+    if (t.reconciled) {
+      toast("Lancamento conciliado: desconcile antes de excluir.", "error");
+      return;
+    }
     if (!confirm("Excluir definitivamente este lancamento? Esta acao nao pode ser desfeita.")) return;
     try {
       await deleteTransaction(t.id);
@@ -423,12 +462,26 @@ export default function FinancePage() {
   }
 
   async function togglePaid(t: Transaction) {
+    if (t.reconciled) {
+      toast("Lancamento conciliado: desconcile antes de alterar a quitacao.", "error");
+      return;
+    }
     try {
       await settleTransaction(t.id, !t.paid_at);
       toast(t.paid_at ? "Lancamento reaberto." : "Lancamento quitado.");
       await handleTxnSaved();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao alterar quitacao", "error");
+    }
+  }
+
+  async function toggleReconciled(t: Transaction) {
+    try {
+      await reconcileTransaction(t.id, !t.reconciled);
+      toast(t.reconciled ? "Lancamento desconciliado." : "Lancamento conciliado e travado.");
+      await handleTxnSaved();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao alterar conciliacao", "error");
     }
   }
 
@@ -760,6 +813,11 @@ export default function FinancePage() {
               <option value="">Todas contas</option>
               {accounts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
             </Select>
+            <Select className="w-40" value={filterRecon} onChange={(e) => setFilterRecon(e.target.value)}>
+              <option value="">Conciliacao</option>
+              <option value="reconciled">Conciliados</option>
+              <option value="pending">Pendentes</option>
+            </Select>
           </div>
 
           <DataTable
@@ -927,6 +985,14 @@ export default function FinancePage() {
             <div className="flex items-center justify-between"><span className="text-zinc-500">Data efetiva</span><span>{datePt(detail.occurred_at)}</span></div>
             <div className="flex items-center justify-between"><span className="text-zinc-500">Registrado em</span><span>{dateTimePt(detail.created_at)}</span></div>
             <div className="flex items-center justify-between"><span className="text-zinc-500">Recibo</span><span>{detail.receipt_ref ?? "-"}</span></div>
+            <div className="flex items-center justify-between">
+              <span className="text-zinc-500">Conciliacao</span>
+              {detail.reconciled ? (
+                <Badge tone="green" className="gap-1"><Lock className="h-3 w-3" /> Conciliado</Badge>
+              ) : (
+                <Badge tone="zinc" variant="soft">Pendente</Badge>
+              )}
+            </div>
             <div className="flex items-start justify-between gap-4"><span className="text-zinc-500">Hash de integridade</span><span className="break-all text-xs text-zinc-400">{detail.hash}</span></div>
 
             {/* Anexos de comprovacao */}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -116,6 +117,10 @@ func (a *App) handleCreateReconciliation(w http.ResponseWriter, r *http.Request)
 			writeErr(w, http.StatusConflict, "ja existe conciliacao para um periodo sobreposto nesta filial")
 			return
 		}
+		if strings.Contains(err.Error(), "auditoria") {
+			writeErr(w, http.StatusConflict, err.Error())
+			return
+		}
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -154,6 +159,11 @@ func (a *App) handleConciliateReconciliation(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		if errors.Is(err, finance.ErrReconciliationClosed) {
 			writeErr(w, http.StatusConflict, err.Error())
+			return
+		}
+		var pending finance.ErrPendingReconciliation
+		if errors.As(err, &pending) {
+			writeErr(w, http.StatusConflict, pending.Error())
 			return
 		}
 		if store.IsNotFound(err) {

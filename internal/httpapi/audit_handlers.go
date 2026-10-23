@@ -180,7 +180,7 @@ func (a *App) handleCloseAudit(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
-		if errors.Is(err, audit.ErrClosed) {
+		if errors.Is(err, audit.ErrClosed) || errors.Is(err, audit.ErrOpenReconciliation) {
 			writeErr(w, http.StatusConflict, err.Error())
 			return
 		}
@@ -238,9 +238,13 @@ func (a *App) handleExportAudit(w http.ResponseWriter, r *http.Request) {
 		if it.Audited {
 			audited = "Sim"
 		}
+		seq := ""
+		if it.EntrySeq != nil {
+			seq = strconv.Itoa(*it.EntrySeq)
+		}
 		rows = append(rows, []string{
-			it.OccurredAt.Format("02/01/2006"), statusLabel(it.Type), cat, acc, sup, pay, desc,
-			money(it.Amount), audited,
+			seq, it.OccurredAt.Format("02/01/2006"), statusLabel(it.Type), cat, acc, sup, pay, desc,
+			money(it.Amount), strOrEmpty(it.ReceiptRef), audited,
 		})
 	}
 	auditedMark := "Em andamento"
@@ -267,7 +271,7 @@ func (a *App) handleExportAudit(w http.ResponseWriter, r *http.Request) {
 	writeReport(w, "auditoria-"+au.PeriodStart+"-"+au.PeriodEnd,
 		"Auditoria financeira - "+au.Title, subtitle, format,
 		[]exportSection{
-			{Title: "Lancamentos do periodo", Headers: []string{"Data", "Tipo", "Conta contabil", "Conta bancaria", "Fornecedor", "Forma pagto", "Descricao", "Valor", "Auditado"}, Rows: rows},
+			{Title: "Lancamentos do periodo", Headers: []string{"Seq.", "Data", "Tipo", "Conta contabil", "Conta bancaria", "Fornecedor", "Forma pagto", "Descricao", "Valor", "Recibo", "Auditado"}, Rows: rows},
 			{Title: "Totais", Headers: []string{"Indicador", "", "", "", "Valor"}, Rows: [][]string{
 				{"Total do periodo", "", "", "", money(au.TotalAmount)},
 				{"Total auditado", "", "", "", money(au.AuditedAmount)},

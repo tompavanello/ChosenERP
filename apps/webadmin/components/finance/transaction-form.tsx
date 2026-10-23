@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Calendar, User, Users, Tag, CreditCard, FileText, Eye, Upload, X } from "lucide-react";
+import { Calendar, User, Users, Tag, CreditCard, FileText, Eye, Upload, X, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Field, Select, Textarea } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
@@ -37,6 +37,8 @@ export interface TransactionFormState {
   due_date: string;
   cost_center: string;
   paid: boolean;
+  /** Cria o lancamento ja conciliado (imutavel depois). */
+  reconciled: boolean;
 }
 
 const EMPTY: TransactionFormState = {
@@ -56,6 +58,7 @@ const EMPTY: TransactionFormState = {
   due_date: "",
   cost_center: "",
   paid: false,
+  reconciled: false,
 };
 
 export interface TransactionFormProps {
@@ -199,6 +202,7 @@ export function TransactionForm({
       due_date: form.due_date || undefined,
       cost_center: form.cost_center || undefined,
       paid: form.paid,
+      reconciled: form.reconciled || undefined,
     };
     if (alloc.length > 0) {
       payload.event_allocations = alloc.map((a) => ({
@@ -470,6 +474,28 @@ export function TransactionForm({
             Nenhuma conta bancaria ativa cadastrada. Cadastre uma em{" "}
             <span className="font-medium">Contas Bancarias</span> antes de lancar.
           </p>
+        )}
+        {!entrySeqReadOnly && hasPerm("finance.reconcile") && (
+          <Field label="Conciliacao" className="sm:col-span-2">
+            <div className="flex items-start gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="reconciled-toggle"
+                checked={form.reconciled}
+                onChange={(e) => set("reconciled", e.target.checked)}
+                disabled={saving}
+                className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
+              />
+              <label htmlFor="reconciled-toggle" className="text-sm text-zinc-600">
+                <span className="flex items-center gap-1 font-medium text-zinc-700 dark:text-zinc-200">
+                  <Lock className="h-3.5 w-3.5" /> Lancar como conciliado
+                </span>
+                <span className="text-xs text-zinc-400">
+                  O lancamento ja nasce conciliado e nao podera ser alterado ou excluido.
+                </span>
+              </label>
+            </div>
+          </Field>
         )}
       </Section>
 

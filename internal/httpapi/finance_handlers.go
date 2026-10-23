@@ -238,6 +238,27 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
+// writeFinanceErr traduz as travas de conciliacao/periodo/auditoria em 409.
+func writeFinanceErr(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, finance.ErrTransactionReconciled):
+		writeErr(w, http.StatusConflict, err.Error())
+	case errors.Is(err, finance.ErrTransactionVoided):
+		writeErr(w, http.StatusConflict, err.Error())
+	case errors.Is(err, finance.ErrPeriodClosed):
+		writeErr(w, http.StatusConflict, err.Error())
+	case errors.Is(err, finance.ErrAuditClosed):
+		writeErr(w, http.StatusConflict, err.Error())
+	default:
+		var pending finance.ErrPendingReconciliation
+		if errors.As(err, &pending) {
+			writeErr(w, http.StatusConflict, pending.Error())
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+	}
+}
+
 func (a *App) handleCreateTxn(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -258,9 +279,21 @@ func (a *App) handleCreateTxn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b := boundsFromClaims(claims)
+	allowed := !in.Reconciled
 	var t *finance.Transaction
 	var ref, token string
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		if in.Reconciled {
+			ok, err := a.hasFinancePerm(r.Context(), tx, claims, "finance.reconcile")
+			if err != nil {
+				return err
+			}
+			allowed = ok
+			if !ok {
+				return nil
+			}
+		}
+		in.ActorID = claims.UserID
 		branchID, err := a.writeBranchID(r.Context(), tx, claims)
 		if err != nil {
 			return err
@@ -276,7 +309,11 @@ func (a *App) handleCreateTxn(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeFinanceErr(w, err)
+		return
+	}
+	if !allowed {
+		writeErr(w, http.StatusForbidden, "sem permissao para conciliar (finance.reconcile)")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
@@ -323,7 +360,117 @@ func (a *App) handleUpdateTxn(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusNotFound, "lancamento nao encontrado")
 			return
 		}
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeFinanceErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handleReconcileTxn concilia/desconcilia um unico lancamento.
+func (a *App) handleReconcileTxn(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var in struct {
+		Reconciled bool `json:"reconciled"`
+	}
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "corpo invalido")
+		return
+	}
+	id := r.PathValue("id")
+	b := boundsFromClaims(claims)
+	allowed := false
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var err error
+		allowed, err = a.hasFinancePerm(r.Context(), tx, claims, "finance.reconcile")
+		if err != nil || !allowed {
+			return err
+		}
+		if err := a.Finance.ReconcileTransaction(r.Context(), tx, id, in.Reconciled, claims.UserID); err != nil {
+			return err
+		}
+		action := "finance.tx.unreconciled"
+		if in.Reconciled {
+			action = "finance.tx.reconciled"
+		}
+		_, err = tx.Exec(r.Context(), `
+			INSERT INTO audit_log (tenant_id, actor_id, action, entity, entity_id, payload)
+			SELECT $1, $2::uuid, $3, 'financial_transactions', $4::uuid, $5
+			FROM users WHERE id = $2`, claims.TenantID, claims.UserID, action, id, []byte(`{}`))
+		return err
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) || store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "lancamento nao encontrado")
+			return
+		}
+		writeFinanceErr(w, err)
+		return
+	}
+	if !allowed {
+		writeErr(w, http.StatusForbidden, "sem permissao para conciliar (finance.reconcile)")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handleReconcileTxnBatch concilia/desconcilia varios lancamentos de uma vez.
+func (a *App) handleReconcileTxnBatch(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var in struct {
+		TransactionIDs []string `json:"transaction_ids"`
+		Reconciled     bool     `json:"reconciled"`
+	}
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "corpo invalido")
+		return
+	}
+	if len(in.TransactionIDs) == 0 {
+		writeErr(w, http.StatusBadRequest, "nenhum lancamento informado")
+		return
+	}
+	if len(in.TransactionIDs) > 500 {
+		writeErr(w, http.StatusBadRequest, "limite de 500 lancamentos por vez")
+		return
+	}
+	b := boundsFromClaims(claims)
+	allowed := false
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var err error
+		allowed, err = a.hasFinancePerm(r.Context(), tx, claims, "finance.reconcile")
+		if err != nil || !allowed {
+			return err
+		}
+		if err := a.Finance.ReconcileTransactions(r.Context(), tx, in.TransactionIDs, in.Reconciled, claims.UserID); err != nil {
+			return err
+		}
+		action := "finance.tx.unreconciled"
+		if in.Reconciled {
+			action = "finance.tx.reconciled"
+		}
+		_, err = tx.Exec(r.Context(), `
+			INSERT INTO audit_log (tenant_id, actor_id, action, entity, payload)
+			SELECT $1, $2::uuid, $3, 'financial_transactions', $4
+			FROM users WHERE id = $2`, claims.TenantID, claims.UserID, action, []byte(`{}`))
+		return err
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) || store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "lancamento nao encontrado")
+			return
+		}
+		writeFinanceErr(w, err)
+		return
+	}
+	if !allowed {
+		writeErr(w, http.StatusForbidden, "sem permissao para conciliar (finance.reconcile)")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -354,8 +501,26 @@ func (a *App) handleCreateTxnBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b := boundsFromClaims(claims)
+	needReconcile := false
+	for i := range in.Transactions {
+		if in.Transactions[i].Reconciled {
+			needReconcile = true
+		}
+		in.Transactions[i].ActorID = claims.UserID
+	}
 	var res finance.ImportResult
+	allowed := !needReconcile
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		if needReconcile {
+			ok, err := a.hasFinancePerm(r.Context(), tx, claims, "finance.reconcile")
+			if err != nil {
+				return err
+			}
+			allowed = ok
+			if !ok {
+				return nil
+			}
+		}
 		branchID, err := a.writeBranchID(r.Context(), tx, claims)
 		if err != nil {
 			return err
@@ -372,6 +537,10 @@ func (a *App) handleCreateTxnBatch(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !allowed {
+		writeErr(w, http.StatusForbidden, "sem permissao para conciliar (finance.reconcile)")
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
@@ -406,7 +575,7 @@ func (a *App) handleReorderTxns(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusNotFound, "lancamento nao encontrado no escopo")
 			return
 		}
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeFinanceErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -522,11 +691,11 @@ func (a *App) handleVoidTxn(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
-		if store.IsNotFound(err) {
+		if store.IsNotFound(err) || errors.Is(err, pgx.ErrNoRows) {
 			writeErr(w, http.StatusNotFound, "lancamento nao encontrado ou ja estornado")
 			return
 		}
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeFinanceErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -552,11 +721,11 @@ func (a *App) handleSettleTxn(w http.ResponseWriter, r *http.Request) {
 		return a.Finance.Settle(r.Context(), tx, id, in.Paid)
 	})
 	if err != nil {
-		if store.IsNotFound(err) {
+		if store.IsNotFound(err) || errors.Is(err, pgx.ErrNoRows) {
 			writeErr(w, http.StatusNotFound, "lancamento nao encontrado")
 			return
 		}
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeFinanceErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -632,11 +801,11 @@ func (a *App) handleDeleteTxn(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
-		if store.IsNotFound(err) {
+		if store.IsNotFound(err) || errors.Is(err, pgx.ErrNoRows) {
 			writeErr(w, http.StatusNotFound, "lancamento nao encontrado")
 			return
 		}
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeFinanceErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})

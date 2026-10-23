@@ -15,13 +15,77 @@ import (
 // ErrCategoryRequired indica que o lancamento veio sem conta do plano de contas.
 var ErrCategoryRequired = errors.New("a conta contabil e obrigatoria")
 
-// Erros de validacao do lancamento (conta bancaria e valor).
+// Erros de validacao do lancamento (conta bancaria, valor e travas).
 var (
-	ErrAccountRequired   = errors.New("a conta bancaria e obrigatoria")
-	ErrAccountNotFound   = errors.New("conta bancaria nao encontrada no escopo")
-	ErrAccountInactive   = errors.New("conta bancaria inativa")
-	ErrAmountNotPositive = errors.New("o valor do lancamento deve ser maior que zero")
+	ErrAccountRequired       = errors.New("a conta bancaria e obrigatoria")
+	ErrAccountNotFound       = errors.New("conta bancaria nao encontrada no escopo")
+	ErrAccountInactive       = errors.New("conta bancaria inativa")
+	ErrAmountNotPositive     = errors.New("o valor do lancamento deve ser maior que zero")
+	ErrTransactionReconciled = errors.New("lancamento conciliado: nao pode ser alterado ou excluido")
+	ErrTransactionVoided     = errors.New("lancamento estornado: nao pode ser conciliado")
+	ErrPeriodClosed          = errors.New("periodo encerrado: lancamentos nao podem ser criados ou alterados")
+	ErrAuditClosed           = errors.New("auditoria fechada: lancamentos nao podem ser alterados")
 )
+
+// assertDateOpen confere se a data/filial nao esta dentro de uma conciliacao
+// encerrada ou auditoria fechada. A checagem no banco continua sendo a
+// autoridade final (inclusive para concorrencia).
+func assertDateOpen(ctx context.Context, tx pgx.Tx, tenantID, branchID, date string) error {
+	var closed bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM financial_reconciliations fr
+			WHERE fr.tenant_id = $1::uuid
+			  AND fr.branch_id = $2::uuid
+			  AND fr.status = 'conciliada'
+			  AND $3::date BETWEEN fr.period_start AND fr.period_end
+			UNION ALL
+			SELECT 1 FROM financial_audits a
+			WHERE a.tenant_id = $1::uuid
+			  AND a.branch_id = $2::uuid
+			  AND a.status = 'fechada'
+			  AND $3::date BETWEEN a.period_start AND a.period_end
+		)`, tenantID, branchID, date).Scan(&closed); err != nil {
+		return err
+	}
+	if closed {
+		return ErrPeriodClosed
+	}
+	return nil
+}
+
+// assertTxnMutable bloqueia alteracoes em lancamento conciliado, em periodo
+// encerrado ou preso a auditoria fechada.
+func assertTxnMutable(ctx context.Context, tx pgx.Tx, id string) error {
+	var tenantID, branchID, date string
+	var reconciledAt *time.Time
+	if err := tx.QueryRow(ctx, `
+		SELECT tenant_id::text, branch_id::text,
+		       (occurred_at AT TIME ZONE 'UTC')::date::text,
+		       reconciled_at
+		FROM financial_transactions WHERE id = $1::uuid`, id).
+		Scan(&tenantID, &branchID, &date, &reconciledAt); err != nil {
+		return err
+	}
+	if reconciledAt != nil {
+		return ErrTransactionReconciled
+	}
+	if err := assertDateOpen(ctx, tx, tenantID, branchID, date); err != nil {
+		return err
+	}
+	var auditClosed bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM financial_audit_items fa
+			JOIN financial_audits a ON a.id = fa.audit_id
+			WHERE fa.transaction_id = $1::uuid AND a.status = 'fechada')`, id).Scan(&auditClosed); err != nil {
+		return err
+	}
+	if auditClosed {
+		return ErrAuditClosed
+	}
+	return nil
+}
 
 // validateTxnAccount confere a conta bancaria do lancamento. currentAccountID
 // permite manter uma conta inativa que ja estava vinculada ao registro (edicao).
@@ -91,6 +155,9 @@ type Transaction struct {
 	// (tenant, filial, conta bancaria, data). Serve para alinhar a ordem com o
 	// extrato. Fica FORA da hash-chain e pode ser alterada (dado de ordenacao).
 	EntrySeq *int `json:"entry_seq,omitempty"`
+	// Conciliacao individual (nao depende de um periodo).
+	Reconciled   bool       `json:"reconciled"`
+	ReconciledAt *time.Time `json:"reconciled_at,omitempty"`
 	// Estorno (o lancamento permanece no historico, mas sai dos relatorios).
 	VoidedAt   *time.Time `json:"voided_at,omitempty"`
 	VoidReason *string    `json:"void_reason,omitempty"`
@@ -341,6 +408,10 @@ type CreateTxnInput struct {
 	DueDate    *string `json:"due_date"`
 	CostCenter *string `json:"cost_center"`
 	Paid       *bool   `json:"paid"`
+	// Reconciled cria o lancamento ja conciliado (lançar como conciliado).
+	// ActorID e preenchido pelo handler, nunca pelo cliente.
+	Reconciled bool   `json:"reconciled"`
+	ActorID    string `json:"-"`
 }
 
 type EventAllocationInput struct {
@@ -399,9 +470,13 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 		return nil, "", "", "", err
 	}
 
+	// Periodo encerrado nao aceita lancamento novo (inclusive retroativo).
+	scopeDate := when.UTC().Format(dateLayout)
+	if err := assertDateOpen(ctx, tx, tenantID, branchID, scopeDate); err != nil {
+		return nil, "", "", "", err
+	}
 	// Sequencia do lancamento no escopo (tenant, filial, conta, data). O lock
 	// por escopo evita corrida ao calcular a proxima posicao / renumerar.
-	scopeDate := when.UTC().Format(dateLayout)
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
 		tenantID+"|"+branchID+"|"+acct+"|"+scopeDate); err != nil {
 		return nil, "", "", "", err
@@ -442,28 +517,32 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 		INSERT INTO financial_transactions
 			(tenant_id, branch_id, category_id, type, amount, currency,
 			 payment_method, donor_member_id, benefactor_id, donor_name, supplier_id, is_anonymous, description, occurred_at, account_id, entry_seq,
-			 due_date, cost_center, paid_at)
+			 due_date, cost_center, paid_at, reconciled_at, reconciled_by)
 		VALUES ($1, NULLIF($2,'')::uuid, NULLIF($3,'')::uuid, $4, $5, 'BRL',
 			 $6, NULLIF($7,'')::uuid, NULLIF($8,'')::uuid, NULLIF($14,''), NULLIF($13,'')::uuid, $9, $10, $11, NULLIF($12,'')::uuid, $15,
-			 NULLIF($16,'')::date, NULLIF($17,''), CASE WHEN $18 THEN now() ELSE NULL END)
+			 NULLIF($16,'')::date, NULLIF($17,''), CASE WHEN $18 THEN now() ELSE NULL END,
+			 CASE WHEN $19 THEN now() ELSE NULL END,
+			 CASE WHEN $19 THEN NULLIF($20,'')::uuid ELSE NULL END)
 		RETURNING id::text, branch_id::text, category_id::text, account_id::text,
 		          donor_member_id::text, benefactor_id::text, donor_name, entry_seq,
 		          type, amount::float8, currency, payment_method, is_anonymous,
 		          description, receipt_issued, hash, occurred_at, created_at,
-		          due_date::text, paid_at, cost_center`,
+		          due_date::text, paid_at, cost_center, reconciled_at`,
 		tenantID, branchID, nullIfEmpty(in.CategoryID), in.Type, in.Amount,
 		in.PaymentMethod, in.DonorMemberID, in.BenefactorID, in.IsAnonymous, in.Description, when, in.AccountID,
-		in.SupplierID, in.DonorName, entrySeq, in.DueDate, in.CostCenter, in.Paid != nil && *in.Paid).
+		in.SupplierID, in.DonorName, entrySeq, in.DueDate, in.CostCenter, in.Paid != nil && *in.Paid,
+		in.Reconciled, in.ActorID).
 		Scan(&t.ID, &t.BranchID, &t.CategoryID, &t.AccountID,
 			&t.DonorMemberID, &t.BenefactorID, &t.DonorName, &outSeq,
 			&t.Type, &t.Amount, &t.Currency,
 			&t.PaymentMethod, &t.IsAnonymous, &t.Description, &status, &t.Hash, &t.OccurredAt, &t.CreatedAt,
-			&t.DueDate, &t.PaidAt, &t.CostCenter)
+			&t.DueDate, &t.PaidAt, &t.CostCenter, &t.ReconciledAt)
 	if err != nil {
 		return nil, "", "", "", err
 	}
 	t.EntrySeq = &outSeq
 	t.ReceiptIssued = status
+	t.Reconciled = t.ReconciledAt != nil
 
 	// Gera recibo digital automatico (documento).
 	docID, ref, token, err := r.issueReceipt(ctx, tx, tenantID, branchID, t)
@@ -539,12 +618,18 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, tenantID, id string, in Up
 	if err != nil {
 		return err
 	}
+	if err := assertTxnMutable(ctx, tx, id); err != nil {
+		return err
+	}
 
 	// Confirma existencia/escopo (RLS), a filial e a conta atual antes de editar.
 	var branchID, currentAccountID string
 	if err := tx.QueryRow(ctx, `
 		SELECT branch_id::text, COALESCE(account_id::text,'')
 		FROM financial_transactions WHERE id = $1::uuid`, id).Scan(&branchID, &currentAccountID); err != nil {
+		return err
+	}
+	if err := assertDateOpen(ctx, tx, tenantID, branchID, when.UTC().Format(dateLayout)); err != nil {
 		return err
 	}
 	if err := validateTxnAccount(ctx, tx, targetAccountID, currentAccountID); err != nil {
@@ -650,8 +735,14 @@ func (r *Repo) Reorder(ctx context.Context, tx pgx.Tx, ids []string) error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	rows.Close()
 	if count != len(ids) {
 		return pgx.ErrNoRows
+	}
+	for _, id := range ids {
+		if err := assertTxnMutable(ctx, tx, id); err != nil {
+			return err
+		}
 	}
 	// Mesmo lock usado no Create, para nao correr com insercoes.
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
@@ -753,6 +844,9 @@ func (r *Repo) ListTransactionEvents(ctx context.Context, tx pgx.Tx, txID string
 // Void anula um lancamento (estorno). O registro permanece no historico; os
 // relatorios param de conta-lo. Nao e DELETE nem altera os valores.
 func (r *Repo) Void(ctx context.Context, tx pgx.Tx, id, reason, actorID string) error {
+	if err := assertTxnMutable(ctx, tx, id); err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx, `
 		UPDATE financial_transactions
 		SET voided_at = now(), voided_by = NULLIF($2,'')::uuid, void_reason = NULLIF($3,'')
@@ -775,6 +869,9 @@ func (r *Repo) Void(ctx context.Context, tx pgx.Tx, id, reason, actorID string) 
 // tenant, para a trilha nao ficar com lacunas. Um lancamento preso a auditoria
 // fechada nao pode ser excluido (mesma trava do estorno).
 func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
+	if err := assertTxnMutable(ctx, tx, id); err != nil {
+		return err
+	}
 	var tenantID string
 	err := tx.QueryRow(ctx, `
 		DELETE FROM financial_transactions
@@ -847,7 +944,7 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind string) ([]Transaction,
 		       t.voided_at, t.void_reason,
 		       (SELECT count(*) FROM financial_attachments fa WHERE fa.transaction_id = t.id)::int,
 		       (SELECT fa.file_url FROM financial_attachments fa WHERE fa.transaction_id = t.id ORDER BY fa.created_at LIMIT 1),
-		       t.due_date::text, t.paid_at, t.cost_center
+		       t.due_date::text, t.paid_at, t.cost_center, t.reconciled_at
 		FROM financial_transactions t
 		JOIN recent r ON r.id = t.id
 		LEFT JOIN financial_categories c ON c.id = t.category_id
@@ -872,9 +969,10 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind string) ([]Transaction,
 			&t.IsAnonymous, &t.Description, &t.ReceiptIssued, &t.Hash, &t.OccurredAt, &t.CreatedAt, &t.EntrySeq,
 			&t.ReceiptID, &t.ReceiptRef, &t.ReceiptToken,
 			&t.VoidedAt, &t.VoidReason, &t.AttachmentCount, &t.AttachmentURL,
-			&t.DueDate, &t.PaidAt, &t.CostCenter); err != nil {
+			&t.DueDate, &t.PaidAt, &t.CostCenter, &t.ReconciledAt); err != nil {
 			return nil, err
 		}
+		t.Reconciled = t.ReconciledAt != nil
 		out = append(out, t)
 	}
 	return out, rows.Err()
@@ -884,6 +982,9 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind string) ([]Transaction,
 // Usado pelas contas a pagar. Colunas fora da hash-chain, entao o trigger
 // append-only permite o UPDATE.
 func (r *Repo) Settle(ctx context.Context, tx pgx.Tx, id string, paid bool) error {
+	if err := assertTxnMutable(ctx, tx, id); err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx, `
 		UPDATE financial_transactions
 		SET paid_at = CASE WHEN $2 THEN now() ELSE NULL END
@@ -895,6 +996,44 @@ func (r *Repo) Settle(ctx context.Context, tx pgx.Tx, id string, paid bool) erro
 		return pgx.ErrNoRows
 	}
 	return nil
+}
+
+// ReconcileTransactions concilia/desconcilia um conjunto de lancamentos na mesma
+// transacao (atomico). Usado pelo atalho "conciliar pendentes" do periodo.
+func (r *Repo) ReconcileTransactions(ctx context.Context, tx pgx.Tx, ids []string, reconciled bool, actorID string) error {
+	for _, id := range ids {
+		if err := r.ReconcileTransaction(ctx, tx, id, reconciled, actorID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ReconcileTransaction concilia/desconcilia um unico lancamento. A RPC no banco
+// valida o tenant e as travas de periodo/auditoria.
+func (r *Repo) ReconcileTransaction(ctx context.Context, tx pgx.Tx, id string, reconciled bool, actorID string) error {
+	var tenantID, branchID, date string
+	var reconciledAt, voidedAt *time.Time
+	err := tx.QueryRow(ctx, `
+		SELECT tenant_id::text, branch_id::text,
+		       (occurred_at AT TIME ZONE 'UTC')::date::text,
+		       reconciled_at, voided_at
+		FROM financial_transactions WHERE id = $1::uuid`, id).
+		Scan(&tenantID, &branchID, &date, &reconciledAt, &voidedAt)
+	if err != nil {
+		return err
+	}
+	if voidedAt != nil {
+		return ErrTransactionVoided
+	}
+	if (reconciledAt != nil) == reconciled {
+		return nil
+	}
+	if err := assertDateOpen(ctx, tx, tenantID, branchID, date); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `SELECT fin_tx_reconcile($1::uuid, $2, $3)`, id, reconciled, actorID)
+	return err
 }
 
 // SumBalance retorna entradas/saidas agregadas e por categoria (balancete/DRE).
