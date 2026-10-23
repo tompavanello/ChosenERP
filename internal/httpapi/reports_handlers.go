@@ -79,8 +79,24 @@ func first(v []string) string {
 	return ""
 }
 
-// money formata um valor para os relatorios exportados.
-func money(v float64) string { return fmt.Sprintf("%.2f", v) }
+// money formata um valor para os relatorios exportados no padrao brasileiro
+// (milhar com ponto e decimal com virgula), igual ao exibido na tela.
+func money(v float64) string {
+	s := strconv.FormatFloat(v, 'f', 2, 64)
+	sign := ""
+	if strings.HasPrefix(s, "-") {
+		sign, s = "-", s[1:]
+	}
+	intPart, decPart, _ := strings.Cut(s, ".")
+	var b strings.Builder
+	for i, ch := range intPart {
+		if i > 0 && (len(intPart)-i)%3 == 0 {
+			b.WriteByte('.')
+		}
+		b.WriteRune(ch)
+	}
+	return sign + b.String() + "," + decPart
+}
 
 func (a *App) handleExportBalance(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())

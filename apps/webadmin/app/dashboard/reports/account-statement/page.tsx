@@ -316,32 +316,6 @@ export default function AccountStatementPage() {
                   const dayLines = linesByDay.get(day.date) ?? [];
                   return (
                     <Fragment key={day.date}>
-                      <TRow className="border-y border-sky-100 bg-sky-50/70 dark:border-sky-900/40 dark:bg-sky-950/20">
-                        <TD colSpan={canWrite ? 8 : 7} className="py-2">
-                          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 text-xs">
-                            <div className="font-semibold text-sky-800 dark:text-sky-300">
-                              {datePt(day.date)}
-                              <span className="ml-2 font-normal text-zinc-500 dark:text-zinc-400">
-                                {day.count} lancamento(s)
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-zinc-600 dark:text-zinc-300">
-                              <span>
-                                Entradas{" "}
-                                <b className="font-semibold text-emerald-600">{currency(day.income)}</b>
-                              </span>
-                              <span>
-                                Saidas{" "}
-                                <b className="font-semibold text-red-600">{currency(day.expense)}</b>
-                              </span>
-                              <span className="rounded bg-white/70 px-2 py-0.5 dark:bg-zinc-900/60">
-                                Saldo do dia{" "}
-                                <b className="font-semibold tabular-nums">{currency(day.closing_balance)}</b>
-                              </span>
-                            </div>
-                          </div>
-                        </TD>
-                      </TRow>
                       {dayLines.map((l) => (
                         <TRow key={l.id}>
                           <TD className="whitespace-nowrap text-zinc-500">{datePt(lineDay(l))}</TD>
@@ -376,6 +350,32 @@ export default function AccountStatementPage() {
                           )}
                         </TRow>
                       ))}
+                      <TRow className="border-y border-sky-100 bg-sky-50/70 dark:border-sky-900/40 dark:bg-sky-950/20">
+                        <TD colSpan={canWrite ? 8 : 7} className="py-2">
+                          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 text-xs">
+                            <div className="font-semibold text-sky-800 dark:text-sky-300">
+                              Total do dia
+                              <span className="ml-2 font-normal text-zinc-500 dark:text-zinc-400">
+                                {datePt(day.date)} · {day.count} lancamento(s)
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-zinc-600 dark:text-zinc-300">
+                              <span>
+                                Entradas{" "}
+                                <b className="font-semibold text-emerald-600">{currency(day.income)}</b>
+                              </span>
+                              <span>
+                                Saidas{" "}
+                                <b className="font-semibold text-red-600">{currency(day.expense)}</b>
+                              </span>
+                              <span className="rounded bg-white/70 px-2 py-0.5 dark:bg-zinc-900/60">
+                                Saldo do dia{" "}
+                                <b className="font-semibold tabular-nums">{currency(day.closing_balance)}</b>
+                              </span>
+                            </div>
+                          </div>
+                        </TD>
+                      </TRow>
                     </Fragment>
                   );
                 })}
