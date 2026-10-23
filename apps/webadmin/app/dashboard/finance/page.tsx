@@ -126,6 +126,7 @@ export default function FinancePage() {
   const [importRows, setImportRows] = useState<string[][]>([]);
   const [importStartRow, setImportStartRow] = useState(1);
   const [importMap, setImportMap] = useState<Record<string, number>>({});
+  const [importAccountId, setImportAccountId] = useState("");
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [sendDrawer, setSendDrawer] = useState<{ open: boolean; txn: Transaction | null; channel: "email" | "whatsapp" }>({ open: false, txn: null, channel: "email" });
@@ -614,9 +615,13 @@ export default function FinancePage() {
 
   async function doImport() {
     if (!importFile) return;
+    if (!importAccountId) {
+      toast("Selecione a conta bancaria dos lancamentos importados.", "error");
+      return;
+    }
     setImporting(true);
     try {
-      const res = await importTransactionsFile(importFile.data, importFile.filename, importStartRow - 1, importMap);
+      const res = await importTransactionsFile(importFile.data, importFile.filename, importStartRow - 1, importMap, importAccountId);
       setImportResult(res);
       toast(`${res.imported} lancamento(s) importado(s).`);
       await handleTxnSaved();
@@ -1128,8 +1133,8 @@ export default function FinancePage() {
       >
         <div className="space-y-3 text-sm">
           <p className="text-zinc-500">
-            Envie uma planilha <b>.xlsx</b> ou <b>.csv</b>. Depois de mapear as colunas e escolher a
-            <b> linha inicial</b> dos dados, clique em Importar.
+            Envie uma planilha <b>.xlsx</b> ou <b>.csv</b>. Escolha a <b>conta bancaria padrao</b>,
+            mapeie as colunas e a <b>linha inicial</b> dos dados e clique em Importar.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" type="button" onClick={() => downloadCSVTemplate("modelo-lancamentos.csv", TX_TEMPLATE)}>
@@ -1147,6 +1152,30 @@ export default function FinancePage() {
               e.target.value = "";
             }}
           />
+
+          <div className="max-w-xs">
+            <label className="label">Conta bancaria padrao *</label>
+            <Select
+              className="h-8 text-sm"
+              value={importAccountId}
+              onChange={(e) => setImportAccountId(e.target.value)}
+              required
+            >
+              <option value="" disabled>Selecione a conta...</option>
+              {accounts.filter((a) => a.is_active).map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </Select>
+            {accounts.filter((a) => a.is_active).length === 0 && (
+              <p className="mt-1 text-xs text-red-600">
+                Cadastre uma conta bancaria ativa em Contas Bancarias.
+              </p>
+            )}
+            <p className="mt-1 text-xs text-zinc-400">
+              Usada quando a coluna &quot;Conta bancaria&quot; nao for mapeada. Quando mapeada, o nome da
+              planilha precisa existir e estar ativo.
+            </p>
+          </div>
 
           {importRows.length > 0 && (
             <>
@@ -1215,7 +1244,7 @@ export default function FinancePage() {
           )}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" type="button" onClick={() => setShowImport(false)}>Fechar</Button>
-            <Button type="button" onClick={doImport} disabled={importing || !importFile}>
+            <Button type="button" onClick={doImport} disabled={importing || !importFile || !importAccountId}>
               {importing ? "Importando..." : "Importar"}
             </Button>
           </div>

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -13,6 +14,26 @@ import (
 
 // ErrProductInvalido sinaliza produto sem nome/categoria.
 var ErrProductInvalido = errors.New("nome e categoria do produto sao obrigatorios")
+
+// ErrProductAccount exige que o produto tenha uma conta bancaria ativa.
+var ErrProductAccount = errors.New("selecione uma conta bancaria ativa para o produto")
+
+func validateProductAccount(ctx context.Context, tx pgx.Tx, accountID string) error {
+	if strings.TrimSpace(accountID) == "" {
+		return ErrProductAccount
+	}
+	var active bool
+	if err := tx.QueryRow(ctx, `SELECT is_active FROM financial_accounts WHERE id = $1::uuid`, accountID).Scan(&active); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return errors.New("conta bancaria do produto nao encontrada no escopo")
+		}
+		return err
+	}
+	if !active {
+		return ErrProductAccount
+	}
+	return nil
+}
 
 // ---- Configuracao de gateway por igreja (Fluxo B) ----
 
@@ -237,6 +258,9 @@ func (s *Service) CreateProduct(ctx context.Context, b store.Bounds, in ProductI
 	}
 	var id string
 	err := s.Store.WithTenant(ctx, b, func(tx pgx.Tx) error {
+		if err := validateProductAccount(ctx, tx, in.AccountID); err != nil {
+			return err
+		}
 		return tx.QueryRow(ctx, `
 			INSERT INTO payment_products
 				(tenant_id, branch_id, name, description, amount_cents, allowed_billing_types,
@@ -257,6 +281,9 @@ func (s *Service) CreateProduct(ctx context.Context, b store.Bounds, in ProductI
 // UpdateProduct edita um produto.
 func (s *Service) UpdateProduct(ctx context.Context, b store.Bounds, id string, in ProductInput) (*Product, error) {
 	err := s.Store.WithTenant(ctx, b, func(tx pgx.Tx) error {
+		if err := validateProductAccount(ctx, tx, in.AccountID); err != nil {
+			return err
+		}
 		tag, e := tx.Exec(ctx, `
 			UPDATE payment_products SET
 				name=COALESCE(NULLIF($3,''), name),

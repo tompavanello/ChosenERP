@@ -250,7 +250,11 @@ func (a *App) handleCreateTxn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Amount <= 0 {
-		writeErr(w, http.StatusBadRequest, "amount must be positive")
+		writeErr(w, http.StatusBadRequest, finance.ErrAmountNotPositive.Error())
+		return
+	}
+	if in.AccountID == nil || strings.TrimSpace(*in.AccountID) == "" {
+		writeErr(w, http.StatusBadRequest, finance.ErrAccountRequired.Error())
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -296,7 +300,11 @@ func (a *App) handleUpdateTxn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Amount <= 0 {
-		writeErr(w, http.StatusBadRequest, "amount must be positive")
+		writeErr(w, http.StatusBadRequest, finance.ErrAmountNotPositive.Error())
+		return
+	}
+	if in.AccountID == nil || strings.TrimSpace(*in.AccountID) == "" {
+		writeErr(w, http.StatusBadRequest, finance.ErrAccountRequired.Error())
 		return
 	}
 	b := boundsFromClaims(claims)
@@ -414,11 +422,12 @@ func (a *App) handleImportTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		CSV      string         `json:"csv"`
-		Data     string         `json:"data"`
-		Filename string         `json:"filename"`
-		StartRow int            `json:"start_row"`
-		Mapping  map[string]int `json:"mapping"`
+		CSV              string         `json:"csv"`
+		Data             string         `json:"data"`
+		Filename         string         `json:"filename"`
+		StartRow         int            `json:"start_row"`
+		Mapping          map[string]int `json:"mapping"`
+		DefaultAccountID string         `json:"default_account_id"`
 	}
 	if err := readJSONMax(r, &in, 8<<20); err != nil {
 		writeErr(w, http.StatusBadRequest, "arquivo invalido ou muito grande (max 8MB)")
@@ -433,7 +442,7 @@ func (a *App) handleImportTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 		if in.CSV != "" {
 			var e error
-			res, e = a.Finance.ImportCSV(r.Context(), tx, claims.TenantID, branchID, claims.UserID, in.CSV)
+			res, e = a.Finance.ImportCSV(r.Context(), tx, claims.TenantID, branchID, claims.UserID, in.DefaultAccountID, in.CSV)
 			return e
 		}
 		if in.Data == "" {
@@ -447,7 +456,7 @@ func (a *App) handleImportTransactions(w http.ResponseWriter, r *http.Request) {
 		if e != nil {
 			return e
 		}
-		res, e = a.Finance.ImportRecords(r.Context(), tx, claims.TenantID, branchID, claims.UserID, rows, in.StartRow, in.Mapping)
+		res, e = a.Finance.ImportRecords(r.Context(), tx, claims.TenantID, branchID, claims.UserID, in.DefaultAccountID, rows, in.StartRow, in.Mapping)
 		return e
 	})
 	if err != nil {

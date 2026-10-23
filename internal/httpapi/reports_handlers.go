@@ -1,9 +1,11 @@
 package httpapi
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -438,6 +440,116 @@ func (a *App) handleExportMonthlyStatement(w http.ResponseWriter, r *http.Reques
 				{"Saldo final", money(st.ClosingBalance)},
 			}},
 		})
+}
+
+func (a *App) handleAccountStatement(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	q := r.URL.Query()
+	accountID := strings.TrimSpace(q.Get("account_id"))
+	if accountID == "" {
+		writeErr(w, http.StatusBadRequest, "selecione a conta bancaria")
+		return
+	}
+	b := boundsFromClaims(claims)
+	var st *finance.AccountStatement
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var e error
+		st, e = a.Finance.BuildAccountStatement(r.Context(), tx, accountID, q.Get("from"), q.Get("to"), q.Get("order"))
+		return e
+	})
+	if err != nil {
+		if errors.Is(err, finance.ErrAccountNotFound) {
+			writeErr(w, http.StatusNotFound, "conta bancaria nao encontrada")
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+func (a *App) handleExportAccountStatement(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	q := r.URL.Query()
+	accountID := strings.TrimSpace(q.Get("account_id"))
+	if accountID == "" {
+		writeErr(w, http.StatusBadRequest, "selecione a conta bancaria")
+		return
+	}
+	b := boundsFromClaims(claims)
+	var st *finance.AccountStatement
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var e error
+		st, e = a.Finance.BuildAccountStatement(r.Context(), tx, accountID, q.Get("from"), q.Get("to"), q.Get("order"))
+		return e
+	})
+	if err != nil {
+		if errors.Is(err, finance.ErrAccountNotFound) {
+			writeErr(w, http.StatusNotFound, "conta bancaria nao encontrada")
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	lines := make([][]string, 0, len(st.Lines))
+	for _, l := range st.Lines {
+		seq := ""
+		if l.EntrySeq != nil {
+			seq = strconv.Itoa(*l.EntrySeq)
+		}
+		kind := "Entrada"
+		if l.Type != "income" {
+			kind = "Saida"
+		}
+		category := ""
+		if l.CategoryName != nil {
+			category = *l.CategoryName
+		}
+		lines = append(lines, []string{
+			l.OccurredAt.UTC().Format("2006-01-02"), seq,
+			statementDescription(l), category, kind,
+			money(l.Amount), money(l.BalanceAfter),
+		})
+	}
+	days := make([][]string, 0, len(st.Days))
+	for _, d := range st.Days {
+		days = append(days, []string{d.Date, money(d.Income), money(d.Expense), money(d.ClosingBalance)})
+	}
+	writeReport(w, "extrato-"+st.AccountID, "Extrato de Conta Corrente",
+		"Conta: "+st.AccountName+" | Periodo: "+st.From+" a "+st.To,
+		first(q["format"]), []exportSection{
+			{Title: "Resumo", Headers: []string{"Indicador", "Valor"}, Rows: [][]string{
+				{"Saldo inicial da conta", money(st.InitialBalance)},
+				{"Saldo anterior ao periodo", money(st.OpeningBalance)},
+				{"Soma das entradas", money(st.TotalIncome)},
+				{"Soma das saidas", money(st.TotalExpense)},
+				{"Saldo final", money(st.ClosingBalance)},
+			}},
+			{Title: "Lancamentos", Headers: []string{"Data", "Seq.", "Descricao", "Categoria", "Tipo", "Valor", "Saldo"}, Rows: lines},
+			{Title: "Resumo por dia", Headers: []string{"Data", "Entradas", "Saidas", "Saldo do dia"}, Rows: days},
+		})
+}
+
+func statementDescription(l finance.AccountStatementLine) string {
+	if l.Description != nil && strings.TrimSpace(*l.Description) != "" {
+		return *l.Description
+	}
+	if l.DonorName != nil && strings.TrimSpace(*l.DonorName) != "" {
+		return *l.DonorName
+	}
+	if l.CategoryName != nil {
+		return *l.CategoryName
+	}
+	return ""
 }
 
 // ---- Recibos: renderizacao e envio ----

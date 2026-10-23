@@ -128,7 +128,8 @@ export default function PaymentMethodsPage() {
     setEditing(null);
     setProductForm({
       name: "", description: "", amount: "", allowed: ["PIX", "BOLETO", "CREDIT_CARD"],
-      category_id: categories[0]?.id ?? "", account_id: "", is_recurring: false, is_active: true, sort_order: "0",
+      category_id: categories[0]?.id ?? "", account_id: accounts.find((a) => a.is_active)?.id ?? "",
+      is_recurring: false, is_active: true, sort_order: "0",
     });
     setProductOpen(true);
   }
@@ -144,6 +145,10 @@ export default function PaymentMethodsPage() {
 
   async function submitProduct(e: React.FormEvent) {
     e.preventDefault();
+    if (!productForm.account_id) {
+      toast("Selecione a conta bancaria do produto.", "error");
+      return;
+    }
     setSaving(true);
     try {
       const payload: PaymentProductInput = {
@@ -152,7 +157,7 @@ export default function PaymentMethodsPage() {
         amount_cents: productForm.amount ? Math.round(Number(productForm.amount) * 100) : null,
         allowed_billing_types: productForm.allowed,
         category_id: productForm.category_id,
-        account_id: productForm.account_id || undefined,
+        account_id: productForm.account_id,
         is_recurring: productForm.is_recurring,
         is_active: productForm.is_active,
         sort_order: Number(productForm.sort_order || 0),
@@ -420,11 +425,23 @@ export default function PaymentMethodsPage() {
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </Select>
             </Field>
-            <Field label="Conta bancaria">
-              <Select className="h-8 text-sm" value={productForm.account_id} onChange={(e) => setProductForm({ ...productForm, account_id: e.target.value })}>
-                <option value="">Nenhuma</option>
-                {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            <Field label="Conta bancaria *" hint="Conta que recebe os valores do produto">
+              <Select
+                required
+                className="h-8 text-sm"
+                value={productForm.account_id}
+                onChange={(e) => setProductForm({ ...productForm, account_id: e.target.value })}
+              >
+                <option value="" disabled>Selecione...</option>
+                {accounts.filter((a) => a.is_active || a.id === productForm.account_id).map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}{a.is_active ? "" : " (inativa)"}</option>
+                ))}
               </Select>
+              {accounts.filter((a) => a.is_active).length === 0 && (
+                <p className="mt-1 text-xs text-red-600">
+                  Cadastre uma conta bancaria ativa em Contas Bancarias.
+                </p>
+              )}
             </Field>
             <Field label="Ordem">
               <Input type="number" className="h-8 text-sm" value={productForm.sort_order} onChange={(e) => setProductForm({ ...productForm, sort_order: e.target.value })} />
@@ -461,7 +478,9 @@ export default function PaymentMethodsPage() {
           </div>
           <div className="flex justify-end gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
             <Button variant="ghost" type="button" className="h-8 text-sm" onClick={() => setProductOpen(false)}>Cancelar</Button>
-            <Button type="submit" className="h-8 text-sm" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
+            <Button type="submit" className="h-8 text-sm" disabled={saving || !productForm.account_id}>
+              {saving ? "Salvando..." : "Salvar"}
+            </Button>
           </div>
         </form>
       </Drawer>

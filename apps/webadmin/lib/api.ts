@@ -1249,10 +1249,11 @@ export const importTransactionsFile = (
   filename: string,
   startRow: number,
   mapping: Record<string, number>,
+  defaultAccountId: string,
 ) =>
   api<ImportResult>("/api/v1/finance/transactions/import", {
     method: "POST",
-    body: JSON.stringify({ data, filename, start_row: startRow, mapping }),
+    body: JSON.stringify({ data, filename, start_row: startRow, mapping, default_account_id: defaultAccountId }),
   });
 
 // ---- Anexos de lancamentos ----
@@ -1458,6 +1459,46 @@ export interface MonthlyStatement {
 }
 export const getMonthlyStatement = (month?: string) =>
   api<MonthlyStatement>(`/api/v1/reports/monthly-statement${month ? `?month=${month}` : ""}`);
+
+// ---- Extrato de conta corrente ----
+export interface AccountStatementLine extends Transaction {
+  balance_after: number;
+}
+export interface AccountStatementDay {
+  date: string;
+  income: number;
+  expense: number;
+  net: number;
+  closing_balance: number;
+  count: number;
+}
+export interface AccountStatement {
+  account_id: string;
+  account_name: string;
+  branch_id?: string;
+  initial_balance: number;
+  from: string;
+  to: string;
+  order: "asc" | "desc";
+  opening_balance: number;
+  total_income: number;
+  total_expense: number;
+  closing_balance: number;
+  lines: AccountStatementLine[];
+  days: AccountStatementDay[];
+}
+export const getAccountStatement = (params: {
+  account_id: string;
+  from?: string;
+  to?: string;
+  order?: "asc" | "desc";
+}) => {
+  const q = new URLSearchParams({ account_id: params.account_id });
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  if (params.order) q.set("order", params.order);
+  return api<AccountStatement>(`/api/v1/reports/account-statement?${q.toString()}`);
+};
 
 // ---- Painel consolidado Sede > Filiais ----
 export interface ConsolidatedBranch {

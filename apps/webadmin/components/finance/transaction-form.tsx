@@ -126,7 +126,7 @@ export function TransactionForm({
       .catch(() => { /* silencioso - usa estados vazios */ });
 
     listAccounts()
-      .then((r) => { if (!cancelled) setAccounts(r.accounts.filter((a) => a.is_active)); })
+      .then((r) => { if (!cancelled) setAccounts(r.accounts); })
       .catch(() => { if (!cancelled) setAccounts([]); });
 
     if (form.type === "income" || form.donor_member_id) {
@@ -154,10 +154,14 @@ export function TransactionForm({
     setForm((f) => ({ ...f, [k]: v }));
 
   const categoriesForType = form.type === "income" ? incomeCats : expenseCats;
+  // Contas inativas continuam visiveis quando ja estao no lancamento (edicao),
+  // mas nao podem ser escolhidas para novos lancamentos.
+  const availableAccounts = accounts.filter((a) => a.is_active || a.id === form.account_id);
 
-  // Validacao client-side minima: a conta contabil e obrigatoria.
+  // Validacao client-side minima: a conta contabil e a conta bancaria sao
+  // obrigatorias.
   const canSubmit =
-    !!form.category_id && !!form.amount && Number(form.amount) > 0 &&
+    !!form.category_id && !!form.account_id && !!form.amount && Number(form.amount) > 0 &&
     (hasPerm("finance.write") || !!onSubmit);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -173,12 +177,16 @@ export function TransactionForm({
       toast("Selecione a conta contabil.", "error");
       return;
     }
+    if (!form.account_id) {
+      toast("Selecione a conta bancaria.", "error");
+      return;
+    }
 
     const payload: Record<string, unknown> = {
       type: form.type,
       amount,
       category_id: form.category_id,
-      account_id: form.account_id || undefined,
+      account_id: form.account_id,
       payment_method: form.payment_method || undefined,
       description: form.description || undefined,
       occurred_at: form.occurred_at || undefined,
@@ -441,25 +449,26 @@ export function TransactionForm({
       )}
 
       <Section title="Conta bancaria">
-        {accounts.length > 0 ? (
-          <Field label="Conta">
+        {availableAccounts.length > 0 ? (
+          <Field label="Conta *">
             <Select
               value={form.account_id}
               onChange={(e) => set("account_id", e.target.value)}
               disabled={saving}
+              required
             >
-              <option value="">Nenhuma (nao informado)</option>
-              {accounts.map((a) => (
+              <option value="" disabled>Selecione a conta...</option>
+              {availableAccounts.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.name} - saldo inicial {currency(a.initial_balance)}
+                  {a.name} - saldo inicial {currency(a.initial_balance)}{a.is_active ? "" : " (inativa)"}
                 </option>
               ))}
             </Select>
           </Field>
         ) : (
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-red-600">
             Nenhuma conta bancaria ativa cadastrada. Cadastre uma em{" "}
-            <span className="text-sky-600">Contas Bancarias</span>.
+            <span className="font-medium">Contas Bancarias</span> antes de lancar.
           </p>
         )}
       </Section>

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -13,6 +14,34 @@ import (
 
 // ErrCategoryRequired indica que o lancamento veio sem conta do plano de contas.
 var ErrCategoryRequired = errors.New("a conta contabil e obrigatoria")
+
+// Erros de validacao do lancamento (conta bancaria e valor).
+var (
+	ErrAccountRequired   = errors.New("a conta bancaria e obrigatoria")
+	ErrAccountNotFound   = errors.New("conta bancaria nao encontrada no escopo")
+	ErrAccountInactive   = errors.New("conta bancaria inativa")
+	ErrAmountNotPositive = errors.New("o valor do lancamento deve ser maior que zero")
+)
+
+// validateTxnAccount confere a conta bancaria do lancamento. currentAccountID
+// permite manter uma conta inativa que ja estava vinculada ao registro (edicao).
+func validateTxnAccount(ctx context.Context, tx pgx.Tx, accountID, currentAccountID string) error {
+	accountID = strings.TrimSpace(accountID)
+	if accountID == "" {
+		return ErrAccountRequired
+	}
+	var active bool
+	if err := tx.QueryRow(ctx, `SELECT is_active FROM financial_accounts WHERE id = $1::uuid`, accountID).Scan(&active); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrAccountNotFound
+		}
+		return err
+	}
+	if !active && accountID != strings.TrimSpace(currentAccountID) {
+		return ErrAccountInactive
+	}
+	return nil
+}
 
 // Category e um item do plano de contas (income | expense).
 type Category struct {
@@ -334,6 +363,16 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 	if in.CategoryID == nil || *in.CategoryID == "" {
 		return nil, "", "", "", ErrCategoryRequired
 	}
+	if in.Amount <= 0 {
+		return nil, "", "", "", ErrAmountNotPositive
+	}
+	acct := ""
+	if in.AccountID != nil {
+		acct = *in.AccountID
+	}
+	if err := validateTxnAccount(ctx, tx, acct, ""); err != nil {
+		return nil, "", "", "", err
+	}
 	// O RLS esconde contas fora do escopo, entao um id de outro tenant/filial
 	// resulta em ErrNoRows - tratado como conta invalida.
 	var catType string
@@ -362,10 +401,6 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 
 	// Sequencia do lancamento no escopo (tenant, filial, conta, data). O lock
 	// por escopo evita corrida ao calcular a proxima posicao / renumerar.
-	acct := ""
-	if in.AccountID != nil {
-		acct = *in.AccountID
-	}
 	scopeDate := when.UTC().Format(dateLayout)
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
 		tenantID+"|"+branchID+"|"+acct+"|"+scopeDate); err != nil {
@@ -480,6 +515,13 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, tenantID, id string, in Up
 	if in.CategoryID == nil || *in.CategoryID == "" {
 		return ErrCategoryRequired
 	}
+	if in.Amount <= 0 {
+		return ErrAmountNotPositive
+	}
+	targetAccountID := strOr(in.AccountID)
+	if targetAccountID == "" {
+		return ErrAccountRequired
+	}
 	// O RLS esconde contas fora do escopo; id invalido cai em ErrNoRows.
 	var catType string
 	if err := tx.QueryRow(ctx, `SELECT type FROM financial_categories WHERE id = $1::uuid`, *in.CategoryID).Scan(&catType); err != nil {
@@ -498,10 +540,14 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, tenantID, id string, in Up
 		return err
 	}
 
-	// Confirma existencia/escopo (RLS) e a filial do lancamento antes de editar.
-	var branchID string
+	// Confirma existencia/escopo (RLS), a filial e a conta atual antes de editar.
+	var branchID, currentAccountID string
 	if err := tx.QueryRow(ctx, `
-		SELECT branch_id::text FROM financial_transactions WHERE id = $1::uuid`, id).Scan(&branchID); err != nil {
+		SELECT branch_id::text, COALESCE(account_id::text,'')
+		FROM financial_transactions WHERE id = $1::uuid`, id).Scan(&branchID, &currentAccountID); err != nil {
+		return err
+	}
+	if err := validateTxnAccount(ctx, tx, targetAccountID, currentAccountID); err != nil {
 		return err
 	}
 

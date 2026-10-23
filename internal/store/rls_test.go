@@ -269,9 +269,9 @@ func TestRLS_Finance_InsertCrossBranchBlocked(t *testing.T) {
 	expectRLSDenied(t,
 		bounds(fixTenantX, fixBranchA, "tesoureiro"),
 		`INSERT INTO financial_transactions
-		 (tenant_id, branch_id, type, amount, currency, payment_method)
-		 VALUES ($1, $2, 'oferta', 999.99, 'BRL', 'pix')`,
-		fixTenantX, fixBranchB)
+		 (tenant_id, branch_id, type, amount, currency, payment_method, account_id)
+		 VALUES ($1, $2, 'oferta', 999.99, 'BRL', 'pix', $3)`,
+		fixTenantX, fixBranchB, fixAccountA)
 }
 
 func TestRLS_Transfers_InsertRequiresParticipation(t *testing.T) {
@@ -357,9 +357,9 @@ func TestFinancialTransactions_HashWithNullPaymentMethod(t *testing.T) {
 	err := inBounds(t, bounds(fixTenantX, fixBranchA, "tesoureiro"), func(tx pgx.Tx) error {
 		var hasHash bool
 		if err := tx.QueryRow(testCtx, `
-			INSERT INTO financial_transactions (tenant_id, branch_id, category_id, type, amount, currency)
-			VALUES ($1, $2, $3, 'income', 1.00, 'BRL')
-			RETURNING hash IS NOT NULL`, fixTenantX, fixBranchA, fixCatA).Scan(&hasHash); err != nil {
+			INSERT INTO financial_transactions (tenant_id, branch_id, category_id, type, amount, currency, account_id)
+			VALUES ($1, $2, $3, 'income', 1.00, 'BRL', $4)
+			RETURNING hash IS NOT NULL`, fixTenantX, fixBranchA, fixCatA, fixAccountA).Scan(&hasHash); err != nil {
 			t.Fatalf("insert sem forma de pagamento: %v", err)
 		}
 		if !hasHash {
@@ -396,9 +396,9 @@ func TestFinancialTransactions_HardDeleteRechains(t *testing.T) {
 	err := inBounds(t, bounds(fixTenantX, fixBranchA, "tesoureiro"), func(tx pgx.Tx) error {
 		var id string
 		if err := tx.QueryRow(testCtx, `
-			INSERT INTO financial_transactions (tenant_id, branch_id, category_id, type, amount, currency)
-			VALUES ($1, $2, $3, 'income', 33.00, 'BRL')
-			RETURNING id::text`, fixTenantX, fixBranchA, fixCatA).Scan(&id); err != nil {
+			INSERT INTO financial_transactions (tenant_id, branch_id, category_id, type, amount, currency, account_id)
+			VALUES ($1, $2, $3, 'income', 33.00, 'BRL', $4)
+			RETURNING id::text`, fixTenantX, fixBranchA, fixCatA, fixAccountA).Scan(&id); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(testCtx, `DELETE FROM financial_transactions WHERE id = $1::uuid`, id); err != nil {

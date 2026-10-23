@@ -3,6 +3,7 @@ package finance
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -110,6 +111,12 @@ func (r *Repo) CreateRecurring(ctx context.Context, tx pgx.Tx, tenantID, branchI
 	sub, ok := normalizeRecurring(in)
 	if !ok {
 		return nil, pgx.ErrNoRows
+	}
+	if in.AccountID == nil || strings.TrimSpace(*in.AccountID) == "" {
+		return nil, ErrAccountRequired
+	}
+	if err := validateTxnAccount(ctx, tx, *in.AccountID, ""); err != nil {
+		return nil, err
 	}
 	periodStart, err := parseOccurredAt(in.PeriodStart)
 	if err != nil {

@@ -162,8 +162,8 @@ export function BulkEntry({
   );
 
   const ready = useMemo(
-    () => touched.filter((r) => r.category_id && Number(r.amount) > 0),
-    [touched],
+    () => touched.filter((r) => r.category_id && Number(r.amount) > 0 && (r.account_id || defaultAccountId)),
+    [touched, defaultAccountId],
   );
 
   const totals = useMemo(() => {
@@ -190,11 +190,15 @@ export function BulkEntry({
       toast("Preencha ao menos uma linha (conta contabil e valor).", "error");
       return;
     }
+    if (!defaultAccountId) {
+      toast("Selecione a conta corrente padrao do lote.", "error");
+      return;
+    }
     const payloads = touched.map((r) => ({
       type: r.type,
       amount: Number(r.amount),
       category_id: r.category_id || undefined,
-      account_id: r.account_id || defaultAccountId || undefined,
+      account_id: r.account_id || defaultAccountId,
       payment_method: r.payment_method || undefined,
       description: r.description || undefined,
       occurred_at: r.occurred_at || defaultDate || undefined,
@@ -268,13 +272,14 @@ export function BulkEntry({
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-full sm:w-64">
-          <span className="block text-[11px] font-medium uppercase tracking-wide text-zinc-500">Conta corrente padrao do lote</span>
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-zinc-500">Conta corrente padrao do lote *</span>
           <Select
             className="mt-1 h-8 text-xs"
             value={defaultAccountId}
             onChange={(e) => setDefaultAccountId(e.target.value)}
+            required
           >
-            <option value="">Nenhuma (definir por linha)</option>
+            <option value="" disabled>Selecione a conta...</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
@@ -293,6 +298,11 @@ export function BulkEntry({
           Aplicadas a todas as linhas; se algum lancamento for diferente, ajuste na propria linha.
         </p>
       </div>
+      {accounts.length === 0 && (
+        <p className="text-xs text-red-600">
+          Nenhuma conta bancaria ativa cadastrada. Cadastre uma em Contas Bancarias antes de lancar.
+        </p>
+      )}
 
       <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
         <table className="w-full min-w-[1000px] text-[13px]">

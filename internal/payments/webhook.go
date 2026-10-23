@@ -200,6 +200,12 @@ func (s *Service) reconcileCharge(ctx context.Context, tx pgx.Tx, chargeID strin
 			return err
 		}
 	}
+	if amountCents <= 0 {
+		return errors.New("cobranca com valor zerado nao gera lancamento")
+	}
+	if accountID == nil || *accountID == "" {
+		return errors.New("produto da cobranca sem conta bancaria vinculada")
+	}
 	if branchID == "" {
 		if b, e := store.DefaultBranchID(ctx, tx, tenantID); e == nil {
 			branchID = b

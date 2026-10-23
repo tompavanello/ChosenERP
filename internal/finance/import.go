@@ -66,7 +66,7 @@ func parseCSV(body string) ([][]string, error) {
 //	data;tipo;conta;valor;forma_pagamento;descricao;anonimo;conta_bancaria
 //
 // Linhas invalidas sao ignoradas e devolvidas em `errors`.
-func (r *Repo) ImportCSV(ctx context.Context, tx pgx.Tx, tenantID, branchID, actorID, body string) (ImportResult, error) {
+func (r *Repo) ImportCSV(ctx context.Context, tx pgx.Tx, tenantID, branchID, actorID, defaultAccountID, body string) (ImportResult, error) {
 	empty := ImportResult{Errors: []ImportError{}}
 	records, err := parseCSV(body)
 	if err != nil {
@@ -81,13 +81,13 @@ func (r *Repo) ImportCSV(ctx context.Context, tx pgx.Tx, tenantID, branchID, act
 			return empty, fmt.Errorf("coluna obrigatoria ausente: %s", req)
 		}
 	}
-	return r.ImportRecords(ctx, tx, tenantID, branchID, actorID, records, 1, idx)
+	return r.ImportRecords(ctx, tx, tenantID, branchID, actorID, defaultAccountID, records, 1, idx)
 }
 
 // ImportRecords importa linhas ja extraidas (CSV ou XLSX). `startRow` e o indice
 // (0-based) da primeira linha de dados e `mapping` mapeia campo -> indice da
 // coluna. Nao emite recibo (carga em lote); o hash-chain e do trigger.
-func (r *Repo) ImportRecords(ctx context.Context, tx pgx.Tx, tenantID, branchID, actorID string, records [][]string, startRow int, mapping map[string]int) (ImportResult, error) {
+func (r *Repo) ImportRecords(ctx context.Context, tx pgx.Tx, tenantID, branchID, actorID, defaultAccountID string, records [][]string, startRow int, mapping map[string]int) (ImportResult, error) {
 	res := ImportResult{Errors: []ImportError{}}
 	if startRow < 0 {
 		startRow = 0
@@ -99,6 +99,12 @@ func (r *Repo) ImportRecords(ctx context.Context, tx pgx.Tx, tenantID, branchID,
 	acctByName, err := accountIndex(ctx, tx)
 	if err != nil {
 		return res, err
+	}
+	defaultAccountID = strings.TrimSpace(defaultAccountID)
+	if defaultAccountID != "" {
+		if err := validateTxnAccount(ctx, tx, defaultAccountID, ""); err != nil {
+			return res, fmt.Errorf("conta bancaria padrao: %w", err)
+		}
 	}
 	addErr := func(line int, format string, args ...any) {
 		res.Skipped++
@@ -148,9 +154,18 @@ func (r *Repo) ImportRecords(ctx context.Context, tx pgx.Tx, tenantID, branchID,
 			continue
 		}
 
-		acctID := ""
+		acctID := defaultAccountID
 		if name := get(rec, "conta_bancaria"); name != "" {
-			acctID = acctByName[strings.ToLower(name)]
+			id, ok := acctByName[strings.ToLower(name)]
+			if !ok {
+				addErr(line, "conta bancaria %q nao encontrada ou inativa", name)
+				continue
+			}
+			acctID = id
+		}
+		if acctID == "" {
+			addErr(line, "conta bancaria obrigatoria")
+			continue
 		}
 
 		if _, err := tx.Exec(ctx, `

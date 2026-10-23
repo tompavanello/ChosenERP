@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Church, LayoutDashboard, Users, Wallet, LogOut, HeartHandshake, DoorOpen,
-  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, TrendingDown, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, CalendarCheck, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight, Globe, Layers, BookOpen, BookMarked, BookText, Play, Radio, Inbox, Smartphone, CreditCard, DatabaseBackup,
+  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, TrendingDown, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, CalendarCheck, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight, Globe, Layers, BookOpen, BookMarked, BookText, Play, Radio, Inbox, Smartphone, CreditCard, DatabaseBackup, ScrollText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -87,6 +87,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
       { key: "rep-balance", href: "/dashboard/reports/balance", label: "Balancete mensal", icon: BarChart3, perms: ["finance.read"], feature: "reports" },
       { key: "rep-dre", href: "/dashboard/reports/dre", label: "DRE", icon: TrendingUp, perms: ["finance.read"], feature: "reports" },
       { key: "rep-statement", href: "/dashboard/reports/monthly-statement", label: "Demonstrativo Mensal", icon: FileSpreadsheet, perms: ["finance.read"], feature: "reports" },
+      { key: "rep-account-statement", href: "/dashboard/reports/account-statement", label: "Extrato de conta corrente", icon: ScrollText, perms: ["finance.read"], feature: "reports" },
       { key: "rep-assembly", href: "/dashboard/reports/assembly", label: "Demonstrativo (Assembleia)", icon: FileSpreadsheet, perms: ["finance.read"], feature: "reports" },
       { key: "rep-inc-exp", href: "/dashboard/reports/income-expense", label: "Entradas x Saidas", icon: ArrowLeftRight, perms: ["finance.read"], feature: "reports" },
       { key: "rep-consolidated", href: "/dashboard/reports/consolidated", label: "Consolidado Sede > Filiais", icon: Building2, perms: ["finance.read"], feature: "reports" },

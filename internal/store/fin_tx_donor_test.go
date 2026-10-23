@@ -16,10 +16,10 @@ func TestFinancialTransactions_DonorNameChain(t *testing.T) {
 		var gotName, gotMember string
 		if err := tx.QueryRow(testCtx, `
 			INSERT INTO financial_transactions
-				(tenant_id, branch_id, category_id, type, amount, currency, donor_member_id, donor_name)
-			VALUES ($1, $2, $3, 'income', 25.00, 'BRL', $4, $5)
+				(tenant_id, branch_id, category_id, type, amount, currency, account_id, donor_member_id, donor_name)
+			VALUES ($1, $2, $3, 'income', 25.00, 'BRL', $4, $5, $6)
 			RETURNING donor_name, donor_member_id::text`,
-			fixTenantX, fixBranchA, fixCatA, fixMemberA1, "Visitante avulso").Scan(&gotName, &gotMember); err != nil {
+			fixTenantX, fixBranchA, fixCatA, fixAccountA, fixMemberA1, "Visitante avulso").Scan(&gotName, &gotMember); err != nil {
 			t.Fatalf("insert com doador avulso: %v", err)
 		}
 		if gotName != "Visitante avulso" || gotMember != fixMemberA1 {

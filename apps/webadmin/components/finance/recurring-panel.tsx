@@ -48,13 +48,17 @@ export function RecurringPanel() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.account_id) {
+      toast("Selecione a conta bancaria.", "error");
+      return;
+    }
     try {
       await createRecurring({
         subtype: form.subtype,
         amount: Number(form.amount),
         frequency: form.frequency,
         category_id: form.category_id || undefined,
-        account_id: form.account_id || undefined,
+        account_id: form.account_id,
         member_id: form.member_id || undefined,
         payment_method: form.payment_method,
         description: form.description || undefined,
@@ -144,14 +148,21 @@ export function RecurringPanel() {
               {incomeCats.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
             </Select>
           </Field>
-          {accts.length > 0 && (
-            <Field label="Conta bancaria">
-              <Select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
-                <option value="">Nenhuma</option>
-                {accts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
-              </Select>
-            </Field>
-          )}
+          <Field label="Conta bancaria *">
+            <Select
+              required
+              value={form.account_id}
+              onChange={(e) => setForm({ ...form, account_id: e.target.value })}
+            >
+              <option value="" disabled>Selecione a conta...</option>
+              {accts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
+            </Select>
+            {accts.length === 0 && (
+              <p className="mt-1 text-xs text-red-600">
+                Cadastre uma conta bancaria ativa em Contas Bancarias.
+              </p>
+            )}
+          </Field>
           <Field label="Doador (membro)">
             <Select value={form.member_id} onChange={(e) => setForm({ ...form, member_id: e.target.value })}>
               <option value="">Anonimo</option>
@@ -174,7 +185,9 @@ export function RecurringPanel() {
           </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" type="button" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button type="submit">{form.subtype === "dizimo" ? "Agendar Dizimo" : "Agendar"}</Button>
+            <Button type="submit" disabled={!form.account_id || accts.length === 0}>
+              {form.subtype === "dizimo" ? "Agendar Dizimo" : "Agendar"}
+            </Button>
           </div>
         </form>
       </Drawer>
