@@ -1077,8 +1077,8 @@ func (r *Repo) SumBalance(ctx context.Context, tx pgx.Tx, kind string) (Balance,
 		  AND t.voided_at IS NULL
 		GROUP BY 1,2,3,4
 		ORDER BY t.type,
-		         NULLIF(regexp_replace(c.code, '\D', '', 'g'), '')::int NULLS LAST,
-		         c.code`, kind)
+		         NULLIF(regexp_replace(COALESCE(c.code,''), '\D', '', 'g'), '')::int NULLS LAST,
+		         COALESCE(c.code,'')`, kind)
 	if err != nil {
 		return b, err
 	}
