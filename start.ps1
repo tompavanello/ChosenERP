@@ -72,6 +72,17 @@ try {
 } finally { Pop-Location }
 Write-Ok "containers iniciados"
 
+# O nginx monta nginx.conf/conf.d do host como volume: `compose up` NAO recria o
+# container quando so o arquivo muda, entao a config em memoria pode ficar
+# desatualizada (ex.: app/subdominios roteando para o servico errado). Recarrega
+# para aplicar o que esta no disco.
+$reload = & docker exec chosen-nginx nginx -s reload 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Write-Ok "nginx recarregado (config atual aplicada)"
+} else {
+    Write-Warn "nao foi possivel recarregar o nginx: $reload"
+}
+
 # --------------------------------------------------------- 4. health
 Write-Step "4/4 Aguardando API e Nginx (http://localhost/healthz)"
 $ok = $false
