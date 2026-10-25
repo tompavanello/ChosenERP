@@ -76,7 +76,7 @@ Write-Ok "containers iniciados"
 # container quando so o arquivo muda, entao a config em memoria pode ficar
 # desatualizada (ex.: app/subdominios roteando para o servico errado). Recarrega
 # para aplicar o que esta no disco.
-$reload = & docker exec chosen-nginx nginx -s reload 2>&1
+$reload = cmd /c "docker exec chosen-nginx nginx -s reload 2>&1"
 if ($LASTEXITCODE -eq 0) {
     Write-Ok "nginx recarregado (config atual aplicada)"
 } else {
