@@ -87,7 +87,10 @@ export default function AssemblyReportPage() {
                 <THead><TRow><TH>Conta contabil</TH><TH className="text-right">Total</TH></TRow></THead>
                 <TBody>
                   {income.map((c) => (
-                    <TRow key={c.category_id}><TD>{c.category}</TD><TD className="text-right text-emerald-600">{currency(c.total)}</TD></TRow>
+                    <TRow key={c.category_id}>
+                      <TD>{c.code && <span className="mr-2 text-xs tabular-nums text-zinc-400">{c.code}</span>}{c.category}</TD>
+                      <TD className="text-right text-emerald-600">{currency(c.total)}</TD>
+                    </TRow>
                   ))}
                   {income.length === 0 && <TRow><TD colSpan={2} className="py-6 text-center text-zinc-400">Sem entradas.</TD></TRow>}
                 </TBody>
@@ -99,7 +102,10 @@ export default function AssemblyReportPage() {
                 <THead><TRow><TH>Conta contabil</TH><TH className="text-right">Total</TH></TRow></THead>
                 <TBody>
                   {expense.map((c) => (
-                    <TRow key={c.category_id}><TD>{c.category}</TD><TD className="text-right text-red-600">{currency(c.total)}</TD></TRow>
+                    <TRow key={c.category_id}>
+                      <TD>{c.code && <span className="mr-2 text-xs tabular-nums text-zinc-400">{c.code}</span>}{c.category}</TD>
+                      <TD className="text-right text-red-600">{currency(c.total)}</TD>
+                    </TRow>
                   ))}
                   {expense.length === 0 && <TRow><TD colSpan={2} className="py-6 text-center text-zinc-400">Sem saidas.</TD></TRow>}
                 </TBody>

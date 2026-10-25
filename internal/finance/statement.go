@@ -2,6 +2,7 @@ package finance
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -55,19 +56,18 @@ func parseMonth(month string) (first, next time.Time, label string, err error) {
 	return first, next, first.Format("2006-01"), nil
 }
 
-// weekBounds devolve as 5 faixas de dias do mes (1-7, 8-14, 15-21, 22-28, 29-fim).
+// weekBounds devolve as semanas do mes com inicio no domingo e fim no sabado.
+// A primeira semana pode comecar no mes anterior e a ultima terminar no mes
+// seguinte, para que todas tenham exatamente 7 dias.
 func weekBounds(first, next time.Time) []WeekRange {
 	last := next.AddDate(0, 0, -1)
-	d := func(n int) string {
-		return time.Date(first.Year(), first.Month(), n, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-	}
-	bounds := [][2]int{{1, 7}, {8, 14}, {15, 21}, {22, 28}, {29, last.Day()}}
-	out := make([]WeekRange, 0, 5)
-	for i, b := range bounds {
+	start := first.AddDate(0, 0, -int(first.Weekday())) // domingo
+	out := []WeekRange{}
+	for w := start; !w.After(last); w = w.AddDate(0, 0, 7) {
 		out = append(out, WeekRange{
-			Label: "Semana " + string(rune('1'+i)),
-			From:  d(b[0]),
-			To:    d(b[1]),
+			Label: "Semana " + strconv.Itoa(len(out)+1),
+			From:  w.Format(dateLayout),
+			To:    w.AddDate(0, 0, 6).Format(dateLayout),
 		})
 	}
 	return out
@@ -94,51 +94,84 @@ func (r *Repo) BuildMonthlyStatement(ctx context.Context, tx pgx.Tx, month strin
 		return st, err
 	}
 
-	// Contas ativas do plano com os totais por semana (inclusive as sem movimento).
-	rows, err := tx.Query(ctx, `
-		SELECT c.id::text, c.code, c.name, c.type,
-		       COALESCE(SUM(t.amount) FILTER (WHERE EXTRACT(DAY FROM t.occurred_at) <= 7), 0)::float8,
-		       COALESCE(SUM(t.amount) FILTER (WHERE EXTRACT(DAY FROM t.occurred_at) BETWEEN 8 AND 14), 0)::float8,
-		       COALESCE(SUM(t.amount) FILTER (WHERE EXTRACT(DAY FROM t.occurred_at) BETWEEN 15 AND 21), 0)::float8,
-		       COALESCE(SUM(t.amount) FILTER (WHERE EXTRACT(DAY FROM t.occurred_at) BETWEEN 22 AND 28), 0)::float8,
-		       COALESCE(SUM(t.amount) FILTER (WHERE EXTRACT(DAY FROM t.occurred_at) >= 29), 0)::float8,
-		       COALESCE(SUM(t.amount), 0)::float8
+	// Contas ativas do plano, ordenadas pelo codigo (101, 102...). As semanas
+	// cobrem o mes inteiro, comecando no domingo.
+	catRows, err := tx.Query(ctx, `
+		SELECT c.id::text, c.code, c.name, c.type
 		FROM financial_categories c
-		LEFT JOIN financial_transactions t
-		       ON t.category_id = c.id
-		      AND t.occurred_at >= $1::date AND t.occurred_at < $2::date
-		      AND t.voided_at IS NULL
 		WHERE c.is_active
-		GROUP BY c.id, c.code, c.name, c.type
 		ORDER BY c.type,
 		         NULLIF(regexp_replace(c.code, '\D', '', 'g'), '')::int NULLS LAST,
-		         c.code`, first, next)
+		         c.code`)
 	if err != nil {
 		return st, err
 	}
-	defer rows.Close()
+	byID := map[string]*StatementLine{}
+	incomeLines := []*StatementLine{}
+	expenseLines := []*StatementLine{}
+	for catRows.Next() {
+		l := &StatementLine{Weeks: make([]float64, len(st.Weeks))}
+		var typ string
+		if err := catRows.Scan(&l.CategoryID, &l.Code, &l.Name, &typ); err != nil {
+			catRows.Close()
+			return st, err
+		}
+		byID[l.CategoryID] = l
+		if typ == "income" {
+			incomeLines = append(incomeLines, l)
+		} else {
+			expenseLines = append(expenseLines, l)
+		}
+	}
+	if err := catRows.Err(); err != nil {
+		catRows.Close()
+		return st, err
+	}
+	catRows.Close()
+
+	// Totais por conta e por semana: o indice da semana e a distancia em dias
+	// desde o domingo que abre o mes, dividida por 7.
+	weekStart := first.AddDate(0, 0, -int(first.Weekday()))
+	txRows, err := tx.Query(ctx, `
+		SELECT t.category_id::text,
+		       ((t.occurred_at::date - $1::date) / 7)::int AS wk,
+		       COALESCE(SUM(t.amount), 0)::float8
+		FROM financial_transactions t
+		WHERE t.occurred_at >= $2::date AND t.occurred_at < $3::date
+		  AND t.voided_at IS NULL
+		  AND t.category_id IS NOT NULL
+		GROUP BY 1, 2`, weekStart, first, next)
+	if err != nil {
+		return st, err
+	}
+	defer txRows.Close()
+	for txRows.Next() {
+		var categoryID string
+		var wk int
+		var amount float64
+		if err := txRows.Scan(&categoryID, &wk, &amount); err != nil {
+			return st, err
+		}
+		l := byID[categoryID]
+		if l == nil || wk < 0 || wk >= len(l.Weeks) {
+			continue
+		}
+		l.Weeks[wk] += amount
+		l.Total += amount
+	}
+	if err := txRows.Err(); err != nil {
+		return st, err
+	}
 
 	st.Income = []StatementLine{}
 	st.Expense = []StatementLine{}
-	for rows.Next() {
-		var l StatementLine
-		var typ string
-		var w1, w2, w3, w4, w5, total float64
-		if err := rows.Scan(&l.CategoryID, &l.Code, &l.Name, &typ, &w1, &w2, &w3, &w4, &w5, &total); err != nil {
-			return st, err
-		}
-		l.Weeks = []float64{w1, w2, w3, w4, w5}
-		l.Total = total
-		if typ == "income" {
-			st.Income = append(st.Income, l)
-			st.TotalIncome += total
-		} else {
-			st.Expense = append(st.Expense, l)
-			st.TotalExpense += total
-		}
+	for _, l := range incomeLines {
+		st.Income = append(st.Income, *l)
+		st.TotalIncome += l.Total
 	}
-	if err := rows.Err(); err != nil {
-		return st, err
+	for _, l := range expenseLines {
+		st.Expense = append(st.Expense, *l)
+		st.TotalExpense += l.Total
 	}
 
 	st.ClosingBalance = st.OpeningBalance + st.TotalIncome - st.TotalExpense

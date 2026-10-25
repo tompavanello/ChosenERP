@@ -52,6 +52,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
     items: [
       { key: "finance", href: "/dashboard/finance", label: "Financeiro", icon: Wallet, perms: ["finance.read"], feature: "finance" },
       { key: "reconciliation", href: "/dashboard/finance/reconciliation", label: "Conciliacao", icon: ClipboardCheck, perms: ["finance.read"], feature: "finance" },
+      { key: "rep-account-statement", href: "/dashboard/reports/account-statement", label: "Extrato de conta corrente", icon: ScrollText, perms: ["finance.read"], feature: "finance" },
       { key: "payments", href: "/dashboard/finance/payments", label: "Meios de pagamento", icon: CreditCard, perms: ["payments.read"], feature: "finance" },
       { key: "audit", href: "/dashboard/reports/audit", label: "Auditoria financeira", icon: ShieldCheck, perms: ["finance.read"], feature: "finance" },
       { key: "transfers", href: "/dashboard/transfers", label: "Repasses", icon: ArrowLeftRight, perms: ["finance.write"], feature: "finance" },
@@ -87,7 +88,6 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
       { key: "rep-balance", href: "/dashboard/reports/balance", label: "Balancete mensal", icon: BarChart3, perms: ["finance.read"], feature: "reports" },
       { key: "rep-dre", href: "/dashboard/reports/dre", label: "DRE", icon: TrendingUp, perms: ["finance.read"], feature: "reports" },
       { key: "rep-statement", href: "/dashboard/reports/monthly-statement", label: "Demonstrativo Mensal", icon: FileSpreadsheet, perms: ["finance.read"], feature: "reports" },
-      { key: "rep-account-statement", href: "/dashboard/reports/account-statement", label: "Extrato de conta corrente", icon: ScrollText, perms: ["finance.read"], feature: "reports" },
       { key: "rep-assembly", href: "/dashboard/reports/assembly", label: "Demonstrativo (Assembleia)", icon: FileSpreadsheet, perms: ["finance.read"], feature: "reports" },
       { key: "rep-inc-exp", href: "/dashboard/reports/income-expense", label: "Entradas x Saidas", icon: ArrowLeftRight, perms: ["finance.read"], feature: "reports" },
       { key: "rep-consolidated", href: "/dashboard/reports/consolidated", label: "Consolidado Sede > Filiais", icon: Building2, perms: ["finance.read"], feature: "reports" },

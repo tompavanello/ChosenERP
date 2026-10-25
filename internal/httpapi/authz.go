@@ -34,7 +34,8 @@ func featureForPath(path string) string {
 	switch {
 	case strings.HasPrefix(rest, "finance/"), strings.HasPrefix(rest, "receipts/"),
 		strings.HasPrefix(rest, "payment-gateways"), strings.HasPrefix(rest, "payment-products"),
-		strings.HasPrefix(rest, "payment-charges"), strings.HasPrefix(rest, "suppliers"):
+		strings.HasPrefix(rest, "payment-charges"), strings.HasPrefix(rest, "suppliers"),
+		strings.HasPrefix(rest, "reports/account-statement"):
 		return "finance"
 	case strings.HasPrefix(rest, "reports/"):
 		return "reports"

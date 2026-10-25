@@ -194,6 +194,7 @@ func (t Transaction) MarshalJSON() ([]byte, error) {
 
 type BalanceItem struct {
 	CategoryID string  `json:"category_id"`
+	Code       string  `json:"code"`
 	Category   string  `json:"category"`
 	Type       string  `json:"type"`
 	Total      float64 `json:"total"`
@@ -1068,19 +1069,23 @@ func (r *Repo) SumBalance(ctx context.Context, tx pgx.Tx, kind string) (Balance,
 	b.ByCategory = []BalanceItem{}
 
 	rows, err := tx.Query(ctx, `
-		SELECT COALESCE(t.category_id::text,''), COALESCE(c.name,'Sem categoria'), t.type, SUM(t.amount)::float8
+		SELECT COALESCE(t.category_id::text,''), COALESCE(c.code,''),
+		       COALESCE(c.name,'Sem categoria'), t.type, SUM(t.amount)::float8
 		FROM financial_transactions t
 		LEFT JOIN financial_categories c ON c.id = t.category_id
 		WHERE ($1 = '' OR t.type = $1)
 		  AND t.voided_at IS NULL
-		GROUP BY 1,2,3 ORDER BY 4 DESC`, kind)
+		GROUP BY 1,2,3,4
+		ORDER BY t.type,
+		         NULLIF(regexp_replace(c.code, '\D', '', 'g'), '')::int NULLS LAST,
+		         c.code`, kind)
 	if err != nil {
 		return b, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var it BalanceItem
-		if err := rows.Scan(&it.CategoryID, &it.Category, &it.Type, &it.Total); err != nil {
+		if err := rows.Scan(&it.CategoryID, &it.Code, &it.Category, &it.Type, &it.Total); err != nil {
 			return b, err
 		}
 		b.ByCategory = append(b.ByCategory, it)

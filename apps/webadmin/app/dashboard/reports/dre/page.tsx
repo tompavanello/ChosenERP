@@ -83,7 +83,10 @@ export default function DreReportPage() {
               <TBody>
                 {dre.lines.map((l) => (
                   <TRow key={`${l.type}-${l.category_id}`}>
-                    <TD className="font-medium">{l.category}</TD>
+                    <TD className="font-medium">
+                      {l.code && <span className="mr-2 text-xs font-normal tabular-nums text-zinc-400">{l.code}</span>}
+                      {l.category}
+                    </TD>
                     <TD><Badge tone={l.type === "income" ? "green" : "red"}>{l.type === "income" ? "Entrada" : "Saida"}</Badge></TD>
                     <TD className={`text-right font-semibold ${l.type === "income" ? "text-emerald-600" : "text-red-600"}`}>{currency(l.total)}</TD>
                   </TRow>

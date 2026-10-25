@@ -23,6 +23,7 @@ type MonthlyPoint struct {
 // DRELine e uma linha do DRE (por categoria).
 type DRELine struct {
 	CategoryID string  `json:"category_id"`
+	Code       string  `json:"code"`
 	Category   string  `json:"category"`
 	Type       string  `json:"type"`
 	Total      float64 `json:"total"`
@@ -112,13 +113,17 @@ func (r *Repo) BuildDRE(ctx context.Context, tx pgx.Tx, from, to string) (DRE, e
 	dre.Net = dre.Income - dre.Expense
 
 	rows, err := tx.Query(ctx, `
-		SELECT COALESCE(t.category_id::text,''), COALESCE(c.name,'Sem categoria'), t.type, SUM(t.amount)::float8
+		SELECT COALESCE(t.category_id::text,''), COALESCE(c.code,''),
+		       COALESCE(c.name,'Sem categoria'), t.type, SUM(t.amount)::float8
 		FROM financial_transactions t
 		LEFT JOIN financial_categories c ON c.id = t.category_id
 		WHERE t.occurred_at >= NULLIF($1,'')::date
 		  AND t.occurred_at < (NULLIF($2,'')::date + 1)
 		  AND t.voided_at IS NULL
-		GROUP BY 1,2,3 ORDER BY 3, 4 DESC`, from, to)
+		GROUP BY 1,2,3,4
+		ORDER BY t.type,
+		         NULLIF(regexp_replace(c.code, '\D', '', 'g'), '')::int NULLS LAST,
+		         c.code`, from, to)
 	if err != nil {
 		return dre, err
 	}
@@ -126,7 +131,7 @@ func (r *Repo) BuildDRE(ctx context.Context, tx pgx.Tx, from, to string) (DRE, e
 	dre.Lines = []DRELine{}
 	for rows.Next() {
 		var l DRELine
-		if err := rows.Scan(&l.CategoryID, &l.Category, &l.Type, &l.Total); err != nil {
+		if err := rows.Scan(&l.CategoryID, &l.Code, &l.Category, &l.Type, &l.Total); err != nil {
 			return dre, err
 		}
 		dre.Lines = append(dre.Lines, l)

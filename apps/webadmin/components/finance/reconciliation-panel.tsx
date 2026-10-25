@@ -235,22 +235,20 @@ export function ReconciliationPanel() {
     },
   ];
 
+  const itemBalances = useMemo(() => {
+    const ordered = items.slice().sort((a, b) =>
+      `${a.occurred_at}|${String(a.entry_seq ?? 999999999).padStart(9, "0")}|${a.created_at}`
+        .localeCompare(`${b.occurred_at}|${String(b.entry_seq ?? 999999999).padStart(9, "0")}|${b.created_at}`));
+    const out = new Map<string, number>();
+    let running = 0;
+    for (const it of ordered) {
+      running += it.type === "income" ? it.amount : -it.amount;
+      out.set(it.id, running);
+    }
+    return out;
+  }, [items]);
+
   const itemColumns: Column<ReconciliationItem>[] = [
-    {
-      key: "reconciled",
-      label: "Conciliado",
-      width: "w-24",
-      render: (it) => (
-        <input
-          type="checkbox"
-          className="h-4 w-4 rounded border-zinc-300 text-sky-600"
-          checked={it.reconciled}
-          disabled={selected?.status === "conciliada" || !canReconcile || reconcilingId === it.id}
-          onChange={() => toggleItem(it)}
-          title={it.reconciled ? "Desconciliar" : "Conciliar"}
-        />
-      ),
-    },
     {
       key: "occurred_at",
       label: "Data",
@@ -276,6 +274,31 @@ export function ReconciliationPanel() {
       sortable: true,
       align: "right",
       render: (it) => <span className={`font-medium ${it.type === "income" ? "text-emerald-600" : "text-red-600"}`}>{currency(it.amount)}</span>,
+    },
+    {
+      key: "balance_after",
+      label: "Saldo apos",
+      sortable: true,
+      align: "right",
+      width: "w-32",
+      sortValue: (it) => itemBalances.get(it.id) ?? 0,
+      render: (it) => <span className="font-medium tabular-nums">{currency(itemBalances.get(it.id) ?? 0)}</span>,
+    },
+    {
+      key: "reconciled",
+      label: "Conciliado",
+      align: "right",
+      width: "w-24",
+      render: (it) => (
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-zinc-300 text-sky-600"
+          checked={it.reconciled}
+          disabled={selected?.status === "conciliada" || !canReconcile || reconcilingId === it.id}
+          onChange={() => toggleItem(it)}
+          title={it.reconciled ? "Desconciliar" : "Conciliar"}
+        />
+      ),
     },
   ];
 

@@ -16,6 +16,11 @@ function mesAtual() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// "2026-03-01" -> "01/03" (dia e mes da semana).
+function diaMes(iso: string) {
+  return iso?.length === 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : iso;
+}
+
 export default function MonthlyStatementPage() {
   const { toast } = useToast();
   const [month, setMonth] = useState(mesAtual());
@@ -54,7 +59,7 @@ export default function MonthlyStatementPage() {
     <div className="page">
       <PageHeader
         title="Demonstrativo Mensal"
-        description="Regime de caixa - entradas e saidas por semana"
+        description="Regime de caixa - entradas e saidas por semana (domingo a sabado)"
         actions={
           <ExportButtons
             path="/api/v1/reports/monthly-statement/export"
@@ -88,13 +93,20 @@ export default function MonthlyStatementPage() {
               <THead>
                 <TRow>
                   <TH>Cod</TH><TH>Descricao</TH>
-                  {st.weeks.map((w) => <TH key={w.label} className="text-right">{w.label}</TH>)}
+                  {st.weeks.map((w) => (
+                    <TH key={w.label} className="text-right">
+                      <span className="block">{w.label}</span>
+                      <span className="block text-[10px] font-normal normal-case tracking-normal text-zinc-400">
+                        {diaMes(w.from)} a {diaMes(w.to)}
+                      </span>
+                    </TH>
+                  ))}
                   <TH className="text-right">Total</TH>
                 </TRow>
               </THead>
               <TBody>
                 {st.income.map(linha)}
-                {st.income.length === 0 && <TRow><TD colSpan={8} className="py-6 text-center text-zinc-400">Sem contas de entrada.</TD></TRow>}
+                {st.income.length === 0 && <TRow><TD colSpan={st.weeks.length + 3} className="py-6 text-center text-zinc-400">Sem contas de entrada.</TD></TRow>}
                 <TRow>
                   <TD /><TD className="font-semibold">Total das entradas</TD>
                   {st.weeks.map((_, i) => <TD key={i} />)}
@@ -110,13 +122,20 @@ export default function MonthlyStatementPage() {
               <THead>
                 <TRow>
                   <TH>Cod</TH><TH>Descricao</TH>
-                  {st.weeks.map((w) => <TH key={w.label} className="text-right">{w.label}</TH>)}
+                  {st.weeks.map((w) => (
+                    <TH key={w.label} className="text-right">
+                      <span className="block">{w.label}</span>
+                      <span className="block text-[10px] font-normal normal-case tracking-normal text-zinc-400">
+                        {diaMes(w.from)} a {diaMes(w.to)}
+                      </span>
+                    </TH>
+                  ))}
                   <TH className="text-right">Total</TH>
                 </TRow>
               </THead>
               <TBody>
                 {st.expense.map(linha)}
-                {st.expense.length === 0 && <TRow><TD colSpan={8} className="py-6 text-center text-zinc-400">Sem contas de saida.</TD></TRow>}
+                {st.expense.length === 0 && <TRow><TD colSpan={st.weeks.length + 3} className="py-6 text-center text-zinc-400">Sem contas de saida.</TD></TRow>}
                 <TRow>
                   <TD /><TD className="font-semibold">Total das saidas</TD>
                   {st.weeks.map((_, i) => <TD key={i} />)}

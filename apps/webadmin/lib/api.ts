@@ -349,6 +349,7 @@ export interface MonthlyPoint {
 }
 export interface DRELine {
   category_id: string;
+  code: string;
   category: string;
   type: string;
   total: number;
@@ -366,7 +367,7 @@ export interface Balance {
   income: number;
   expense: number;
   net: number;
-  by_category: { category_id: string; category: string; type: string; total: number }[];
+  by_category: { category_id: string; code: string; category: string; type: string; total: number }[];
 }
 export interface Relationship {
   id: string;
@@ -1169,7 +1170,7 @@ export const deleteBankImport = (id: string) =>
   api<{ ok: boolean }>(`/api/v1/finance/bank-imports/${id}`, { method: "DELETE" });
 
 // ---- Demonstrativo para assembleia ----
-export interface AssemblyCategory { category_id: string; category: string; type: string; total: number; }
+export interface AssemblyCategory { category_id: string; code: string; category: string; type: string; total: number; }
 export interface AssemblyBalance { income: number; expense: number; net: number; by_category: AssemblyCategory[]; }
 export interface AssemblyReport { from: string; to: string; balance: AssemblyBalance; months: MonthlyPoint[]; }
 export const getAssemblyReport = (from: string, to: string) => {

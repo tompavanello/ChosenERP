@@ -79,6 +79,17 @@ func first(v []string) string {
 	return ""
 }
 
+// dayMonthRange formata "01/03 a 07/03" a partir de datas ISO (YYYY-MM-DD).
+func dayMonthRange(from, to string) string {
+	dm := func(s string) string {
+		if len(s) != 10 {
+			return s
+		}
+		return s[8:10] + "/" + s[5:7]
+	}
+	return dm(from) + " a " + dm(to)
+}
+
 // money formata um valor para os relatorios exportados no padrao brasileiro
 // (milhar com ponto e decimal com virgula), igual ao exibido na tela.
 func money(v float64) string {
@@ -153,7 +164,11 @@ func (a *App) handleExportDRE(w http.ResponseWriter, r *http.Request) {
 		if l.Type == "expense" {
 			tipo = "Saida"
 		}
-		lines = append(lines, []string{tipo, l.Category, money(l.Total)})
+		conta := l.Category
+		if l.Code != "" {
+			conta = l.Code + " - " + conta
+		}
+		lines = append(lines, []string{tipo, conta, money(l.Total)})
 	}
 	totais := [][]string{
 		{"Entradas", "", money(dre.Income)},
@@ -429,7 +444,7 @@ func (a *App) handleExportMonthlyStatement(w http.ResponseWriter, r *http.Reques
 	}
 	headers := []string{"Cod", "Descricao"}
 	for _, wk := range st.Weeks {
-		headers = append(headers, wk.Label)
+		headers = append(headers, wk.Label+" ("+dayMonthRange(wk.From, wk.To)+")")
 	}
 	headers = append(headers, "Total")
 	lines := func(ls []finance.StatementLine) [][]string {
@@ -727,7 +742,11 @@ func (a *App) handleAssemblyReport(w http.ResponseWriter, r *http.Request) {
 func assemblySections(bal finance.Balance, months []finance.MonthlyPoint, from, to string) []exportSection {
 	var entradas, saidas [][]string
 	for _, it := range bal.ByCategory {
-		row := []string{it.Category, money(it.Total)}
+		conta := it.Category
+		if it.Code != "" {
+			conta = it.Code + " - " + conta
+		}
+		row := []string{conta, money(it.Total)}
 		if it.Type == "income" {
 			entradas = append(entradas, row)
 		} else {

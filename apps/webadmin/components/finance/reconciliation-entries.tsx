@@ -8,7 +8,7 @@ import { Input, Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
-import { listTransactions, reconcileTransaction, type Transaction } from "@/lib/api";
+import { listAccounts, listTransactions, reconcileTransaction, type BankAccount, type Transaction } from "@/lib/api";
 import { currency, datePt, todayISO } from "@/lib/format";
 
 /**
@@ -27,6 +27,7 @@ export function ReconciliationEntries() {
   const [status, setStatus] = useState("");
   const [query, setQuery] = useState("");
   const [txns, setTxns] = useState<Transaction[]>([]);
+  const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
   const [sortColumn, setSortColumn] = useState("occurred_at");
@@ -34,8 +35,12 @@ export function ReconciliationEntries() {
 
   const load = useCallback(async () => {
     try {
-      const r = await listTransactions();
+      const [r, a] = await Promise.all([
+        listTransactions(),
+        listAccounts().catch(() => ({ accounts: [] })),
+      ]);
       setTxns(Array.isArray(r.transactions) ? r.transactions : []);
+      setAccounts(Array.isArray(a.accounts) ? a.accounts : []);
     } catch (e) {
       toast(e instanceof Error ? e.message : "Erro ao carregar lancamentos", "error");
     } finally {
@@ -80,22 +85,30 @@ export function ReconciliationEntries() {
     });
   }, [txns, from, to, status, query]);
 
+  // Saldo apos cada lancamento, na mesma logica do extrato: acumula por conta
+  // bancaria a partir do saldo inicial, na ordem cronologica do razao.
+  const balanceAfter = useMemo(() => {
+    const initial = new Map<string, number>();
+    for (const a of accounts) initial.set(a.id, a.initial_balance);
+    const ordered = txns
+      .filter((t) => !t.voided_at)
+      .slice()
+      .sort((a, b) =>
+        `${a.occurred_at}|${String(a.entry_seq ?? 999999999).padStart(9, "0")}|${a.created_at ?? ""}`
+          .localeCompare(`${b.occurred_at}|${String(b.entry_seq ?? 999999999).padStart(9, "0")}|${b.created_at ?? ""}`));
+    const current = new Map<string, number>();
+    const out = new Map<string, number>();
+    for (const t of ordered) {
+      const key = t.account_id ?? "";
+      const prev = current.get(key) ?? initial.get(key) ?? 0;
+      const next = prev + (t.type === "income" ? t.amount : -t.amount);
+      current.set(key, next);
+      out.set(t.id, next);
+    }
+    return out;
+  }, [txns, accounts]);
+
   const columns: Column<Transaction>[] = [
-    {
-      key: "reconciled",
-      label: "Conciliado",
-      width: "w-24",
-      render: (t) => (
-        <input
-          type="checkbox"
-          className="h-4 w-4 rounded border-zinc-300 text-sky-600"
-          checked={!!t.reconciled}
-          disabled={!canReconcile || busyId === t.id}
-          onChange={() => toggle(t)}
-          title={t.reconciled ? "Desconciliar" : "Conciliar"}
-        />
-      ),
-    },
     {
       key: "occurred_at",
       label: "Data",
@@ -128,6 +141,31 @@ export function ReconciliationEntries() {
       sortable: true,
       align: "right",
       render: (t) => <span className={`font-medium ${t.type === "income" ? "text-emerald-600" : "text-red-600"}`}>{currency(t.amount)}</span>,
+    },
+    {
+      key: "balance_after",
+      label: "Saldo apos",
+      sortable: true,
+      align: "right",
+      width: "w-32",
+      sortValue: (t) => balanceAfter.get(t.id) ?? 0,
+      render: (t) => <span className="font-medium tabular-nums">{currency(balanceAfter.get(t.id) ?? 0)}</span>,
+    },
+    {
+      key: "reconciled",
+      label: "Conciliado",
+      align: "right",
+      width: "w-24",
+      render: (t) => (
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-zinc-300 text-sky-600"
+          checked={!!t.reconciled}
+          disabled={!canReconcile || busyId === t.id}
+          onChange={() => toggle(t)}
+          title={t.reconciled ? "Desconciliar" : "Conciliar"}
+        />
+      ),
     },
   ];
 
