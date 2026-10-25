@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
+import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
 import {
   getMonthlyStatement, getMonthlyStatementTransactions,
@@ -26,6 +27,8 @@ function diaMes(iso: string) {
   return iso?.length === 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : iso;
 }
 
+const DETAIL_PER_PAGE = 10;
+
 export default function MonthlyStatementPage() {
   const { toast } = useToast();
   const [month, setMonth] = useState(mesAtual());
@@ -39,6 +42,7 @@ export default function MonthlyStatementPage() {
   } | null>(null);
   const [detailTxns, setDetailTxns] = useState<StatementTransaction[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailPage, setDetailPage] = useState(1);
 
   const load = useCallback(async (m: string) => {
     setLoading(true);
@@ -71,6 +75,7 @@ export default function MonthlyStatementPage() {
     const { from, to } = weekWithinMonth(week);
     setDetail({ line, week, type, total });
     setDetailTxns([]);
+    setDetailPage(1);
     setDetailLoading(true);
     getMonthlyStatementTransactions({ category_id: line.category_id, from, to })
       .then((r) => setDetailTxns(r.transactions))
@@ -200,6 +205,9 @@ export default function MonthlyStatementPage() {
           <Modal open={!!detail} onClose={() => setDetail(null)} title="Lancamentos da semana" size="lg">
             {detail && (() => {
               const range = weekWithinMonth(detail.week);
+              const pages = Math.max(1, Math.ceil(detailTxns.length / DETAIL_PER_PAGE));
+              const safePage = Math.min(detailPage, pages);
+              const pageTxns = detailTxns.slice((safePage - 1) * DETAIL_PER_PAGE, safePage * DETAIL_PER_PAGE);
               return (
                 <div className="space-y-3 text-sm">
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -222,30 +230,38 @@ export default function MonthlyStatementPage() {
                   {detailLoading ? (
                     <p className="text-xs text-zinc-500">Carregando lancamentos...</p>
                   ) : (
-                    <Table>
-                      <THead>
-                        <TRow>
-                          <TH>Data</TH><TH>Descricao</TH><TH>Tipo</TH><TH className="text-right">Valor</TH>
-                        </TRow>
-                      </THead>
-                      <TBody>
-                        {detailTxns.map((t) => (
-                          <TRow key={t.id}>
-                            <TD className="whitespace-nowrap text-zinc-500">{datePt(t.occurred_at)}</TD>
-                            <TD>
-                              <span className="font-medium">{t.description || t.donor_name || "-"}</span>
-                              {t.description && t.donor_name && <span className="block text-xs text-zinc-400">{t.donor_name}</span>}
-                              {t.account_name && <span className="block text-xs text-zinc-400">{t.account_name}</span>}
-                            </TD>
-                            <TD><Badge tone={t.type === "income" ? "green" : "red"}>{t.type === "income" ? "Entrada" : "Saida"}</Badge></TD>
-                            <TD className={`text-right font-medium ${t.type === "income" ? "text-emerald-600" : "text-red-600"}`}>{currency(t.amount)}</TD>
+                    <>
+                      <Table wrapperClassName="max-h-[55vh] overflow-y-auto rounded-lg border border-zinc-100 dark:border-zinc-800">
+                        <THead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_rgba(0,0,0,0.06)] dark:bg-zinc-950">
+                          <TRow>
+                            <TH>Data</TH><TH>Descricao</TH><TH>Tipo</TH><TH className="text-right">Valor</TH>
                           </TRow>
-                        ))}
-                        {detailTxns.length === 0 && (
-                          <TRow><TD colSpan={4} className="py-6 text-center text-zinc-400">Nenhum lancamento nesta semana.</TD></TRow>
-                        )}
-                      </TBody>
-                    </Table>
+                        </THead>
+                        <TBody>
+                          {pageTxns.map((t) => (
+                            <TRow key={t.id}>
+                              <TD className="whitespace-nowrap text-zinc-500">{datePt(t.occurred_at)}</TD>
+                              <TD>
+                                <span className="font-medium">{t.description || t.donor_name || "-"}</span>
+                                {t.description && t.donor_name && <span className="block text-xs text-zinc-400">{t.donor_name}</span>}
+                                {t.account_name && <span className="block text-xs text-zinc-400">{t.account_name}</span>}
+                              </TD>
+                              <TD><Badge tone={t.type === "income" ? "green" : "red"}>{t.type === "income" ? "Entrada" : "Saida"}</Badge></TD>
+                              <TD className={`text-right font-medium ${t.type === "income" ? "text-emerald-600" : "text-red-600"}`}>{currency(t.amount)}</TD>
+                            </TRow>
+                          ))}
+                          {detailTxns.length === 0 && (
+                            <TRow><TD colSpan={4} className="py-6 text-center text-zinc-400">Nenhum lancamento nesta semana.</TD></TRow>
+                          )}
+                        </TBody>
+                      </Table>
+                      <Pagination
+                        page={safePage}
+                        total={detailTxns.length}
+                        perPage={DETAIL_PER_PAGE}
+                        onChange={setDetailPage}
+                      />
+                    </>
                   )}
                 </div>
               );
