@@ -2,6 +2,7 @@ package finance
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"time"
 
@@ -71,6 +72,59 @@ func weekBounds(first, next time.Time) []WeekRange {
 		})
 	}
 	return out
+}
+
+// StatementTransaction e um lancamento individual que compoe uma celula do
+// Demonstrativo Mensal (conta + semana).
+type StatementTransaction struct {
+	ID          string  `json:"id"`
+	OccurredAt  string  `json:"occurred_at"`
+	EntrySeq    *int    `json:"entry_seq,omitempty"`
+	Type        string  `json:"type"`
+	Amount      float64 `json:"amount"`
+	Description *string `json:"description,omitempty"`
+	DonorName   *string `json:"donor_name,omitempty"`
+	AccountName *string `json:"account_name,omitempty"`
+}
+
+// ListStatementTransactions lista os lancamentos de uma conta no intervalo
+// (inclusive) usado pelo modal de detalhe do Demonstrativo Mensal.
+func (r *Repo) ListStatementTransactions(ctx context.Context, tx pgx.Tx, categoryID, from, to string) ([]StatementTransaction, error) {
+	if categoryID == "" {
+		return nil, errors.New("category_id e obrigatorio")
+	}
+	if from == "" || to == "" {
+		return nil, errors.New("from e to sao obrigatorios")
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT t.id::text, to_char(t.occurred_at,'YYYY-MM-DD'), t.entry_seq,
+		       t.type, t.amount::float8, t.description,
+		       CASE WHEN t.is_anonymous THEN NULL
+		            ELSE COALESCE(t.donor_name, dm.full_name, db.name) END,
+		       a.name
+		FROM financial_transactions t
+		LEFT JOIN members dm ON dm.id = t.donor_member_id
+		LEFT JOIN benefactors db ON db.id = t.benefactor_id
+		LEFT JOIN financial_accounts a ON a.id = t.account_id
+		WHERE t.category_id = $1::uuid
+		  AND t.occurred_at >= $2::date AND t.occurred_at < ($3::date + 1)
+		  AND t.voided_at IS NULL
+		ORDER BY t.occurred_at, t.entry_seq NULLS LAST, t.created_at, t.id`,
+		categoryID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []StatementTransaction{}
+	for rows.Next() {
+		var it StatementTransaction
+		if err := rows.Scan(&it.ID, &it.OccurredAt, &it.EntrySeq, &it.Type, &it.Amount,
+			&it.Description, &it.DonorName, &it.AccountName); err != nil {
+			return nil, err
+		}
+		out = append(out, it)
+	}
+	return out, rows.Err()
 }
 
 // BuildMonthlyStatement monta o Demonstrativo Mensal do periodo.

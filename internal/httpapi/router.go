@@ -362,6 +362,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/reports/demographics", authed(app.perm("reports.read", app.handleDemographics)))
 	mux.Handle("GET /api/v1/reports/demographics/export", authed(app.perm("reports.read", app.handleExportDemographics)))
 	mux.Handle("GET /api/v1/reports/monthly-statement", authed(app.perm("reports.read", app.handleMonthlyStatement)))
+	mux.Handle("GET /api/v1/reports/monthly-statement/transactions", authed(app.perm("reports.read", app.handleMonthlyStatementTransactions)))
 	mux.Handle("GET /api/v1/reports/monthly-statement/export", authed(app.perm("reports.read", app.handleExportMonthlyStatement)))
 	mux.Handle("GET /api/v1/reports/account-statement", authed(app.permAny("reports.read", "finance.read")(app.handleAccountStatement)))
 	mux.Handle("GET /api/v1/reports/account-statement/export", authed(app.permAny("reports.read", "finance.read")(app.handleExportAccountStatement)))

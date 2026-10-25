@@ -6,9 +6,14 @@ import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
-import { getMonthlyStatement, type MonthlyStatement, type StatementLine } from "@/lib/api";
-import { currency } from "@/lib/format";
+import {
+  getMonthlyStatement, getMonthlyStatementTransactions,
+  type MonthlyStatement, type StatementLine, type StatementTransaction, type WeekRange,
+} from "@/lib/api";
+import { currency, datePt } from "@/lib/format";
 import { ExportButtons } from "@/components/reports/export-buttons";
 
 function mesAtual() {
@@ -26,6 +31,14 @@ export default function MonthlyStatementPage() {
   const [month, setMonth] = useState(mesAtual());
   const [st, setSt] = useState<MonthlyStatement | null>(null);
   const [loading, setLoading] = useState(true);
+  const [detail, setDetail] = useState<{
+    line: StatementLine;
+    week: WeekRange;
+    type: "income" | "expense";
+    total: number;
+  } | null>(null);
+  const [detailTxns, setDetailTxns] = useState<StatementTransaction[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const load = useCallback(async (m: string) => {
     setLoading(true);
@@ -42,15 +55,50 @@ export default function MonthlyStatementPage() {
     load(month);
   }, [load, month]);
 
-  const linha = (l: StatementLine) => (
+  useEffect(() => {
+    setDetail(null);
+  }, [month]);
+
+  // A semana pode comecar/terminar fora do mes; o detalhe so considera os dias
+  // do proprio demonstrativo (o total da celula tambem).
+  function weekWithinMonth(week: WeekRange) {
+    const from = st && week.from < st.from ? st.from : week.from;
+    const to = st && week.to > st.to ? st.to : week.to;
+    return { from, to };
+  }
+
+  function openWeek(line: StatementLine, week: WeekRange, type: "income" | "expense", total: number) {
+    const { from, to } = weekWithinMonth(week);
+    setDetail({ line, week, type, total });
+    setDetailTxns([]);
+    setDetailLoading(true);
+    getMonthlyStatementTransactions({ category_id: line.category_id, from, to })
+      .then((r) => setDetailTxns(r.transactions))
+      .catch((e) => toast(e instanceof Error ? e.message : "Erro ao carregar lancamentos", "error"))
+      .finally(() => setDetailLoading(false));
+  }
+
+  const linha = (l: StatementLine, weeks: WeekRange[], type: "income" | "expense") => (
     <TRow key={l.category_id}>
       <TD className="w-14 text-xs text-zinc-400">{l.code}</TD>
       <TD className="font-medium">{l.name}</TD>
-      {l.weeks.map((v, i) => (
-        <TD key={i} className={`text-right tabular-nums ${v === 0 ? "text-zinc-300 dark:text-zinc-600" : ""}`}>
-          {currency(v)}
-        </TD>
-      ))}
+      {l.weeks.map((v, i) => {
+        const week = weeks[i];
+        return (
+          <TD key={i} className={`text-right tabular-nums ${v === 0 ? "text-zinc-300 dark:text-zinc-600" : ""}`}>
+            {v === 0 || !week ? currency(v) : (
+              <button
+                type="button"
+                onClick={() => openWeek(l, week, type, v)}
+                className="font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-400"
+                title={`Ver lancamentos de ${week.label}`}
+              >
+                {currency(v)}
+              </button>
+            )}
+          </TD>
+        );
+      })}
       <TD className="text-right font-semibold tabular-nums">{currency(l.total)}</TD>
     </TRow>
   );
@@ -105,7 +153,7 @@ export default function MonthlyStatementPage() {
                 </TRow>
               </THead>
               <TBody>
-                {st.income.map(linha)}
+                {st.income.map((l) => linha(l, st.weeks, "income"))}
                 {st.income.length === 0 && <TRow><TD colSpan={st.weeks.length + 3} className="py-6 text-center text-zinc-400">Sem contas de entrada.</TD></TRow>}
                 <TRow>
                   <TD /><TD className="font-semibold">Total das entradas</TD>
@@ -134,7 +182,7 @@ export default function MonthlyStatementPage() {
                 </TRow>
               </THead>
               <TBody>
-                {st.expense.map(linha)}
+                {st.expense.map((l) => linha(l, st.weeks, "expense"))}
                 {st.expense.length === 0 && <TRow><TD colSpan={st.weeks.length + 3} className="py-6 text-center text-zinc-400">Sem contas de saida.</TD></TRow>}
                 <TRow>
                   <TD /><TD className="font-semibold">Total das saidas</TD>
@@ -148,6 +196,61 @@ export default function MonthlyStatementPage() {
           <p className="mt-4 text-xs text-zinc-400">
             Saldo inicial: liquido acumulado ate o mes anterior. Saldo final = saldo inicial + entradas  saidas.
           </p>
+
+          <Modal open={!!detail} onClose={() => setDetail(null)} title="Lancamentos da semana" size="lg">
+            {detail && (() => {
+              const range = weekWithinMonth(detail.week);
+              return (
+                <div className="space-y-3 text-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold">
+                        {detail.line.code ? `${detail.line.code} - ` : ""}{detail.line.name}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {detail.week.label} · {diaMes(range.from)} a {diaMes(range.to)} · {detailTxns.length} lancamento(s)
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-zinc-500">Total da semana</p>
+                      <p className={`text-lg font-semibold ${detail.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
+                        {currency(detail.total)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {detailLoading ? (
+                    <p className="text-xs text-zinc-500">Carregando lancamentos...</p>
+                  ) : (
+                    <Table>
+                      <THead>
+                        <TRow>
+                          <TH>Data</TH><TH>Descricao</TH><TH>Tipo</TH><TH className="text-right">Valor</TH>
+                        </TRow>
+                      </THead>
+                      <TBody>
+                        {detailTxns.map((t) => (
+                          <TRow key={t.id}>
+                            <TD className="whitespace-nowrap text-zinc-500">{datePt(t.occurred_at)}</TD>
+                            <TD>
+                              <span className="font-medium">{t.description || t.donor_name || "-"}</span>
+                              {t.description && t.donor_name && <span className="block text-xs text-zinc-400">{t.donor_name}</span>}
+                              {t.account_name && <span className="block text-xs text-zinc-400">{t.account_name}</span>}
+                            </TD>
+                            <TD><Badge tone={t.type === "income" ? "green" : "red"}>{t.type === "income" ? "Entrada" : "Saida"}</Badge></TD>
+                            <TD className={`text-right font-medium ${t.type === "income" ? "text-emerald-600" : "text-red-600"}`}>{currency(t.amount)}</TD>
+                          </TRow>
+                        ))}
+                        {detailTxns.length === 0 && (
+                          <TRow><TD colSpan={4} className="py-6 text-center text-zinc-400">Nenhum lancamento nesta semana.</TD></TRow>
+                        )}
+                      </TBody>
+                    </Table>
+                  )}
+                </div>
+              );
+            })()}
+          </Modal>
         </>
       )}
     </div>

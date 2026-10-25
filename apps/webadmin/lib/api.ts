@@ -1487,6 +1487,21 @@ export interface MonthlyStatement {
 export const getMonthlyStatement = (month?: string) =>
   api<MonthlyStatement>(`/api/v1/reports/monthly-statement${month ? `?month=${month}` : ""}`);
 
+export interface StatementTransaction {
+  id: string;
+  occurred_at: string;
+  entry_seq?: number;
+  type: "income" | "expense";
+  amount: number;
+  description?: string;
+  donor_name?: string;
+  account_name?: string;
+}
+export const getMonthlyStatementTransactions = (params: { category_id: string; from: string; to: string }) => {
+  const q = new URLSearchParams({ category_id: params.category_id, from: params.from, to: params.to });
+  return api<{ transactions: StatementTransaction[] }>(`/api/v1/reports/monthly-statement/transactions?${q.toString()}`);
+};
+
 // ---- Extrato de conta corrente ----
 export interface AccountStatementLine extends Transaction {
   balance_after: number;

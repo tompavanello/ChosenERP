@@ -423,6 +423,34 @@ func (a *App) handleMonthlyStatement(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, st)
 }
 
+func (a *App) handleMonthlyStatementTransactions(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	q := r.URL.Query()
+	categoryID := strings.TrimSpace(q.Get("category_id"))
+	from := strings.TrimSpace(q.Get("from"))
+	to := strings.TrimSpace(q.Get("to"))
+	if categoryID == "" || from == "" || to == "" {
+		writeErr(w, http.StatusBadRequest, "category_id, from e to sao obrigatorios")
+		return
+	}
+	b := boundsFromClaims(claims)
+	var list []finance.StatementTransaction
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var e error
+		list, e = a.Finance.ListStatementTransactions(r.Context(), tx, categoryID, from, to)
+		return e
+	})
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"transactions": list})
+}
+
 func (a *App) handleExportMonthlyStatement(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
