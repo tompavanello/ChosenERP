@@ -263,6 +263,8 @@ func writeFinanceErr(w http.ResponseWriter, err error) {
 		writeErr(w, http.StatusConflict, err.Error())
 	case errors.Is(err, finance.ErrGroupReconciled):
 		writeErr(w, http.StatusConflict, err.Error())
+	case errors.Is(err, finance.ErrGroupDateMismatch):
+		writeErr(w, http.StatusConflict, err.Error())
 	default:
 		var pending finance.ErrPendingReconciliation
 		if errors.As(err, &pending) {

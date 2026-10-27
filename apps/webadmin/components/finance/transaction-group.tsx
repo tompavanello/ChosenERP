@@ -48,11 +48,20 @@ export function GroupSelectionDrawer({ open, onClose, transactions, onSaved }: S
     if (transactions.length < 2) return false;
     const first = transactions[0];
     return transactions.some(
-      (t) => t.type !== first.type || t.account_id !== first.account_id || t.branch_id !== first.branch_id,
+      (t) =>
+        t.type !== first.type ||
+        t.account_id !== first.account_id ||
+        t.branch_id !== first.branch_id ||
+        t.occurred_at.slice(0, 10) !== first.occurred_at.slice(0, 10),
     );
   }, [transactions]);
   const hasReconciled = transactions.some((t) => t.reconciled);
   const hasGrouped = transactions.some((t) => t.group_id);
+  const sameDate = useMemo(() => {
+    if (transactions.length === 0) return true;
+    const d = transactions[0].occurred_at.slice(0, 10);
+    return transactions.every((t) => t.occurred_at.slice(0, 10) === d);
+  }, [transactions]);
 
   async function save() {
     if (transactions.length < 2) {
@@ -60,7 +69,11 @@ export function GroupSelectionDrawer({ open, onClose, transactions, onSaved }: S
       return;
     }
     if (mixed) {
-      toast("Os lancamentos precisam ter a mesma conta bancaria e o mesmo tipo.", "error");
+      toast("Os lancamentos precisam ter a mesma conta bancaria, o mesmo tipo e a mesma data.", "error");
+      return;
+    }
+    if (!sameDate) {
+      toast("Todos os lancamentos do grupo precisam ter a mesma data.", "error");
       return;
     }
     if (hasReconciled) {
@@ -101,9 +114,14 @@ export function GroupSelectionDrawer({ open, onClose, transactions, onSaved }: S
           </p>
         </div>
 
-        <Section title="Dados do grupo" hint="A data e a descricao aparecem na visao banco do extrato.">
+        <Section title="Dados do grupo" hint="Todos os lancamentos precisam ter a mesma data do grupo.">
           <Field label="Data do deposito">
-            <Input type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} />
+            <Input
+              type="date"
+              value={occurredAt}
+              disabled
+              title="A data do grupo e a mesma dos lancamentos selecionados."
+            />
           </Field>
           <Field label="Descricao">
             <Input
@@ -121,7 +139,7 @@ export function GroupSelectionDrawer({ open, onClose, transactions, onSaved }: S
 
         {mixed && (
           <p className="text-xs text-red-600">
-            Ha lancamentos com contas bancarias ou tipos diferentes. Ajuste a selecao.
+            Ha lancamentos com contas bancarias, tipos ou datas diferentes. Ajuste a selecao.
           </p>
         )}
         {hasReconciled && (
@@ -170,10 +188,20 @@ type DetailDrawerProps = {
   onChanged: () => void;
   canWrite: boolean;
   canReconcile: boolean;
+  /** Somente leitura (auditoria/conciliacao): esconde as acoes de alteracao. */
+  readOnly?: boolean;
 };
 
 /** Detalhe do grupo: linha bancaria unica + membros e acoes. */
-export function GroupDetailDrawer({ open, groupId, onClose, onChanged, canWrite, canReconcile }: DetailDrawerProps) {
+export function GroupDetailDrawer({
+  open,
+  groupId,
+  onClose,
+  onChanged,
+  canWrite,
+  canReconcile,
+  readOnly = false,
+}: DetailDrawerProps) {
   const { toast } = useToast();
   const [group, setGroup] = useState<TransactionGroup | null>(null);
   const [loading, setLoading] = useState(false);
@@ -295,11 +323,22 @@ export function GroupDetailDrawer({ open, groupId, onClose, onChanged, canWrite,
 
           <Section title="Dados do grupo" hint="A data e a descricao valem para a linha do extrato bancario.">
             <Field label="Data do deposito">
-              <Input type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} disabled={!canWrite || group.reconciled} />
+              <Input
+                type="date"
+                value={occurredAt}
+                onChange={(e) => setOccurredAt(e.target.value)}
+                disabled={readOnly || !canWrite || group.reconciled || !!group.bank_entry_id}
+                title={group.bank_entry_id ? "Grupo vinculado ao extrato: a data do deposito nao pode ser alterada." : undefined}
+              />
             </Field>
             <Field label="Descricao">
-              <Input value={description} onChange={(e) => setDescription(e.target.value)} disabled={!canWrite || group.reconciled} />
+              <Input value={description} onChange={(e) => setDescription(e.target.value)} disabled={readOnly || !canWrite || group.reconciled} />
             </Field>
+            {!readOnly && !group.bank_entry_id && (
+              <p className="text-xs text-zinc-500">
+                Alterar a data move todos os lancamentos do grupo para a nova data.
+              </p>
+            )}
           </Section>
 
           <div className="max-h-80 overflow-y-auto rounded-lg border border-zinc-200">
@@ -323,7 +362,7 @@ export function GroupDetailDrawer({ open, groupId, onClose, onChanged, canWrite,
                     <TD className="text-zinc-500">{m.description ?? "-"}</TD>
                     <TD className="text-right font-medium">{currency(m.amount)}</TD>
                     <TD className="text-right">
-                      {canWrite && !group.reconciled && (
+                      {!readOnly && canWrite && !group.reconciled && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -343,16 +382,16 @@ export function GroupDetailDrawer({ open, groupId, onClose, onChanged, canWrite,
           </div>
 
           <div className="flex flex-wrap justify-end gap-2">
-            {canWrite && !group.reconciled && (
+            {!readOnly && canWrite && !group.reconciled && (
               <Button variant="outline" onClick={saveHeader} disabled={saving}>Salvar dados</Button>
             )}
-            {canReconcile && (
+            {!readOnly && canReconcile && (
               <Button variant={group.reconciled ? "outline" : "primary"} onClick={toggleReconciled} disabled={saving}>
                 {group.reconciled ? <RotateCcw className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
                 {group.reconciled ? "Desconciliar" : "Conciliar grupo"}
               </Button>
             )}
-            {canWrite && !group.reconciled && (
+            {!readOnly && canWrite && !group.reconciled && (
               <Button variant="outline" className="text-red-600" onClick={ungroup} disabled={saving}>
                 <Trash2 className="h-4 w-4" /> Desagrupar
               </Button>

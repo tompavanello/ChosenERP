@@ -41,8 +41,8 @@ func TestFinancialTransactionGroups_Lifecycle(t *testing.T) {
 	)
 
 	err := inBounds(t, bounds(fixTenantX, fixBranchA, "tesoureiro"), func(tx pgx.Tx) error {
-		insertGroupTxn(t, tx, tx1, fixBranchA, fixAccountA, "income", "2025-06-01", "dizimo 1", 400)
-		insertGroupTxn(t, tx, tx2, fixBranchA, fixAccountA, "income", "2025-06-02", "dizimo 2", 600)
+		insertGroupTxn(t, tx, tx1, fixBranchA, fixAccountA, "income", "2025-06-10", "dizimo 1", 400)
+		insertGroupTxn(t, tx, tx2, fixBranchA, fixAccountA, "income", "2025-06-10", "dizimo 2", 600)
 		insertTxGroup(t, tx, grp, fixBranchA, fixAccountA, "income", "2025-06-10", "deposito")
 
 		if _, err := tx.Exec(testCtx,
@@ -131,8 +131,110 @@ func TestFinancialTransactionGroups_Lifecycle(t *testing.T) {
 	}
 }
 
+// TestFinancialTransactionGroups_SameDateAndSeq cobre o invariante de mesma
+// data (000106) e o entry_seq do grupo: pode ser alterado enquanto agrupado e
+// fica travado depois da conciliacao.
+func TestFinancialTransactionGroups_SameDateAndSeq(t *testing.T) {
+	const (
+		tx1  = "e0000000-0000-4000-8000-000000000121"
+		tx2  = "e0000000-0000-4000-8000-000000000122"
+		grp  = "e0000000-0000-4000-8000-000000000123"
+		tx3  = "e0000000-0000-4000-8000-000000000124"
+		tx4  = "e0000000-0000-4000-8000-000000000125"
+		grp2 = "e0000000-0000-4000-8000-000000000126"
+	)
+	err := inBounds(t, bounds(fixTenantX, fixBranchA, "tesoureiro"), func(tx pgx.Tx) error {
+		insertGroupTxn(t, tx, tx1, fixBranchA, fixAccountA, "income", "2025-07-10", "a", 100)
+		insertGroupTxn(t, tx, tx2, fixBranchA, fixAccountA, "income", "2025-07-11", "b", 200)
+		insertTxGroup(t, tx, grp, fixBranchA, fixAccountA, "income", "2025-07-10", "deposito")
+
+		expectSavepointError(t, tx, "grp_date_mismatch", "data", func() error {
+			_, err := tx.Exec(testCtx, `SELECT fin_group_attach($1::uuid, ARRAY[$2,$3]::uuid[])`, grp, tx1, tx2)
+			return err
+		})
+
+		insertGroupTxn(t, tx, tx3, fixBranchA, fixAccountA, "income", "2025-07-10", "c", 300)
+		insertGroupTxn(t, tx, tx4, fixBranchA, fixAccountA, "income", "2025-07-10", "d", 400)
+		insertTxGroup(t, tx, grp2, fixBranchA, fixAccountA, "income", "2025-07-10", "deposito 2")
+		if _, err := tx.Exec(testCtx, `SELECT fin_group_attach($1::uuid, ARRAY[$2,$3]::uuid[])`, grp2, tx3, tx4); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(testCtx,
+			`UPDATE financial_transaction_groups SET entry_seq = 1 WHERE id = $1::uuid`, grp2); err != nil {
+			return err
+		}
+		var seq *int
+		if err := tx.QueryRow(testCtx,
+			`SELECT entry_seq FROM financial_transaction_groups WHERE id = $1::uuid`, grp2).Scan(&seq); err != nil {
+			return err
+		}
+		if seq == nil || *seq != 1 {
+			t.Fatalf("entry_seq do grupo: esperava 1, veio %v", seq)
+		}
+
+		if _, err := tx.Exec(testCtx, `SELECT fin_group_reconcile($1::uuid, true, '')`, grp2); err != nil {
+			return err
+		}
+		expectSavepointError(t, tx, "grp_seq_locked", "conciliado", func() error {
+			_, err := tx.Exec(testCtx,
+				`UPDATE financial_transaction_groups SET entry_seq = 2 WHERE id = $1::uuid`, grp2)
+			return err
+		})
+		return errRollback
+	})
+	if err != nil {
+		t.Fatalf("inBounds: %v", err)
+	}
+}
+
+// TestFinancialTransactionGroups_MoveDate cobre a RPC que move o grupo e todos
+// os membros para a mesma data, recalculando a hash-chain.
+func TestFinancialTransactionGroups_MoveDate(t *testing.T) {
+	const (
+		tx1 = "e0000000-0000-4000-8000-000000000131"
+		tx2 = "e0000000-0000-4000-8000-000000000132"
+		grp = "e0000000-0000-4000-8000-000000000133"
+	)
+	err := inBounds(t, bounds(fixTenantX, fixBranchA, "tesoureiro"), func(tx pgx.Tx) error {
+		insertGroupTxn(t, tx, tx1, fixBranchA, fixAccountA, "income", "2025-08-10", "a", 100)
+		insertGroupTxn(t, tx, tx2, fixBranchA, fixAccountA, "income", "2025-08-10", "b", 200)
+		insertTxGroup(t, tx, grp, fixBranchA, fixAccountA, "income", "2025-08-10", "deposito")
+		if _, err := tx.Exec(testCtx, `SELECT fin_group_attach($1::uuid, ARRAY[$2,$3]::uuid[])`, grp, tx1, tx2); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(testCtx,
+			`SELECT fin_group_move_date($1::uuid, '2025-08-15'::date, 7)`, grp); err != nil {
+			return err
+		}
+		var groupDate string
+		var seq *int
+		if err := tx.QueryRow(testCtx,
+			`SELECT occurred_at::text, entry_seq FROM financial_transaction_groups WHERE id = $1::uuid`, grp).
+			Scan(&groupDate, &seq); err != nil {
+			return err
+		}
+		if groupDate != "2025-08-15" || seq == nil || *seq != 7 {
+			t.Fatalf("grupo apos mover: data=%s seq=%v", groupDate, seq)
+		}
+		var wrong int
+		if err := tx.QueryRow(testCtx, `
+			SELECT count(*)::int FROM financial_transactions
+			WHERE group_id = $1::uuid
+			  AND (occurred_at AT TIME ZONE 'UTC')::date <> '2025-08-15'::date`, grp).Scan(&wrong); err != nil {
+			return err
+		}
+		if wrong != 0 {
+			t.Fatalf("esperava todos os membros em 2025-08-15, %d fora", wrong)
+		}
+		return errRollback
+	})
+	if err != nil {
+		t.Fatalf("inBounds: %v", err)
+	}
+}
+
 // TestFinancialTransactionGroups_Consistency cobre as regras de integridade:
-// mesma filial/conta/tipo, lancamentos livres e escopo do tenant.
+// mesma filial/conta/tipo/data, lancamentos livres e escopo do tenant.
 func TestFinancialTransactionGroups_Consistency(t *testing.T) {
 	const (
 		tx1    = "e0000000-0000-4000-8000-000000000111"
@@ -146,11 +248,11 @@ func TestFinancialTransactionGroups_Consistency(t *testing.T) {
 	// Sede: enxerga e grava nas duas filiais, o que permite montar o cenario de
 	// filial divergente. A consistencia continua sendo garantida pelo trigger.
 	err := inBounds(t, bounds(fixTenantX, "", "super_admin"), func(tx pgx.Tx) error {
-		insertGroupTxn(t, tx, tx1, fixBranchA, fixAccountA, "income", "2025-06-01", "a", 100)
-		insertGroupTxn(t, tx, tx2, fixBranchA, fixAccountA, "income", "2025-06-02", "b", 200)
+		insertGroupTxn(t, tx, tx1, fixBranchA, fixAccountA, "income", "2025-06-10", "a", 100)
+		insertGroupTxn(t, tx, tx2, fixBranchA, fixAccountA, "income", "2025-06-10", "b", 200)
 		insertGroupTxn(t, tx, txB, fixBranchB, fixAccountB, "income", "2025-06-03", "outra filial", 300)
-		insertGroupTxn(t, tx, txDone, fixBranchA, fixAccountA, "income", "2025-06-04", "conciliado", 400)
-		insertGroupTxn(t, tx, txVoid, fixBranchA, fixAccountA, "income", "2025-06-05", "estornado", 500)
+		insertGroupTxn(t, tx, txDone, fixBranchA, fixAccountA, "income", "2025-06-10", "conciliado", 400)
+		insertGroupTxn(t, tx, txVoid, fixBranchA, fixAccountA, "income", "2025-06-10", "estornado", 500)
 		insertTxGroup(t, tx, grp, fixBranchA, fixAccountA, "income", "2025-06-10", "deposito")
 
 		if _, err := tx.Exec(testCtx,

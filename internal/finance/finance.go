@@ -531,6 +531,36 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 		if locked {
 			return nil, "", "", "", ErrScopeReconciled
 		}
+		// Grupos tambem ocupam uma posicao na sequencia; a insercao precisa
+		// empurra-los junto com os lancamentos.
+		var groupLocked bool
+		if err := tx.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM financial_transaction_groups
+				WHERE tenant_id = $1::uuid
+				  AND branch_id = NULLIF($2,'')::uuid
+				  AND account_id = NULLIF($3,'')::uuid
+				  AND occurred_at = $4::date
+				  AND entry_seq >= $5
+				  AND status = 'conciliado')`,
+			tenantID, branchID, acct, scopeDate, entrySeq).Scan(&groupLocked); err != nil {
+			return nil, "", "", "", err
+		}
+		if groupLocked {
+			return nil, "", "", "", ErrScopeReconciled
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE financial_transaction_groups
+			SET entry_seq = entry_seq + 1
+			WHERE tenant_id = $1::uuid
+			  AND branch_id = NULLIF($2,'')::uuid
+			  AND account_id = NULLIF($3,'')::uuid
+			  AND occurred_at = $4::date
+			  AND entry_seq >= $5
+			  AND status = 'agrupado'`,
+			tenantID, branchID, acct, scopeDate, entrySeq); err != nil {
+			return nil, "", "", "", err
+		}
 		if _, err := tx.Exec(ctx, `
 			UPDATE financial_transactions
 			SET entry_seq = entry_seq + 1
@@ -545,13 +575,24 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 		}
 	} else {
 		if err := tx.QueryRow(ctx, `
-			SELECT COALESCE(MAX(entry_seq), 0) + 1
-			FROM financial_transactions
-			WHERE tenant_id = $1::uuid
-			  AND branch_id = NULLIF($2,'')::uuid
-			  AND COALESCE(account_id, '00000000-0000-0000-0000-000000000000'::uuid)
-			      = COALESCE(NULLIF($3,'')::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
-			  AND (occurred_at AT TIME ZONE 'UTC')::date = $4::date`,
+			SELECT COALESCE(MAX(seq), 0) + 1
+			FROM (
+			    SELECT entry_seq AS seq
+			      FROM financial_transactions
+			     WHERE tenant_id = $1::uuid
+			       AND branch_id = NULLIF($2,'')::uuid
+			       AND COALESCE(account_id, '00000000-0000-0000-0000-000000000000'::uuid)
+			           = COALESCE(NULLIF($3,'')::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+			       AND (occurred_at AT TIME ZONE 'UTC')::date = $4::date
+			       AND group_id IS NULL
+			    UNION ALL
+			    SELECT entry_seq AS seq
+			      FROM financial_transaction_groups
+			     WHERE tenant_id = $1::uuid
+			       AND branch_id = NULLIF($2,'')::uuid
+			       AND account_id = NULLIF($3,'')::uuid
+			       AND occurred_at = $4::date
+			) q`,
 			tenantID, branchID, acct, scopeDate).Scan(&entrySeq); err != nil {
 			return nil, "", "", "", err
 		}

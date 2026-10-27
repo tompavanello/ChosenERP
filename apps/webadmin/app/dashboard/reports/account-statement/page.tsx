@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Eye, Layers, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Eye, Layers, Pencil, Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
@@ -20,6 +20,7 @@ import { currency, datePt } from "@/lib/format";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import { TransactionForm, type TransactionFormState } from "@/components/finance/transaction-form";
 import { GroupDetailDrawer } from "@/components/finance/transaction-group";
+import { GroupMembersInline } from "@/components/finance/group-members-inline";
 
 const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -53,6 +54,7 @@ export default function AccountStatementPage() {
   const [st, setSt] = useState<AccountStatement | null>(null);
   const [loading, setLoading] = useState(false);
   const [groupDetailId, setGroupDetailId] = useState<string | undefined>(undefined);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
@@ -169,7 +171,15 @@ export default function AccountStatementPage() {
     : undefined;
 
   const lineDay = (l: AccountStatementLine) => l.occurred_at.slice(0, 10);
-  const linesByDay = useMemo(() => {
+
+  function toggleGroupExpanded(id: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }  const linesByDay = useMemo(() => {
     const m = new Map<string, AccountStatementLine[]>();
     for (const l of st?.lines ?? []) {
       const key = lineDay(l);
@@ -343,12 +353,22 @@ export default function AccountStatementPage() {
                       {dayLines.map((l) => {
                         const isGroupLine = !!l.is_group;
                         return (
-                          <TRow key={l.id} className={isGroupLine ? "bg-sky-50/50 dark:bg-sky-950/20" : undefined}>
+                          <Fragment key={l.id}>
+                          <TRow className={isGroupLine ? "bg-sky-50/50 dark:bg-sky-950/20" : undefined}>
                             <TD className="whitespace-nowrap text-zinc-500">{datePt(lineDay(l))}</TD>
                             <TD className="text-xs text-zinc-400">{l.entry_seq ?? ""}</TD>
                             <TD className="font-medium">
                               {isGroupLine ? (
                                 <span className="inline-flex flex-wrap items-center gap-1.5 text-sky-800 dark:text-sky-300">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleGroupExpanded(l.id)}
+                                    title={expandedGroups.has(l.id) ? "Recolher lancamentos" : "Ver lancamentos do agrupamento"}
+                                    aria-label={expandedGroups.has(l.id) ? "Recolher lancamentos" : "Ver lancamentos do agrupamento"}
+                                    className="text-sky-500 hover:text-sky-700"
+                                  >
+                                    {expandedGroups.has(l.id) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                  </button>
                                   <Layers className="h-3.5 w-3.5" />
                                   {l.description || "Agrupamento de lancamentos"}
                                   <Badge tone="indigo" className="text-[10px]">
@@ -415,6 +435,19 @@ export default function AccountStatementPage() {
                               </TD>
                             )}
                           </TRow>
+                          {isGroupLine && expandedGroups.has(l.id) && (
+                            <TRow>
+                              <TD colSpan={canWrite ? 8 : 7} className="p-3">
+                                <GroupMembersInline
+                                  groupId={l.group_id ?? l.id}
+                                  from={from}
+                                  to={to}
+                                  onOpenGroup={(id) => setGroupDetailId(id)}
+                                />
+                              </TD>
+                            </TRow>
+                          )}
+                          </Fragment>
                         );
                       })}
                       <TRow className="border-y border-sky-100 bg-sky-50/70 dark:border-sky-900/40 dark:bg-sky-950/20">

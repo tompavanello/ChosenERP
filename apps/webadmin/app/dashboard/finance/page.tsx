@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Wallet, Plus, Eye, Send, Filter, Tags, Repeat, Banknote, Upload, Download, FileText, Paperclip, Pencil, Trash2, FolderTree, ChevronUp, ChevronDown, CheckCircle2, RotateCcw, Lock, Layers, RefreshCw } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Wallet, Plus, Eye, Send, Filter, Tags, Repeat, Banknote, Upload, Download, FileText, Paperclip, Pencil, Trash2, FolderTree, ChevronUp, ChevronDown, ChevronRight, CheckCircle2, RotateCcw, Lock, Layers, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -21,8 +21,8 @@ import {
    listCategoryGroups, createCategoryGroup, updateCategoryGroup, deleteCategoryGroup,
    listAccounts, createAccount, updateAccount, deleteAccount,
    uploadAttachment, listAttachments, listDeliveries, updateTransaction, deleteTransaction, settleTransaction,
-   reconcileTransaction, downloadFinancialAttachment,
-   listTransactionEvents, previewTransactions, importTransactionsFile, reorderTransactions,
+   reconcileTransaction, downloadFinancialAttachment, reconcileTransactionGroup,
+   listTransactionEvents, previewTransactions, importTransactionsFile, reorderFinanceLines,
    listTransactionGroups,
    type Category, type CategoryGroup, type Transaction, type Balance, type BankAccount,
    type FinancialAttachment, type Delivery, type ImportResult, type EventAllocation,
@@ -35,6 +35,7 @@ import { RecurringPanel } from "@/components/finance/recurring-panel";
 import { BulkEntry } from "@/components/finance/bulk-entry";
 import { TransactionForm, type TransactionFormState } from "@/components/finance/transaction-form";
 import { GroupDetailDrawer, GroupSelectionDrawer } from "@/components/finance/transaction-group";
+import { GroupMembersInline } from "@/components/finance/group-members-inline";
 
 // Modelo de importacao de lancamentos (colunas iguais aos aliases do mapeamento).
 const TX_TEMPLATE: string[][] = [
@@ -67,6 +68,13 @@ function colLetter(i: number): string {
 function scopeKeyOf(t: Transaction): string {
   return `${t.branch_id}|${t.account_id ?? ""}|${t.occurred_at.slice(0, 10)}`;
 }
+
+// Linha exibida no ledger: lancamento avulso ou agrupamento (sintetico).
+type LedgerRow = Transaction & {
+  _kind: "transaction" | "group";
+  _group?: TransactionGroup;
+  _members?: Transaction[];
+};
 
 // Alvo de uma insercao "no meio" da sequencia (mesma filial+conta+data).
 type InsertTarget = {
@@ -113,6 +121,8 @@ export default function FinancePage() {
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [txGroups, setTxGroups] = useState<TransactionGroup[]>([]);
+  const [allTxGroups, setAllTxGroups] = useState<TransactionGroup[]>([]);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [txGroupsLoading, setTxGroupsLoading] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Set<string>>(new Set());
   const [showGroupSelection, setShowGroupSelection] = useState(false);
@@ -177,14 +187,21 @@ export default function FinancePage() {
     setBalance(bal);
   }, []);
 
-  // Lancamentos do periodo selecionado (filtro no servidor).
+  // Lancamentos do periodo selecionado (filtro no servidor). Os grupos sao
+  // carregados sem filtro para montar a linha unica mesmo quando o deposito
+  // esta em outro dia do periodo exibido.
   const loadTxns = useCallback(async () => {
     setLoading(true);
     try {
-      const tx = await listTransactions("", from, to);
+      const [tx, gr] = await Promise.all([
+        listTransactions("", from, to),
+        listTransactionGroups().catch(() => ({ groups: [] })),
+      ]);
       setTxns(Array.isArray(tx.transactions) ? tx.transactions : []);
+      setAllTxGroups(Array.isArray(gr.groups) ? gr.groups : []);
     } catch (e) {
       setTxns([]);
+      setAllTxGroups([]);
       toast(e instanceof Error ? e.message : "Falha ao carregar lancamentos", "error");
     } finally {
       setLoading(false);
@@ -225,19 +242,99 @@ export default function FinancePage() {
     [txns, selectedTx],
   );
 
+  // Linhas do ledger: cada grupo vira UMA linha (com os membros no detalhe).
+  const ledgerRows = useMemo<LedgerRow[]>(() => {
+    const list = Array.isArray(txns) ? txns : [];
+    const groupsById = new Map(allTxGroups.map((g) => [g.id, g]));
+    const membersByGroup = new Map<string, Transaction[]>();
+    for (const t of list) {
+      if (!t.group_id) continue;
+      const arr = membersByGroup.get(t.group_id) ?? [];
+      arr.push(t);
+      membersByGroup.set(t.group_id, arr);
+    }
+    const rows: LedgerRow[] = [];
+    for (const [gid, members] of membersByGroup) {
+      const g = groupsById.get(gid);
+      const first = members[0];
+      const amount = members.reduce((sum, m) => sum + Number(m.amount || 0), 0);
+      const attachmentCount = members.reduce((sum, m) => sum + (m.attachment_count ?? 0), 0);
+      const reconciled = g ? g.reconciled : members.every((m) => m.reconciled);
+      const seqs = members
+        .map((m) => m.entry_seq)
+        .filter((n): n is number => typeof n === "number");
+      const entrySeq = g?.entry_seq ?? (seqs.length ? Math.min(...seqs) : undefined);
+      rows.push({
+        ...first,
+        id: gid,
+        branch_id: g?.branch_id ?? first.branch_id,
+        category_id: undefined,
+        category_name: undefined,
+        account_id: g?.account_id ?? first.account_id,
+        account_name: g?.account_name ?? first.account_name,
+        type: g?.type ?? first.type,
+        amount,
+        description: g?.description ?? "Agrupamento de lancamentos",
+        occurred_at: g?.occurred_at ?? first.occurred_at,
+        created_at: g?.created_at ?? first.created_at,
+        entry_seq: entrySeq,
+        reconciled,
+        reconciled_at: g?.reconciled_at ?? (reconciled ? first.reconciled_at : undefined),
+        group_id: gid,
+        group_status: g?.status ?? first.group_status,
+        attachment_count: attachmentCount,
+        attachment_url: undefined,
+        receipt_id: undefined,
+        receipt_ref: undefined,
+        receipt_token: undefined,
+        voided_at: undefined,
+        void_reason: undefined,
+        paid_at: undefined,
+        due_date: undefined,
+        donor_member_id: undefined,
+        benefactor_id: undefined,
+        donor_name: undefined,
+        supplier_id: undefined,
+        supplier_name: undefined,
+        payment_method: undefined,
+        _kind: "group",
+        _group: g,
+        _members: members,
+      });
+    }
+    for (const t of list) {
+      if (t.group_id) continue;
+      rows.push({ ...t, _kind: "transaction", _members: [] });
+    }
+    return rows;
+  }, [txns, allTxGroups]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = Array.isArray(txns) ? txns : [];
-    return list.filter((t) => {
+    return ledgerRows.filter((r) => {
+      const group = r._kind === "group";
+      const members = r._members ?? [];
       return (
-        (!filterType || t.type === filterType) &&
-         (!filterCat || t.category_id === filterCat) &&
-         (!filterAcct || t.account_id === filterAcct) &&
-        (!filterRecon || (filterRecon === "reconciled" ? t.reconciled : !t.reconciled)) &&
-        (!q || t.description?.toLowerCase().includes(q))
+        (!filterType || r.type === filterType) &&
+        (!filterCat ||
+          (group
+            ? members.some((m) => m.category_id === filterCat)
+            : r.category_id === filterCat)) &&
+        (!filterAcct || r.account_id === filterAcct) &&
+        (!filterRecon || (filterRecon === "reconciled" ? r.reconciled : !r.reconciled)) &&
+        (!q ||
+          r.description?.toLowerCase().includes(q) ||
+          r.account_name?.toLowerCase().includes(q) ||
+          (group &&
+            members.some(
+              (m) =>
+                m.description?.toLowerCase().includes(q) ||
+                m.donor_name?.toLowerCase().includes(q) ||
+                m.category_name?.toLowerCase().includes(q),
+            )))
       );
     });
-  }, [txns, filterType, filterCat, filterAcct, filterRecon, query]);
+  }, [ledgerRows, filterType, filterCat, filterAcct, filterRecon, query]);
 
   useEffect(() => setPage(1), [filterType, filterCat, filterAcct, filterRecon, query, from, to]);
 
@@ -250,7 +347,7 @@ export default function FinancePage() {
     }
   };
 
-  const columns: Column<Transaction>[] = useMemo(() => [
+  const columns: Column<LedgerRow>[] = useMemo(() => [
     {
       key: "occurred_at",
       label: "Data efetiva",
@@ -298,47 +395,84 @@ export default function FinancePage() {
     {
       key: "description",
       label: "Descricao",
-      render: (t) => (
-        <div className="flex items-center gap-2">
-          <span className={t.voided_at ? "text-zinc-400 line-through" : ""}>{t.description ?? "-"}</span>
-          {t.voided_at && <Badge tone="red" className="text-[10px]">Estornado</Badge>}
-          {t.group_id && (
-            <button
-              type="button"
-              onClick={() => setGroupDetailId(t.group_id)}
-              title="Ver grupo de lancamentos"
-              className="inline-flex"
-            >
-              <Badge tone={t.group_status === "conciliado" ? "green" : "indigo"} className="gap-1 text-[10px]">
-                <Layers className="h-3 w-3" /> Agrupado
-              </Badge>
-            </button>
-          )}
-          {!!t.attachment_count && t.attachment_count > 0 && (
-            t.attachment_count === 1 ? (
-              <a
-                href={t.attachment_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Ver anexo"
-                className="inline-flex items-center text-sky-600 hover:text-sky-700"
-              >
-                <Paperclip className="h-3.5 w-3.5" />
-              </a>
-            ) : (
+      render: (t) => {
+        const isGroup = t._kind === "group";
+        const expanded = expandedRows.has(t.id);
+        return (
+          <div className="flex items-center gap-2">
+            {isGroup && (
               <button
                 type="button"
-                onClick={() => openDetail(t)}
-                title={`Ver os ${t.attachment_count} anexos`}
-                className="inline-flex items-center gap-0.5 text-sky-600 hover:text-sky-700"
+                onClick={() => toggleRowExpanded(t.id)}
+                title={expanded ? "Recolher lancamentos" : "Ver lancamentos do agrupamento"}
+                aria-label={expanded ? "Recolher lancamentos" : "Ver lancamentos do agrupamento"}
+                className="text-zinc-400 hover:text-sky-600"
               >
-                <Paperclip className="h-3.5 w-3.5" />
-                <span className="text-[10px] font-medium">{t.attachment_count}</span>
+                {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
               </button>
-            )
-          )}
-        </div>
-      ),
+            )}
+            <span className={t.voided_at ? "text-zinc-400 line-through" : ""}>{t.description ?? "-"}</span>
+            {t.voided_at && <Badge tone="red" className="text-[10px]">Estornado</Badge>}
+            {isGroup && (
+              <button
+                type="button"
+                onClick={() => setGroupDetailId(t.id)}
+                title="Ver grupo de lancamentos"
+                className="inline-flex"
+              >
+                <Badge tone={t.reconciled ? "green" : "indigo"} className="gap-1 text-[10px]">
+                  <Layers className="h-3 w-3" /> {t._members?.length ?? 0} itens
+                </Badge>
+              </button>
+            )}
+            {!isGroup && t.group_id && (
+              <button
+                type="button"
+                onClick={() => setGroupDetailId(t.group_id)}
+                title="Ver grupo de lancamentos"
+                className="inline-flex"
+              >
+                <Badge tone={t.group_status === "conciliado" ? "green" : "indigo"} className="gap-1 text-[10px]">
+                  <Layers className="h-3 w-3" /> Agrupado
+                </Badge>
+              </button>
+            )}
+            {!!t.attachment_count && t.attachment_count > 0 && (
+              isGroup ? (
+                <button
+                  type="button"
+                  onClick={() => setGroupDetailId(t.id)}
+                  title={`Ver os ${t.attachment_count} anexos dos lancamentos do grupo`}
+                  className="inline-flex items-center gap-0.5 text-sky-600 hover:text-sky-700"
+                >
+                  <Paperclip className="h-3.5 w-3.5" />
+                  <span className="text-[10px] font-medium">{t.attachment_count}</span>
+                </button>
+              ) : t.attachment_count === 1 ? (
+                <a
+                  href={t.attachment_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Ver anexo"
+                  className="inline-flex items-center text-sky-600 hover:text-sky-700"
+                >
+                  <Paperclip className="h-3.5 w-3.5" />
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => openDetail(t)}
+                  title={`Ver os ${t.attachment_count} anexos`}
+                  className="inline-flex items-center gap-0.5 text-sky-600 hover:text-sky-700"
+                >
+                  <Paperclip className="h-3.5 w-3.5" />
+                  <span className="text-[10px] font-medium">{t.attachment_count}</span>
+                </button>
+              )
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "category_name",
@@ -346,7 +480,9 @@ export default function FinancePage() {
       sortable: true,
       render: (t) => (
         <div>
-          <p className="font-medium">{t.category_name ?? "-"}</p>
+          <p className="font-medium">
+            {t._kind === "group" ? <Badge tone="indigo">{t._members?.length ?? 0} itens</Badge> : (t.category_name ?? "-")}
+          </p>
           {t.payment_method && <p className="text-xs text-zinc-400">{PAYMENT_METHODS[t.payment_method] ?? t.payment_method}</p>}
         </div>
       ),
@@ -363,7 +499,7 @@ export default function FinancePage() {
       label: "Doador",
       render: (t) => (
         <span className="text-zinc-500">
-          {t.is_anonymous ? "Anonimo" : (t.donor_name ?? "-")}
+          {t._kind === "group" ? "Varios" : t.is_anonymous ? "Anonimo" : (t.donor_name ?? "-")}
         </span>
       ),
     },
@@ -384,6 +520,7 @@ export default function FinancePage() {
       label: "Situação",
       width: "w-28",
       render: (t) => {
+        if (t._kind === "group") return <span className="text-zinc-300">-</span>;
         if (t.type !== "expense") return <span className="text-zinc-300">-</span>;
         if (t.paid_at) return <Badge tone="green">Pago</Badge>;
         const overdue = !!t.due_date && t.due_date < new Date().toISOString().slice(0, 10);
@@ -410,45 +547,69 @@ export default function FinancePage() {
       sortable: false,
       width: "w-52",
       align: "right" as const,
-      render: (t) => (
-        <div className="flex items-center justify-end gap-0.5">
-          {t.receipt_id && (
-            <Button variant="ghost" size="sm" onClick={() => viewReceipt(t)} aria-label="Ver recibo" title="Ver recibo"><Eye className="h-3.5 w-3.5" /> Ver</Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={() => openDetail(t)} aria-label="Ver detalhes" title="Detalhes"><Eye className="h-3.5 w-3.5" /></Button>
-          {!t.voided_at && !t.group_id && hasPerm("finance.reconcile") && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => toggleReconciled(t)}
-              title={t.reconciled ? "Desconciliar" : "Conciliar"}
-              aria-label={t.reconciled ? "Desconciliar" : "Conciliar"}
-            >
-              {t.reconciled ? <RotateCcw className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
-            </Button>
-          )}
-          {t.group_id && (
-            <Button variant="ghost" size="sm" onClick={() => setGroupDetailId(t.group_id)} title="Abrir grupo">
-              <Layers className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          {!t.voided_at && !t.reconciled && hasPerm("finance.write") && (
-            <>
-              {t.type === "expense" && (
-                <Button variant="ghost" size="sm" onClick={() => togglePaid(t)} title={t.paid_at ? "Reabrir" : "Quitar"}>
-                  {t.paid_at ? "Reabrir" : "Quitar"}
+      render: (t) => {
+        if (t._kind === "group") {
+          return (
+            <div className="flex items-center justify-end gap-0.5">
+              <Button variant="ghost" size="sm" onClick={() => setGroupDetailId(t.id)} title="Abrir grupo">
+                <Layers className="h-3.5 w-3.5" /> Abrir
+              </Button>
+              {hasPerm("finance.reconcile") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => toggleGroupReconciled(t)}
+                  title={t.reconciled ? "Desconciliar grupo" : "Conciliar grupo"}
+                  aria-label={t.reconciled ? "Desconciliar grupo" : "Conciliar grupo"}
+                >
+                  {t.reconciled ? <RotateCcw className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
                 </Button>
               )}
-              <Button variant="ghost" size="sm" onClick={() => openEdit(t)} aria-label="Editar" title="Editar"><Pencil className="h-3.5 w-3.5" /></Button>
-              {!t.group_id && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => toggleRowExpanded(t.id)}
+                title={expandedRows.has(t.id) ? "Recolher lancamentos" : "Ver lancamentos"}
+                aria-label={expandedRows.has(t.id) ? "Recolher lancamentos" : "Ver lancamentos"}
+              >
+                {expandedRows.has(t.id) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+          );
+        }
+        return (
+          <div className="flex items-center justify-end gap-0.5">
+            {t.receipt_id && (
+              <Button variant="ghost" size="sm" onClick={() => viewReceipt(t)} aria-label="Ver recibo" title="Ver recibo"><Eye className="h-3.5 w-3.5" /> Ver</Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => openDetail(t)} aria-label="Ver detalhes" title="Detalhes"><Eye className="h-3.5 w-3.5" /></Button>
+            {!t.voided_at && hasPerm("finance.reconcile") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => toggleReconciled(t)}
+                title={t.reconciled ? "Desconciliar" : "Conciliar"}
+                aria-label={t.reconciled ? "Desconciliar" : "Conciliar"}
+              >
+                {t.reconciled ? <RotateCcw className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
+              </Button>
+            )}
+            {!t.voided_at && !t.reconciled && hasPerm("finance.write") && (
+              <>
+                {t.type === "expense" && (
+                  <Button variant="ghost" size="sm" onClick={() => togglePaid(t)} title={t.paid_at ? "Reabrir" : "Quitar"}>
+                    {t.paid_at ? "Reabrir" : "Quitar"}
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" onClick={() => openEdit(t)} aria-label="Editar" title="Editar"><Pencil className="h-3.5 w-3.5" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => removeTxn(t)} aria-label="Excluir" title="Excluir"><Trash2 className="h-3.5 w-3.5 text-red-500" /></Button>
-              )}
-            </>
-          )}
-        </div>
-      ),
+              </>
+            )}
+          </div>
+        );
+      },
     },
-  ], [hasPerm, txns]);
+  ], [hasPerm, txns, ledgerRows, expandedRows]);
 
   async function handleTxnSaved(data?: Record<string, unknown>) {
     const savedDate = typeof data?.occurred_at === "string" ? data.occurred_at.slice(0, 10) : "";
@@ -456,34 +617,49 @@ export default function FinancePage() {
     if (outside) {
       toast(`Lancamento salvo em ${datePt(savedDate)}, fora do periodo exibido.`, "info");
     }
-    // Recarrega os lancamentos do periodo exibido e o saldo atual.
-    const [tx] = await Promise.all([
-      listTransactions("", from, to).catch(() => ({ transactions: [] })),
-      loadBalance(),
-    ]);
-    setTxns(tx.transactions);
+    // Recarrega os lancamentos do periodo e os grupos (linhas unicas).
+    await Promise.all([loadTxns(), loadBalance()]);
   }
 
-  // Move o lancamento uma posicao para cima/baixo dentro do escopo (filial+
-  // conta+data), renumerando o grupo. So entry_seq muda no backend.
-  async function moveEntrySeq(t: Transaction, dir: -1 | 1) {
-    const key = scopeKeyOf(t);
-    const group = (Array.isArray(txns) ? txns : [])
-      .filter((x) => scopeKeyOf(x) === key)
+  function toggleRowExpanded(id: string) {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function toggleGroupReconciled(row: LedgerRow) {
+    try {
+      const g = await reconcileTransactionGroup(row.id, !row.reconciled);
+      toast(g.reconciled ? "Grupo conciliado." : "Grupo desconcliado.", "success");
+      await handleTxnSaved();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao conciliar grupo", "error");
+    }
+  }
+
+  // Move a linha (lancamento avulso ou agrupamento) uma posicao dentro do
+  // escopo (filial+conta+data), renumerando todas as linhas visiveis.
+  async function moveEntrySeq(row: LedgerRow, dir: -1 | 1) {
+    const key = scopeKeyOf(row);
+    const lines = ledgerRows
+      .filter((x) => scopeKeyOf(x) === key && !x.voided_at)
       .sort((a, b) =>
         (a.entry_seq ?? Number.MAX_SAFE_INTEGER) - (b.entry_seq ?? Number.MAX_SAFE_INTEGER) ||
         a.occurred_at.localeCompare(b.occurred_at) ||
         (a.created_at ?? "").localeCompare(b.created_at ?? ""));
-    if (group.some((x) => x.reconciled)) {
-      toast("O escopo tem lancamento conciliado; desconcile antes de reordenar.", "error");
+    if (lines.some((x) => x.reconciled)) {
+      toast("O escopo tem linha conciliada; desconcilie antes de reordenar.", "error");
       return;
     }
-    const idx = group.findIndex((x) => x.id === t.id);
+    const idx = lines.findIndex((x) => x.id === row.id);
     const swap = idx + dir;
-    if (idx < 0 || swap < 0 || swap >= group.length) return;
-    [group[idx], group[swap]] = [group[swap], group[idx]];
+    if (idx < 0 || swap < 0 || swap >= lines.length) return;
+    [lines[idx], lines[swap]] = [lines[swap], lines[idx]];
     try {
-      await reorderTransactions(group.map((x) => x.id));
+      await reorderFinanceLines(lines.map((x) => ({ kind: x._kind, id: x.id })));
       await handleTxnSaved();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao reordenar", "error");
@@ -491,28 +667,20 @@ export default function FinancePage() {
   }
 
   // Insercao entre duas linhas: so no mesmo escopo (filial+conta+data), na
-  // ordem cronologica e sem lancamento conciliado no grupo.
-  function canInsertBetween(prev: Transaction, next: Transaction): boolean {
+  // ordem cronologica e sem linha conciliada no grupo.
+  function canInsertBetween(prev: LedgerRow, next: LedgerRow): boolean {
     if (!hasPerm("finance.write")) return false;
     if (sortColumn !== "occurred_at" || sortDirection !== "asc") return false;
     if (!next.account_id) return false;
     if (scopeKeyOf(prev) !== scopeKeyOf(next)) return false;
     const key = scopeKeyOf(next);
-    return !(Array.isArray(txns) ? txns : []).some(
-      (t) => scopeKeyOf(t) === key && t.reconciled
+    return !ledgerRows.some(
+      (t) => scopeKeyOf(t) === key && !t.voided_at && t.reconciled
     );
   }
 
-  function openInsert(_prev: Transaction, next: Transaction) {
-    const key = scopeKeyOf(next);
-    const group = (Array.isArray(txns) ? txns : [])
-      .filter((t) => scopeKeyOf(t) === key)
-      .sort((a, b) =>
-        (a.entry_seq ?? Number.MAX_SAFE_INTEGER) - (b.entry_seq ?? Number.MAX_SAFE_INTEGER) ||
-        a.occurred_at.localeCompare(b.occurred_at) ||
-        (a.created_at ?? "").localeCompare(b.created_at ?? ""));
-    const idx = group.findIndex((t) => t.id === next.id);
-    const entrySeq = next.entry_seq ?? (idx >= 0 ? idx + 1 : group.length + 1);
+  function openInsert(_prev: LedgerRow, next: LedgerRow) {
+    const entrySeq = next.entry_seq ?? 1;
     setEditing(null);
     setInsertTarget({ transaction: next, entrySeq });
     setShowNew(true);
@@ -991,6 +1159,24 @@ export default function FinancePage() {
               selectedKeys: selectedTx,
               onSelectionChange: setSelectedTx,
               keyExtractor: (t) => t.id,
+              isRowSelectable: (t) => t._kind !== "group",
+            }}
+            expansion={{
+              expandedKeys: expandedRows,
+              onToggleExpand: toggleRowExpanded,
+              isExpandable: (t) => t._kind === "group",
+              renderExpanded: (t) => (
+                <GroupMembersInline
+                  groupId={t.id}
+                  from={from}
+                  to={to}
+                  onOpenGroup={(id) => setGroupDetailId(id)}
+                  onOpenTransaction={(m) => {
+                    const member = txns.find((x) => x.id === m.id);
+                    if (member) openDetail(member);
+                  }}
+                />
+              ),
             }}
             pagination={{
               page,
@@ -1038,6 +1224,7 @@ export default function FinancePage() {
             <THead>
               <TRow>
                 <TH>Data do deposito</TH>
+                <TH>Seq.</TH>
                 <TH>Conta bancaria</TH>
                 <TH>Descricao</TH>
                 <TH>Status</TH>
@@ -1050,6 +1237,7 @@ export default function FinancePage() {
               {txGroups.map((g) => (
                 <TRow key={g.id}>
                   <TD className="whitespace-nowrap text-zinc-500">{datePt(g.occurred_at)}</TD>
+                  <TD className="text-zinc-500 tabular-nums">{g.entry_seq ?? "-"}</TD>
                   <TD>{g.account_name ?? "-"}</TD>
                   <TD className="text-zinc-500">{g.description ?? "-"}</TD>
                   <TD>
@@ -1072,7 +1260,7 @@ export default function FinancePage() {
               ))}
               {!txGroupsLoading && txGroups.length === 0 && (
                 <TRow>
-                  <TD colSpan={7} className="py-8 text-center text-zinc-400">
+                  <TD colSpan={8} className="py-8 text-center text-zinc-400">
                     Nenhum agrupamento no periodo. Selecione lancamentos na aba Lancamentos e clique em Agrupar.
                   </TD>
                 </TRow>

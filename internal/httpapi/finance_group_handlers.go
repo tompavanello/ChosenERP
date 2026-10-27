@@ -290,3 +290,36 @@ func (a *App) handleGroupFromBankEntry(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, g)
 }
+
+// handleReorderFinanceLines reordena as linhas visiveis do escopo (lancamentos
+// avulsos + agrupamentos) na ordem enviada pelo cliente.
+func (a *App) handleReorderFinanceLines(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var in struct {
+		Lines []finance.LineRef `json:"lines"`
+	}
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if len(in.Lines) == 0 {
+		writeErr(w, http.StatusBadRequest, "nenhuma linha informada")
+		return
+	}
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		return a.Finance.ReorderLines(r.Context(), tx, in.Lines)
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) || store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "linha nao encontrada no escopo")
+			return
+		}
+		writeFinanceErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}

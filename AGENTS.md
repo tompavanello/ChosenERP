@@ -315,7 +315,7 @@ Camada `internal/payments` com a interface `Gateway` (abstracao de provider) e o
   `occurred_at, entry_seq NULLS LAST, created_at, id`.
 - Na auditoria, a acao de cada linha tem atalhos para anexos e recibo.
 
-### Agrupamento de lancamentos (`000105`)
+### Agrupamento de lancamentos (`000105`/`000106`)
 
 Um **grupo** representa uma unica movimentacao bancaria (ex.: um deposito) que
 reune varios lancamentos (dizimos, oferta, benfeitor). O grupo **nao e um
@@ -325,24 +325,34 @@ lancamentos individuais e nao ha duplicidade.
 
 - Tabela `financial_transaction_groups` + coluna `financial_transactions.group_id`
   e `bank_statement_entries.group_id`. Status `agrupado`/`conciliado`.
-- Regras: minimo de **2 membros**, mesma filial/conta/tipo; nao aceita lancamento
-  estornado, conciliado ou ja agrupado. Grupo conciliado e imutavel.
-  Lancamento agrupado **nao pode ser estornado/excluido nem conciliado isoladamente**.
+- Regras: minimo de **2 membros**, mesma filial/conta/tipo/**data**; nao aceita
+  lancamento estornado, conciliado ou ja agrupado. A data do grupo e a mesma de
+  todos os membros (`000106`); alterar a data move os membros junto. Grupo
+  conciliado e imutavel. Lancamento agrupado **nao pode ser estornado/excluido
+  nem conciliado isoladamente**.
+- **Sequencia:** o grupo tem `entry_seq` proprio (`000106`) e ocupa o lugar do
+  primeiro membro; ao criar, herda o `MIN(entry_seq)`. A ordenacao e unificada
+  (grupos + lancamentos avulsos) por `POST /finance/lines/reorder`, disponivel
+  no ledger, conciliacao (periodo e individual) e auditoria.
 - A conciliacao e **no grupo** (`fin_group_reconcile`): marca/desmarca todos os
   membros atomicamente e respeita periodo encerrado/auditoria fechada.
-- RPCs `SECURITY DEFINER`: `fin_group_attach/detach` e `fin_group_reconcile`,
-  com validacao de tenant/filial (`rls_write`) alem dos triggers de consistencia.
+- RPCs `SECURITY DEFINER`: `fin_group_attach/detach`, `fin_group_reconcile` e
+  `fin_group_move_date`, com validacao de tenant/filial (`rls_write`) alem dos
+  triggers de consistencia.
 - API: `GET/POST /finance/groups`, `GET/PATCH/DELETE /finance/groups/{id}`,
   `POST /finance/groups/{id}/members`, `DELETE /finance/groups/{id}/members/{txId}`,
-  `POST /finance/groups/{id}/reconcile` e
+  `POST /finance/groups/{id}/reconcile`, `POST /finance/lines/reorder` e
   `POST /finance/bank-imports/{id}/entries/{entryId}/group` (cria o grupo a partir
-  do extrato, exige que a soma bata com a linha e concilia tudo).
+  do extrato, exige que a soma bata com a linha **e que os lancamentos estejam na
+  data do deposito**; caso contrario recusa e pede o ajuste manual da data).
 - Extrato (`GET /reports/account-statement`): `view=detail` (padrao, um lancamento
   por linha) ou `view=bank` (um grupo por linha, na data do deposito). A visao
   banco pode divergir do mes dos lancamentos; o export aceita o mesmo `view`.
 - UI: aba **Agrupamentos** no financeiro, selecao multipla + "Agrupar (N)", badge
-  "Agrupado", detalhe com membros/desagrupar; conciliacao e extrato mostra o grupo
-  como uma linha e permitem conciliar em bloco.
+  "Agrupado", detalhe com membros/desagrupar. No ledger, na conciliacao (periodo e
+  individual) e na auditoria o grupo aparece como **uma linha** com expansao
+  inline dos membros (e atalho para o detalhe); no extrato somente a visao Banco
+  colapsa. A auditoria marca apenas os membros do periodo.
 
 ### 3. Servico Go localmente (para depurar)
 
@@ -707,6 +717,7 @@ docker exec chosen-postgres psql -U postgres -d chosenerp \
 | POST | `/api/v1/finance/transactions/import` | Bearer | Importa lancamentos (CSV ou XLSX, com mapeamento de colunas) |
 | POST | `/api/v1/finance/transactions/import/preview` | Bearer | Pre-visualiza as linhas da planilha para mapear colunas |
 | POST | `/api/v1/finance/transactions/reorder` | Bearer | Renumera a sequencia (entry_seq) dos lancamentos da mesma conta/data |
+| POST | `/api/v1/finance/lines/reorder` | Bearer | Reordena linhas visiveis (lancamentos + agrupamentos) do mesmo escopo |
 | PATCH | `/api/v1/finance/transactions/{id}` | Bearer | Edita o lancamento EM VIGOR (preserva id, entry_seq, recibo e anexos; recalcula hash-chain) |
 | DELETE | `/api/v1/finance/transactions/{id}` | Bearer | Exclui o lancamento definitivamente (recalcula hash-chain) |
 | POST | `/api/v1/finance/transactions/{id}/void` | Bearer | Estorna o lancamento (legado; sai dos relatorios) |

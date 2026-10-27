@@ -40,27 +40,33 @@ type Audit struct {
 }
 
 type Item struct {
-	TransactionID   string       `json:"transaction_id"`
-	OccurredAt      time.Time    `json:"occurred_at"`
-	CreatedAt       time.Time    `json:"created_at"`
-	EntrySeq        *int         `json:"entry_seq,omitempty"`
-	Type            string       `json:"type"`
-	Amount          float64      `json:"amount"`
-	Currency        string       `json:"currency"`
-	Description     *string      `json:"description,omitempty"`
-	CategoryName    *string      `json:"category_name,omitempty"`
-	AccountName     *string      `json:"account_name,omitempty"`
-	SupplierName    *string      `json:"supplier_name,omitempty"`
-	PaymentMethod   *string      `json:"payment_method,omitempty"`
-	IsAnonymous     bool         `json:"is_anonymous"`
-	DonorName       *string      `json:"donor_name,omitempty"`
-	ReceiptID       *string      `json:"receipt_id,omitempty"`
-	ReceiptRef      *string      `json:"receipt_ref,omitempty"`
-	AttachmentCount int          `json:"attachment_count"`
-	Allocations     []Allocation `json:"allocations"`
-	Audited         bool         `json:"audited"`
-	AuditedAt       *time.Time   `json:"audited_at,omitempty"`
-	Notes           *string      `json:"notes,omitempty"`
+	TransactionID    string       `json:"transaction_id"`
+	OccurredAt       time.Time    `json:"occurred_at"`
+	CreatedAt        time.Time    `json:"created_at"`
+	EntrySeq         *int         `json:"entry_seq,omitempty"`
+	Type             string       `json:"type"`
+	Amount           float64      `json:"amount"`
+	Currency         string       `json:"currency"`
+	Description      *string      `json:"description,omitempty"`
+	CategoryName     *string      `json:"category_name,omitempty"`
+	AccountName      *string      `json:"account_name,omitempty"`
+	AccountID        *string      `json:"account_id,omitempty"`
+	SupplierName     *string      `json:"supplier_name,omitempty"`
+	PaymentMethod    *string      `json:"payment_method,omitempty"`
+	IsAnonymous      bool         `json:"is_anonymous"`
+	DonorName        *string      `json:"donor_name,omitempty"`
+	ReceiptID        *string      `json:"receipt_id,omitempty"`
+	ReceiptRef       *string      `json:"receipt_ref,omitempty"`
+	AttachmentCount  int          `json:"attachment_count"`
+	Allocations      []Allocation `json:"allocations"`
+	Audited          bool         `json:"audited"`
+	AuditedAt        *time.Time   `json:"audited_at,omitempty"`
+	Notes            *string      `json:"notes,omitempty"`
+	GroupID          *string      `json:"group_id,omitempty"`
+	GroupStatus      *string      `json:"group_status,omitempty"`
+	GroupDescription *string      `json:"group_description,omitempty"`
+	GroupMemberCount int          `json:"group_member_count,omitempty"`
+	GroupEntrySeq    *int         `json:"group_entry_seq,omitempty"`
 }
 
 // Allocation e o rateio do lancamento em um evento (custo real por evento).
@@ -160,10 +166,13 @@ func (r *Repo) ListItems(ctx context.Context, tx pgx.Tx, id string) ([]Item, err
 	rows, err := tx.Query(ctx, `
 		SELECT i.transaction_id::text, t.occurred_at, t.created_at, t.entry_seq,
 		       t.type, t.amount::float8, t.currency, t.description,
-		       c.name, ac.name, s.name, t.payment_method, t.is_anonymous,
+		       c.name, ac.name, t.account_id::text, s.name, t.payment_method, t.is_anonymous,
 		       COALESCE(dm.full_name, db.name) AS donor_name, doc.id::text, doc.document_ref,
 		       i.audited, i.audited_at, i.notes,
-		       (SELECT count(*) FROM financial_attachments fa WHERE fa.transaction_id = t.id)::int
+		       (SELECT count(*) FROM financial_attachments fa WHERE fa.transaction_id = t.id)::int,
+		       t.group_id::text, g.status, g.description, g.entry_seq,
+		       (SELECT count(*)::int FROM financial_transactions mt
+		         WHERE mt.group_id = t.group_id AND mt.voided_at IS NULL)
 		FROM financial_audit_items i
 		JOIN financial_transactions t ON t.id = i.transaction_id
 		LEFT JOIN financial_categories c ON c.id = t.category_id
@@ -171,6 +180,7 @@ func (r *Repo) ListItems(ctx context.Context, tx pgx.Tx, id string) ([]Item, err
 		LEFT JOIN suppliers s ON s.id = t.supplier_id
 		LEFT JOIN members dm ON dm.id = t.donor_member_id
 		LEFT JOIN benefactors db ON db.id = t.benefactor_id
+		LEFT JOIN financial_transaction_groups g ON g.id = t.group_id
 		LEFT JOIN LATERAL (
 		    SELECT d.id, d.document_ref
 		    FROM documents d
@@ -190,9 +200,10 @@ func (r *Repo) ListItems(ctx context.Context, tx pgx.Tx, id string) ([]Item, err
 		var it Item
 		if err := rows.Scan(&it.TransactionID, &it.OccurredAt, &it.CreatedAt, &it.EntrySeq,
 			&it.Type, &it.Amount, &it.Currency, &it.Description,
-			&it.CategoryName, &it.AccountName, &it.SupplierName, &it.PaymentMethod, &it.IsAnonymous,
+			&it.CategoryName, &it.AccountName, &it.AccountID, &it.SupplierName, &it.PaymentMethod, &it.IsAnonymous,
 			&it.DonorName, &it.ReceiptID, &it.ReceiptRef, &it.Audited, &it.AuditedAt, &it.Notes,
-			&it.AttachmentCount); err != nil {
+			&it.AttachmentCount, &it.GroupID, &it.GroupStatus, &it.GroupDescription,
+			&it.GroupEntrySeq, &it.GroupMemberCount); err != nil {
 			return nil, err
 		}
 		it.Allocations = []Allocation{}

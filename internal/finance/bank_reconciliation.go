@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"errors"
+	"fmt"
 	"math"
 	"regexp"
 	"strings"
@@ -657,6 +658,17 @@ func (r *Repo) GroupFromBankEntry(ctx context.Context, tx pgx.Tx, tenantID, acto
 	}
 	if found != len(ids) {
 		return nil, errors.New("um ou mais lancamentos nao conferem com a conta/tipo do extrato")
+	}
+	var mismatched int
+	if err := tx.QueryRow(ctx, `
+		SELECT count(*)::int FROM financial_transactions
+		WHERE id = ANY($1::uuid[])
+		  AND (occurred_at AT TIME ZONE 'UTC')::date <> $2::date`, ids, posted).Scan(&mismatched); err != nil {
+		return nil, err
+	}
+	if mismatched > 0 {
+		return nil, fmt.Errorf("%w: ajuste a data dos lancamentos para %s antes de agrupar",
+			ErrGroupDateMismatch, posted)
 	}
 	if math.Abs(sum-amount) >= 0.005 {
 		return nil, errors.New("a soma dos lancamentos nao confere com o valor do extrato")

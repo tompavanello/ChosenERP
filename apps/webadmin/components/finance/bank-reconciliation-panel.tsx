@@ -191,6 +191,11 @@ export function BankReconciliationPanel() {
   }
 
   function toggleGroupTxn(id: string) {
+    const t = groupCandidates.find((x) => x.id === id);
+    if (t && groupEntry && t.occurred_at.slice(0, 10) !== groupEntry.posted_at.slice(0, 10)) {
+      toast(`Ajuste a data do lancamento para ${datePt(groupEntry.posted_at)} antes de agrupar.`, "error");
+      return;
+    }
     setGroupSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -204,6 +209,11 @@ export function BankReconciliationPanel() {
     if (!selected || !groupEntry) return;
     if (groupSelected.size < 2) {
       toast("Selecione pelo menos 2 lancamentos.", "error");
+      return;
+    }
+    const chosen = groupCandidates.filter((t) => groupSelected.has(t.id));
+    if (chosen.some((t) => t.occurred_at.slice(0, 10) !== groupEntry.posted_at.slice(0, 10))) {
+      toast(`Todos os lancamentos precisam estar na data do deposito (${datePt(groupEntry.posted_at)}).`, "error");
       return;
     }
     setGroupSaving(true);
@@ -247,6 +257,8 @@ export function BankReconciliationPanel() {
   );
   const groupDiff = groupEntry ? groupEntry.amount - groupTotal : 0;
   const groupBalanced = Math.abs(groupDiff) < 0.005;
+  const groupDate = groupEntry?.posted_at.slice(0, 10) ?? "";
+  const hasOtherDates = !!groupDate && groupCandidates.some((t) => t.occurred_at.slice(0, 10) !== groupDate);
 
   const importColumns: Column<BankImport>[] = [
     { key: "filename", label: "Arquivo", sortable: true, render: (b) => <span className="font-medium">{b.filename || "-"}</span> },
@@ -415,9 +427,14 @@ export function BankReconciliationPanel() {
               <p className="text-zinc-500">
                 {groupEntry.direction === "income" ? "Credito" : "Debito"} de{" "}
                 <strong>{currency(groupEntry.amount)}</strong> em {datePt(groupEntry.posted_at)}
-                {groupEntry.memo ? ` - ${groupEntry.memo}` : ""}. Selecione os lancamentos cuja soma
-                confere com o valor do extrato.
+                {groupEntry.memo ? ` - ${groupEntry.memo}` : ""}. Selecione os lancamentos da
+                <strong> mesma data do deposito</strong> cuja soma confere com o valor do extrato.
               </p>
+              {hasOtherDates && (
+                <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+                  Ha lancamentos em outras datas. Ajuste a data deles para {datePt(groupDate)} antes de agrupar.
+                </p>
+              )}
 
               <Field label="Descricao do grupo">
                 <Input
@@ -447,22 +464,29 @@ export function BankReconciliationPanel() {
                         Nenhum lancamento pendente nesta conta/tipo.
                       </td></tr>
                     )}
-                    {!groupLoading && groupCandidates.map((t) => (
+                    {!groupLoading && groupCandidates.map((t) => {
+                      const sameDate = !groupDate || t.occurred_at.slice(0, 10) === groupDate;
+                      return (
                       <tr
                         key={t.id}
-                        className={`cursor-pointer border-t border-zinc-100 dark:border-zinc-800 ${groupSelected.has(t.id) ? "bg-sky-50 dark:bg-sky-950/30" : ""}`}
-                        onClick={() => toggleGroupTxn(t.id)}
+                        className={`border-t border-zinc-100 dark:border-zinc-800 ${sameDate ? "cursor-pointer" : "opacity-60"} ${groupSelected.has(t.id) ? "bg-sky-50 dark:bg-sky-950/30" : ""}`}
+                        onClick={() => { if (sameDate) toggleGroupTxn(t.id); }}
                       >
                         <td className="px-2 py-1 text-center">
                           <input
                             type="checkbox"
                             className="h-4 w-4 rounded border-zinc-300 text-sky-600"
                             checked={groupSelected.has(t.id)}
+                            disabled={!sameDate}
+                            title={sameDate ? undefined : "Ajuste a data do lancamento para a data do deposito."}
                             onChange={() => toggleGroupTxn(t.id)}
                             onClick={(ev) => ev.stopPropagation()}
                           />
                         </td>
-                        <td className="whitespace-nowrap px-2 py-1 text-zinc-500">{datePt(t.occurred_at)}</td>
+                        <td className="whitespace-nowrap px-2 py-1 text-zinc-500">
+                          {datePt(t.occurred_at)}
+                          {!sameDate && <Badge tone="amber" className="ml-1 text-[10px]">Fora da data</Badge>}
+                        </td>
                         <td className="px-2 py-1">{t.category_name ?? "-"}</td>
                         <td className="px-2 py-1 text-zinc-500">
                           {t.donor_name || t.description || "-"}
@@ -472,7 +496,8 @@ export function BankReconciliationPanel() {
                         </td>
                         <td className="px-2 py-1 text-right font-medium tabular-nums">{currency(t.amount)}</td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

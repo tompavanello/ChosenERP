@@ -68,6 +68,15 @@ export interface DataTableProps<T> {
     selectedKeys: Set<string>;
     onSelectionChange: (keys: Set<string>) => void;
     keyExtractor: (row: T) => string;
+    /** Linhas que nao podem ser selecionadas (ex.: linha sintetica de grupo). */
+    isRowSelectable?: (row: T) => boolean;
+  };
+  /** Expansao inline de uma linha (ex.: membros de um agrupamento). */
+  expansion?: {
+    expandedKeys: Set<string>;
+    onToggleExpand: (key: string) => void;
+    isExpandable?: (row: T) => boolean;
+    renderExpanded: (row: T) => ReactNode;
   };
   /** Permite inserir um registro entre duas linhas consecutivas (hover). */
   insertion?: {
@@ -133,6 +142,7 @@ export function DataTable<T>({  columns,
   compact = false,
   showIndex = false,
   selection,
+  expansion,
   insertion,
   renderMobileCard,
   className,
@@ -187,6 +197,9 @@ export function DataTable<T>({  columns,
   };
 
   const columnCount = columns.length + (selection ? 1 : 0) + (showIndex ? 1 : 0);
+  const selectableRows = selection
+    ? data.filter((row) => !selection.isRowSelectable || selection.isRowSelectable(row))
+    : [];
 
   return (
     <div
@@ -206,12 +219,12 @@ export function DataTable<T>({  columns,
                 <th className="w-10 px-2 py-2">
                   <input
                     type="checkbox"
-                    checked={data.length > 0 && data.every(row => selection.selectedKeys.has(selection.keyExtractor(row)))}
+                    checked={selectableRows.length > 0 && selectableRows.every(row => selection.selectedKeys.has(selection.keyExtractor(row)))}
                     onChange={() => {
-                      if (data.length > 0 && data.every(row => selection.selectedKeys.has(selection.keyExtractor(row)))) {
+                      if (selectableRows.length > 0 && selectableRows.every(row => selection.selectedKeys.has(selection.keyExtractor(row)))) {
                         selection.onSelectionChange(new Set());
                       } else {
-                        selection.onSelectionChange(new Set(data.map(selection.keyExtractor)));
+                        selection.onSelectionChange(new Set(selectableRows.map(selection.keyExtractor)));
                       }
                     }}
                     className="rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
@@ -239,9 +252,12 @@ export function DataTable<T>({  columns,
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/70">
             {pageData.map((row, index) => {
               const rowKey = keyExtractor(row);
-              const isSelected = selection?.selectedKeys.has(rowKey);
+              const selectable = !selection?.isRowSelectable || selection.isRowSelectable(row);
+              const isSelected = selectable && !!selection?.selectedKeys.has(rowKey);
               const prev = index > 0 ? pageData[index - 1] : undefined;
               const canInsert = !!insertion && !!prev && insertion.canInsert(prev, row);
+              const canExpand = !!expansion && (!expansion.isExpandable || expansion.isExpandable(row));
+              const isExpanded = canExpand && !!expansion?.expandedKeys.has(rowKey);
 
               return (
                 <Fragment key={rowKey}>
@@ -279,7 +295,9 @@ export function DataTable<T>({  columns,
                         <input
                           type="checkbox"
                           checked={isSelected}
+                          disabled={!selectable}
                           onChange={(e) => {
+                            if (!selectable) return;
                             const newKeys = new Set(selection.selectedKeys);
                             if (e.target.checked) {
                               newKeys.add(rowKey);
@@ -289,7 +307,7 @@ export function DataTable<T>({  columns,
                             selection.onSelectionChange(newKeys);
                           }}
                           onClick={(e) => e.stopPropagation()}
-                          className="rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
+                          className="rounded border-zinc-300 text-sky-600 disabled:opacity-40 focus:ring-sky-500"
                         />
                       </td>
                     )}
@@ -315,6 +333,13 @@ export function DataTable<T>({  columns,
                       </td>
                     ))}
                   </tr>
+                  {isExpanded && (
+                    <tr className="bg-zinc-50/60 dark:bg-zinc-900/40">
+                      <td colSpan={columnCount} className="px-3 py-3">
+                        {expansion!.renderExpanded(row)}
+                      </td>
+                    </tr>
+                  )}
                 </Fragment>
               );
             })}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ShieldCheck, Plus, Search, Paperclip, Lock, ArrowLeft, CheckCircle2, Eye, Trash2, FileText } from "lucide-react";
+import { ShieldCheck, Plus, Search, Paperclip, Lock, ArrowLeft, CheckCircle2, Eye, Trash2, FileText, ChevronDown, ChevronRight, ChevronUp, Layers } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,16 +14,44 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import {
   listAudits, createAudit, getAudit, markAudit, closeAudit, deleteAudit, listAttachments,
-  downloadFinancialAttachment, getReceiptHTML,
+  downloadFinancialAttachment, getReceiptHTML, reorderFinanceLines,
   type FinancialAudit, type AuditItem, type FinancialAttachment,
 } from "@/lib/api";
 import { PAYMENT_METHODS } from "@/lib/constants";
 import { currency, datePt, dateTimePt, todayISO } from "@/lib/format";
+import { GroupMembersInline } from "@/components/finance/group-members-inline";
+import { GroupDetailDrawer } from "@/components/finance/transaction-group";
+
+type AuditRow = {
+  id: string;
+  kind: "tx" | "group";
+  group_id?: string;
+  branch_id: string;
+  account_id?: string;
+  occurred_at: string;
+  created_at: string;
+  entry_seq?: number;
+  type: "income" | "expense";
+  category_name?: string;
+  description?: string;
+  account_name?: string;
+  amount: number;
+  audited: boolean;
+  member_count: number;
+  total_members: number;
+  tx?: AuditItem;
+  members?: AuditItem[];
+};
+
+function auditScopeKey(row: AuditRow): string {
+  return `${row.branch_id}|${row.account_id ?? ""}|${row.occurred_at.slice(0, 10)}`;
+}
 
 export default function AuditReportPage() {
   const { toast } = useToast();
   const { hasPerm, user } = useAuth();
   const canAudit = hasPerm("finance.audit");
+  const canWrite = hasPerm("finance.write");
   const isHQ = user?.role === "super_admin" || user?.role === "admin_sede";
   const [audits, setAudits] = useState<FinancialAudit[] | null>(null);
   const [selected, setSelected] = useState<FinancialAudit | null>(null);
@@ -35,6 +63,8 @@ export default function AuditReportPage() {
   const [itemSearch, setItemSearch] = useState("");
   const [itemFrom, setItemFrom] = useState("");
   const [itemTo, setItemTo] = useState("");
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [groupDetailId, setGroupDetailId] = useState<string | undefined>(undefined);
   // Ordenacao/filtro da lista de auditorias (grid principal da tela).
   const [auditSortColumn, setAuditSortColumn] = useState("period_start");
   const [auditSortDirection, setAuditSortDirection] = useState<"asc" | "desc">("desc");
@@ -76,6 +106,8 @@ export default function AuditReportPage() {
     setItemSearch("");
     setItemFrom("");
     setItemTo("");
+    setExpandedRows(new Set());
+    setGroupDetailId(undefined);
     setSortColumn("occurred_at");
     setSortDirection("asc");
     try {
@@ -123,13 +155,55 @@ export default function AuditReportPage() {
     }
   }
 
-  async function toggleOne(it: AuditItem) {
-    if (!selected) return;
+  function toggleExpanded(id: string) {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function toggleRow(row: AuditRow) {
+    if (!selected || selected.status !== "aberta" || !canAudit) return;
+    const ids = row.kind === "group"
+      ? items.filter((it) => it.group_id === row.group_id).map((it) => it.transaction_id)
+      : row.tx
+        ? [row.tx.transaction_id]
+        : [];
+    if (ids.length === 0) return;
     try {
-      await markAudit(selected.id, { transaction_ids: [it.transaction_id], audited: !it.audited });
+      await markAudit(selected.id, { transaction_ids: ids, audited: !row.audited });
       await reloadItems(selected.id);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro", "error");
+    }
+  }
+
+  async function moveRow(row: AuditRow, dir: -1 | 1) {
+    if (!selected || selected.status !== "aberta" || !canWrite) return;
+    const key = auditScopeKey(row);
+    const lines = auditRows
+      .filter((r) => auditScopeKey(r) === key)
+      .sort((a, b) =>
+        (a.entry_seq ?? Number.MAX_SAFE_INTEGER) - (b.entry_seq ?? Number.MAX_SAFE_INTEGER) ||
+        a.occurred_at.localeCompare(b.occurred_at) ||
+        a.created_at.localeCompare(b.created_at) ||
+        a.id.localeCompare(b.id));
+    const idx = lines.findIndex((r) => r.id === row.id);
+    const swap = idx + dir;
+    if (idx < 0 || swap < 0 || swap >= lines.length) return;
+    [lines[idx], lines[swap]] = [lines[swap], lines[idx]];
+    try {
+      await reorderFinanceLines(
+        lines.map((r) => ({
+          kind: r.kind === "group" ? "group" : "transaction",
+          id: r.kind === "group" ? (r.group_id ?? r.id) : (r.tx?.transaction_id ?? r.id),
+        })),
+      );
+      await reloadItems(selected.id);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao reordenar", "error");
     }
   }
 
@@ -195,23 +269,94 @@ export default function AuditReportPage() {
   const isOpen = selected?.status === "aberta";
   const auditedCount = items.filter((i) => i.audited).length;
 
+  const auditRows = useMemo<AuditRow[]>(() => {
+    const branchID = selected?.branch_id ?? "";
+    const out: AuditRow[] = [];
+    const groups = new Map<string, AuditItem[]>();
+    for (const it of items) {
+      if (it.group_id) {
+        const arr = groups.get(it.group_id) ?? [];
+        arr.push(it);
+        groups.set(it.group_id, arr);
+        continue;
+      }
+      out.push({
+        id: it.transaction_id,
+        kind: "tx",
+        branch_id: branchID,
+        account_id: it.account_id,
+        occurred_at: it.occurred_at,
+        created_at: it.created_at,
+        entry_seq: it.entry_seq,
+        type: it.type,
+        category_name: it.category_name,
+        description: it.description,
+        account_name: it.account_name,
+        amount: it.amount,
+        audited: it.audited,
+        member_count: 1,
+        total_members: 1,
+        tx: it,
+      });
+    }
+    for (const [gid, members] of groups) {
+      const first = members[0];
+      const seqs = members
+        .map((m) => m.entry_seq)
+        .filter((n): n is number => typeof n === "number");
+      out.push({
+        id: `group:${gid}`,
+        kind: "group",
+        group_id: gid,
+        branch_id: branchID,
+        account_id: first.account_id,
+        occurred_at: first.occurred_at,
+        created_at: first.created_at,
+        entry_seq: first.group_entry_seq ?? (seqs.length ? Math.min(...seqs) : undefined),
+        type: first.type,
+        description: first.group_description ?? first.description,
+        account_name: first.account_name,
+        amount: members.reduce((sum, m) => sum + m.amount, 0),
+        audited: members.every((m) => m.audited),
+        member_count: members.length,
+        total_members: first.group_member_count && first.group_member_count > 0
+          ? first.group_member_count
+          : members.length,
+        members,
+      });
+    }
+    return out;
+  }, [items, selected]);
+
   // Filtro por descricao/conta/doador e por periodo (a data efetiva e
   // YYYY-MM-DD, entao a comparacao lexicografica equivale a comparacao de data).
   const filteredItems = useMemo(() => {
     const q = itemSearch.trim().toLowerCase();
-    return items.filter((it) => {
+    return auditRows.filter((row) => {
       if (q) {
-        const hay = [it.description, it.category_name, it.account_name, it.supplier_name, it.donor_name, it.receipt_ref]
+        const hay = [
+          row.description,
+          row.category_name,
+          row.account_name,
+          ...(row.members ?? []).flatMap((it) => [
+            it.description,
+            it.category_name,
+            it.account_name,
+            it.supplier_name,
+            it.donor_name,
+            it.receipt_ref,
+          ]),
+        ]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
         if (!hay.includes(q)) return false;
       }
-      if (itemFrom && it.occurred_at < itemFrom) return false;
-      if (itemTo && it.occurred_at > itemTo) return false;
+      if (itemFrom && row.occurred_at < itemFrom) return false;
+      if (itemTo && row.occurred_at > itemTo) return false;
       return true;
     });
-  }, [items, itemSearch, itemFrom, itemTo]);
+  }, [auditRows, itemSearch, itemFrom, itemTo]);
 
   // Filtro por titulo e por periodo (auditorias que interceptam o intervalo).
   const filteredAudits = useMemo(() => {
@@ -242,18 +387,23 @@ export default function AuditReportPage() {
     }
   };
 
-  const itemColumns: Column<AuditItem>[] = [
+  const itemColumns: Column<AuditRow>[] = [
     {
       key: "audited",
       label: "Auditado",
       width: "w-20",
-      render: (it) => (
+      render: (row) => (
         <input
           type="checkbox"
           className="h-4 w-4 rounded border-zinc-300 text-sky-600"
-          checked={it.audited}
+          checked={row.audited}
           disabled={!isOpen || !canAudit}
-          onChange={() => toggleOne(it)}
+          onChange={() => toggleRow(row)}
+          title={
+            row.kind === "group" && row.total_members > row.member_count
+              ? "Marca apenas os lancamentos do periodo."
+              : undefined
+          }
         />
       ),
     },
@@ -262,25 +412,51 @@ export default function AuditReportPage() {
       label: "Data",
       sortable: true,
       width: "w-28",
-      sortValue: (it) => `${it.occurred_at}|${String(it.entry_seq ?? 999999999).padStart(9, "0")}|${it.created_at}`,
-      render: (it) => <span className="text-zinc-500">{datePt(it.occurred_at)}</span>,
+      sortValue: (row) => `${row.occurred_at}|${String(row.entry_seq ?? 999999999).padStart(9, "0")}|${row.created_at}`,
+      render: (row) => <span className="text-zinc-500">{datePt(row.occurred_at)}</span>,
     },
     {
       key: "entry_seq",
       label: "Seq.",
       sortable: true,
       width: "w-16",
-      sortValue: (it) => it.entry_seq ?? 999999999,
-      render: (it) => <span className="text-xs tabular-nums text-zinc-400">{it.entry_seq ?? "-"}</span>,
+      sortValue: (row) => row.entry_seq ?? 999999999,
+      render: (row) => (
+        <div className="flex items-center gap-1">
+          <span className="text-xs tabular-nums text-zinc-400">{row.entry_seq ?? "-"}</span>
+          {canWrite && isOpen && (
+            <div className="flex flex-col">
+              <button
+                type="button"
+                aria-label="Mover para cima"
+                title="Mover para cima"
+                className="text-zinc-400 hover:text-sky-600"
+                onClick={() => moveRow(row, -1)}
+              >
+                <ChevronUp className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                aria-label="Mover para baixo"
+                title="Mover para baixo"
+                className="text-zinc-400 hover:text-sky-600"
+                onClick={() => moveRow(row, 1)}
+              >
+                <ChevronDown className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       key: "type",
       label: "Tipo",
       sortable: true,
       width: "w-24",
-      render: (it) => (
-        <Badge tone={it.type === "income" ? "green" : "red"}>
-          {it.type === "income" ? "Entrada" : "Saida"}
+      render: (row) => (
+        <Badge tone={row.type === "income" ? "green" : "red"}>
+          {row.type === "income" ? "Entrada" : "Saida"}
         </Badge>
       ),
     },
@@ -288,22 +464,48 @@ export default function AuditReportPage() {
       key: "category_name",
       label: "Conta contabil",
       sortable: true,
-      render: (it) => <span className="text-zinc-500">{it.category_name ?? "-"}</span>,
+      render: (row) =>
+        row.kind === "group" ? (
+          <Badge tone="indigo" className="gap-1">
+            <Layers className="h-3 w-3" />{" "}
+            {row.total_members > row.member_count
+              ? `${row.member_count}/${row.total_members}`
+              : row.member_count}{" "}
+            itens
+          </Badge>
+        ) : (
+          <span className="text-zinc-500">{row.category_name ?? "-"}</span>
+        ),
     },
     {
       key: "description",
       label: "Descricao",
       sortable: true,
-      render: (it) => <span className="text-zinc-500">{it.description ?? "-"}</span>,
+      render: (row) => (
+        <div className="flex items-center gap-1">
+          {row.kind === "group" && (
+            <button
+              type="button"
+              onClick={() => toggleExpanded(row.id)}
+              title={expandedRows.has(row.id) ? "Recolher lancamentos" : "Ver lancamentos do agrupamento"}
+              aria-label={expandedRows.has(row.id) ? "Recolher lancamentos" : "Ver lancamentos do agrupamento"}
+              className="text-zinc-400 hover:text-sky-600"
+            >
+              {expandedRows.has(row.id) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            </button>
+          )}
+          <span className="text-zinc-500">{row.description ?? "-"}</span>
+        </div>
+      ),
     },
     {
       key: "amount",
       label: "Valor",
       sortable: true,
       align: "right",
-      render: (it) => (
-        <span className={`font-medium ${it.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
-          {currency(it.amount)}
+      render: (row) => (
+        <span className={`font-medium ${row.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
+          {currency(row.amount)}
         </span>
       ),
     },
@@ -312,32 +514,43 @@ export default function AuditReportPage() {
       label: "Acesso rapido",
       width: "w-32",
       align: "center",
-      render: (it) => (
-        <div className="flex items-center justify-center gap-0.5">
-          <Button variant="ghost" className="h-7 px-1.5" title="Detalhes do lancamento" onClick={() => openDetail(it)}>
-            <Eye className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            className="h-7 px-1.5"
-            title={it.attachment_count > 0 ? "Ver anexos" : "Sem anexos"}
-            disabled={it.attachment_count === 0}
-            onClick={() => openDetail(it)}
-          >
-            <Paperclip className="h-4 w-4" />
-            {it.attachment_count > 0 && <span className="ml-0.5 text-[10px]">{it.attachment_count}</span>}
-          </Button>
-          <Button
-            variant="ghost"
-            className="h-7 px-1.5"
-            title={it.receipt_id ? "Ver recibo" : "Sem recibo"}
-            disabled={!it.receipt_id}
-            onClick={() => viewReceipt(it)}
-          >
-            <FileText className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
+      render: (row) => {
+        if (row.kind === "group") {
+          return (
+            <Button variant="ghost" className="h-7 px-1.5" title="Detalhes do agrupamento" onClick={() => setGroupDetailId(row.group_id)}>
+              <Layers className="h-4 w-4" />
+            </Button>
+          );
+        }
+        const it = row.tx;
+        if (!it) return null;
+        return (
+          <div className="flex items-center justify-center gap-0.5">
+            <Button variant="ghost" className="h-7 px-1.5" title="Detalhes do lancamento" onClick={() => openDetail(it)}>
+              <Eye className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              className="h-7 px-1.5"
+              title={it.attachment_count > 0 ? "Ver anexos" : "Sem anexos"}
+              disabled={it.attachment_count === 0}
+              onClick={() => openDetail(it)}
+            >
+              <Paperclip className="h-4 w-4" />
+              {it.attachment_count > 0 && <span className="ml-0.5 text-[10px]">{it.attachment_count}</span>}
+            </Button>
+            <Button
+              variant="ghost"
+              className="h-7 px-1.5"
+              title={it.receipt_id ? "Ver recibo" : "Sem recibo"}
+              disabled={!it.receipt_id}
+              onClick={() => viewReceipt(it)}
+            >
+              <FileText className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -368,7 +581,7 @@ export default function AuditReportPage() {
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <Badge tone={isOpen ? "amber" : "green"}>{isOpen ? "Aberta" : "Fechada"}</Badge>
           <span className="text-sm text-zinc-500">
-            Auditados {auditedCount}/{items.length} - Total {currency(selected.total_amount)} - Auditado {currency(selected.audited_amount)}
+            {auditRows.length} linha(s) / {items.length} lancamento(s) - Auditados {auditedCount}/{items.length} - Total {currency(selected.total_amount)} - Auditado {currency(selected.audited_amount)}
           </span>
           {isOpen && canAudit && (
             <div className="ml-auto flex flex-wrap gap-2">
@@ -425,18 +638,36 @@ export default function AuditReportPage() {
             </div>
           </div>
         )}
-        {items.length > 0 && (itemSearch || itemFrom || itemTo) && (
+        {auditRows.length > 0 && (itemSearch || itemFrom || itemTo) && (
           <p className="mb-2 text-xs text-zinc-500">
-            Mostrando {filteredItems.length} de {items.length} lancamento(s).
+            Mostrando {filteredItems.length} de {auditRows.length} linha(s).
           </p>
         )}
 
         <DataTable
           columns={itemColumns}
           data={filteredItems}
-          keyExtractor={(it) => it.transaction_id}
+          keyExtractor={(row) => row.id}
           loading={loadingItems}
           sort={{ column: sortColumn, direction: sortDirection, onSort: handleItemSort }}
+          expansion={{
+            expandedKeys: expandedRows,
+            onToggleExpand: toggleExpanded,
+            isExpandable: (row) => row.kind === "group",
+            renderExpanded: (row) =>
+              row.group_id ? (
+                <GroupMembersInline
+                  groupId={row.group_id}
+                  from={selected?.period_start}
+                  to={selected?.period_end}
+                  onOpenGroup={(id) => setGroupDetailId(id)}
+                  onOpenTransaction={(m) => {
+                    const it = items.find((i) => i.transaction_id === m.id);
+                    if (it) openDetail(it);
+                  }}
+                />
+              ) : null,
+          }}
           emptyIcon={<ShieldCheck className="h-10 w-10" />}
           emptyMessage={items.length === 0 ? "Sem lancamentos" : "Nenhum lancamento no filtro"}
           emptyDescription={items.length === 0 ? "Nenhum lancamento no periodo desta auditoria." : "Ajuste o periodo ou a busca."}
@@ -535,6 +766,16 @@ export default function AuditReportPage() {
             </div>
           )}
         </Drawer>
+
+        <GroupDetailDrawer
+          open={!!groupDetailId}
+          groupId={groupDetailId}
+          onClose={() => setGroupDetailId(undefined)}
+          onChanged={() => { if (selected) reloadItems(selected.id); }}
+          canWrite={false}
+          canReconcile={false}
+          readOnly
+        />
       </div>
     );
   }

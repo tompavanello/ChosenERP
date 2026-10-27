@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Layers, Search } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Layers, Search } from "lucide-react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Input, Select } from "@/components/ui/input";
@@ -10,14 +10,18 @@ import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
 import {
   listAccounts, listTransactionGroups, listTransactions, reconcileTransaction,
-  reconcileTransactionGroup,
+  reconcileTransactionGroup, reorderFinanceLines,
   type BankAccount, type Transaction, type TransactionGroup,
 } from "@/lib/api";
 import { currency, datePt, todayISO } from "@/lib/format";
+import { GroupMembersInline } from "@/components/finance/group-members-inline";
 
 type ReconRow = {
   id: string;
   kind: "tx" | "group";
+  group_id?: string;
+  branch_id: string;
+  account_id?: string;
   occurred_at: string;
   entry_seq?: number;
   type: "income" | "expense";
@@ -31,6 +35,10 @@ type ReconRow = {
   group?: TransactionGroup;
 };
 
+function reconScopeKey(row: ReconRow): string {
+  return `${row.branch_id}|${row.account_id ?? ""}|${row.occurred_at.slice(0, 10)}`;
+}
+
 /**
  * Visao de lancamentos avulsos da conciliacao: permite marcar/desmarcar um
  * unico lancamento sem precisar criar um periodo. Lancamentos agrupados
@@ -40,6 +48,7 @@ export function ReconciliationEntries() {
   const { toast } = useToast();
   const { hasPerm } = useAuth();
   const canReconcile = hasPerm("finance.reconcile");
+  const canWrite = hasPerm("finance.write");
 
   const now = new Date();
   const [from, setFrom] = useState(todayISO(new Date(now.getFullYear(), now.getMonth(), 1)));
@@ -53,6 +62,7 @@ export function ReconciliationEntries() {
   const [busyId, setBusyId] = useState("");
   const [sortColumn, setSortColumn] = useState("occurred_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     try {
@@ -76,8 +86,8 @@ export function ReconciliationEntries() {
   async function toggle(row: ReconRow) {
     setBusyId(row.id);
     try {
-      if (row.kind === "group" && row.group) {
-        await reconcileTransactionGroup(row.group.id, !row.reconciled);
+      if (row.kind === "group" && row.group_id) {
+        await reconcileTransactionGroup(row.group_id, !row.reconciled);
         toast(row.reconciled ? "Grupo desconciliado." : "Grupo conciliado e travado.");
       } else if (row.tx) {
         await reconcileTransaction(row.tx.id, !row.reconciled);
@@ -96,6 +106,45 @@ export function ReconciliationEntries() {
     else { setSortColumn(col); setSortDirection("asc"); }
   };
 
+  function toggleExpanded(id: string) {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function moveRow(row: ReconRow, dir: -1 | 1) {
+    if (!canWrite) return;
+    const key = reconScopeKey(row);
+    const lines = rows
+      .filter((r) => reconScopeKey(r) === key)
+      .sort((a, b) =>
+        (a.entry_seq ?? Number.MAX_SAFE_INTEGER) - (b.entry_seq ?? Number.MAX_SAFE_INTEGER) ||
+        a.occurred_at.localeCompare(b.occurred_at) ||
+        a.id.localeCompare(b.id));
+    if (lines.some((r) => r.reconciled)) {
+      toast("O escopo tem linha conciliada; desconcilie antes de reordenar.", "error");
+      return;
+    }
+    const idx = lines.findIndex((r) => r.id === row.id);
+    const swap = idx + dir;
+    if (idx < 0 || swap < 0 || swap >= lines.length) return;
+    [lines[idx], lines[swap]] = [lines[swap], lines[idx]];
+    try {
+      await reorderFinanceLines(
+        lines.map((r) => ({
+          kind: r.kind === "group" ? "group" : "transaction",
+          id: r.kind === "group" ? (r.group_id ?? r.id) : (r.tx?.id ?? r.id),
+        })),
+      );
+      await load();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Erro ao reordenar", "error");
+    }
+  }
+
   const rows = useMemo<ReconRow[]>(() => {
     const knownGroups = new Map(groups.map((g) => [g.id, g]));
     const out: ReconRow[] = [];
@@ -106,7 +155,11 @@ export function ReconciliationEntries() {
       out.push({
         id: `group:${g.id}`,
         kind: "group",
+        group_id: g.id,
+        branch_id: g.branch_id,
+        account_id: g.account_id,
         occurred_at: g.occurred_at,
+        entry_seq: g.entry_seq,
         type: g.type,
         category_name: undefined,
         description: g.description,
@@ -127,10 +180,17 @@ export function ReconciliationEntries() {
         const members = txns.filter((m) => m.group_id === t.group_id && !m.voided_at);
         if (members.length > 0) {
           emittedGroups.add(t.group_id);
+          const seqs = members
+            .map((m) => m.entry_seq)
+            .filter((n): n is number => typeof n === "number");
           out.push({
             id: `group:${t.group_id}`,
             kind: "group",
+            group_id: t.group_id,
+            branch_id: t.branch_id,
+            account_id: t.account_id,
             occurred_at: t.occurred_at,
+            entry_seq: seqs.length ? Math.min(...seqs) : undefined,
             type: t.type,
             description: t.description,
             account_name: t.account_name,
@@ -144,6 +204,8 @@ export function ReconciliationEntries() {
       out.push({
         id: t.id,
         kind: "tx",
+        branch_id: t.branch_id,
+        account_id: t.account_id,
         occurred_at: t.occurred_at,
         entry_seq: t.entry_seq,
         type: t.type,
@@ -212,7 +274,33 @@ export function ReconciliationEntries() {
       sortable: true,
       width: "w-16",
       sortValue: (t) => t.entry_seq ?? 999999999,
-      render: (t) => <span className="text-xs tabular-nums text-zinc-400">{t.entry_seq ?? "-"}</span>,
+      render: (t) => (
+        <div className="flex items-center gap-1">
+          <span className="text-xs tabular-nums text-zinc-400">{t.entry_seq ?? "-"}</span>
+          {canWrite && !t.reconciled && (
+            <div className="flex flex-col">
+              <button
+                type="button"
+                aria-label="Mover para cima"
+                title="Mover para cima"
+                className="text-zinc-400 hover:text-sky-600"
+                onClick={() => moveRow(t, -1)}
+              >
+                <ChevronUp className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                aria-label="Mover para baixo"
+                title="Mover para baixo"
+                className="text-zinc-400 hover:text-sky-600"
+                onClick={() => moveRow(t, 1)}
+              >
+                <ChevronDown className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       key: "type",
@@ -234,7 +322,27 @@ export function ReconciliationEntries() {
           <span className="text-zinc-500">{t.category_name ?? "-"}</span>
         ),
     },
-    { key: "description", label: "Descricao", sortable: true, render: (t) => <span className="text-zinc-500">{t.description ?? "-"}</span> },
+    {
+      key: "description",
+      label: "Descricao",
+      sortable: true,
+      render: (t) => (
+        <div className="flex items-center gap-1">
+          {t.kind === "group" && (
+            <button
+              type="button"
+              onClick={() => toggleExpanded(t.id)}
+              title={expandedRows.has(t.id) ? "Recolher lancamentos" : "Ver lancamentos do agrupamento"}
+              aria-label={expandedRows.has(t.id) ? "Recolher lancamentos" : "Ver lancamentos do agrupamento"}
+              className="text-zinc-400 hover:text-sky-600"
+            >
+              {expandedRows.has(t.id) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            </button>
+          )}
+          <span className="text-zinc-500">{t.description ?? "-"}</span>
+        </div>
+      ),
+    },
     { key: "account_name", label: "Conta", sortable: true, render: (t) => <span className="text-zinc-500">{t.account_name ?? "-"}</span> },
     {
       key: "amount",
@@ -310,6 +418,12 @@ export function ReconciliationEntries() {
         keyExtractor={(t) => t.id}
         loading={loading}
         sort={{ column: sortColumn, direction: sortDirection, onSort: handleSort }}
+        expansion={{
+          expandedKeys: expandedRows,
+          onToggleExpand: toggleExpanded,
+          isExpandable: (t) => t.kind === "group",
+          renderExpanded: (t) => (t.group_id ? <GroupMembersInline groupId={t.group_id} from={from} to={to} /> : null),
+        }}
         emptyMessage="Nenhum lancamento no filtro"
         emptyDescription="Ajuste o periodo, o status ou a busca."
         compact

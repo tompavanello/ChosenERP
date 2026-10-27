@@ -362,6 +362,8 @@ export interface TransactionGroup {
   reconciled: boolean;
   reconciled_at?: string;
   bank_entry_id?: string;
+  /** Posicao da linha do grupo no escopo (filial, conta, data). */
+  entry_seq?: number;
   total_amount: number;
   member_count: number;
   created_at: string;
@@ -1090,6 +1092,7 @@ export interface AuditItem {
   description?: string;
   category_name?: string;
   account_name?: string;
+  account_id?: string;
   supplier_name?: string;
   payment_method?: string;
   is_anonymous: boolean;
@@ -1101,6 +1104,11 @@ export interface AuditItem {
   audited: boolean;
   audited_at?: string;
   notes?: string;
+  group_id?: string;
+  group_status?: "agrupado" | "conciliado";
+  group_description?: string;
+  group_member_count?: number;
+  group_entry_seq?: number;
 }
 export const listAudits = () => api<{ audits: FinancialAudit[] }>("/api/v1/finance/audits");
 export const createAudit = (data: Record<string, unknown>) =>
@@ -1141,10 +1149,14 @@ export interface ReconciliationItem {
   description?: string;
   category_name?: string;
   account_name?: string;
+  account_id?: string;
   reconciled: boolean;
   reconciled_at?: string;
   group_id?: string;
   group_status?: "agrupado" | "conciliado";
+  group_description?: string;
+  group_member_count?: number;
+  group_entry_seq?: number;
 }
 export const listReconciliations = () =>
   api<{ reconciliations: FinancialReconciliation[] }>("/api/v1/finance/reconciliations");
@@ -1266,6 +1278,18 @@ export const reorderTransactions = (orderedIds: string[]) =>
   api<{ ok: boolean }>("/api/v1/finance/transactions/reorder", {
     method: "POST",
     body: JSON.stringify({ ordered_ids: orderedIds }),
+  });
+
+export type FinanceLineKind = "transaction" | "group";
+export interface FinanceLineRef {
+  kind: FinanceLineKind;
+  id: string;
+}
+/** Reordena as linhas visiveis (lancamentos + agrupamentos) de um escopo. */
+export const reorderFinanceLines = (lines: FinanceLineRef[]) =>
+  api<{ ok: boolean }>("/api/v1/finance/lines/reorder", {
+    method: "POST",
+    body: JSON.stringify({ lines }),
   });
 
 // ---- Importacao em lote de lancamentos (CSV/planilha) ----
