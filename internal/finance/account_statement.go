@@ -332,10 +332,10 @@ func (r *Repo) buildBankStatement(ctx context.Context, tx pgx.Tx, st *AccountSta
 		       NULL::text AS due_date, NULL::timestamptz AS paid_at, NULL::text AS cost_center,
 		       group_id, NULLIF(group_status, '') AS group_status,
 		       is_group, member_count,
-		       ($2::numeric + running)::float8 AS balance_after
+		       ($4::numeric + running)::float8 AS balance_after
 		FROM ordered
 		ORDER BY line_date, entry_seq NULLS LAST, created_at, line_key`,
-		st.AccountID, st.OpeningBalance, fromT, toExclusive)
+		st.AccountID, fromT, toExclusive, st.OpeningBalance)
 	if err != nil {
 		return err
 	}
