@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Landmark, Upload, ArrowLeft, Trash2, Link2, AlertTriangle, CheckCircle2, X } from "lucide-react";
+import { Landmark, Upload, ArrowLeft, Trash2, Link2, AlertTriangle, CheckCircle2, X, Layers } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DataTable, type Column } from "@/components/ui/data-table";
@@ -13,7 +13,9 @@ import { useAuth } from "@/components/providers/auth-provider";
 import {
   listBankImports, importBankStatement, getBankImport, ignoreBankEntry,
   generateBankEntry, deleteBankImport, listAccounts, listCategories,
+  listTransactions, groupBankEntry,
   type BankImport, type BankEntry, type BankDivergence, type BankAccount, type Category,
+  type Transaction,
 } from "@/lib/api";
 import { currency, datePt } from "@/lib/format";
 
@@ -62,6 +64,13 @@ export function BankReconciliationPanel() {
   const [genEntry, setGenEntry] = useState<BankEntry | null>(null);
   const [genForm, setGenForm] = useState({ category_id: "", description: "" });
   const [generating, setGenerating] = useState(false);
+
+  const [groupEntry, setGroupEntry] = useState<BankEntry | null>(null);
+  const [groupCandidates, setGroupCandidates] = useState<Transaction[]>([]);
+  const [groupSelected, setGroupSelected] = useState<Set<string>>(new Set());
+  const [groupDescription, setGroupDescription] = useState("");
+  const [groupLoading, setGroupLoading] = useState(false);
+  const [groupSaving, setGroupSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -157,6 +166,62 @@ export function BankReconciliationPanel() {
     }
   }
 
+  async function openGroup(entry: BankEntry) {
+    if (!selected) return;
+    setGroupEntry(entry);
+    setGroupSelected(new Set());
+    setGroupDescription(entry.memo ?? "");
+    setGroupLoading(true);
+    try {
+      const r = await listTransactions();
+      const accountID = selected.account_id ?? "";
+      const candidates = (Array.isArray(r.transactions) ? r.transactions : [])
+        .filter((t) =>
+          !t.voided_at && !t.reconciled && !t.group_id &&
+          t.account_id === accountID && t.type === entry.direction,
+        )
+        .sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
+      setGroupCandidates(candidates);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Erro ao carregar lancamentos", "error");
+      setGroupCandidates([]);
+    } finally {
+      setGroupLoading(false);
+    }
+  }
+
+  function toggleGroupTxn(id: string) {
+    setGroupSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function submitGroup(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selected || !groupEntry) return;
+    if (groupSelected.size < 2) {
+      toast("Selecione pelo menos 2 lancamentos.", "error");
+      return;
+    }
+    setGroupSaving(true);
+    try {
+      const g = await groupBankEntry(selected.id, groupEntry.id, {
+        transaction_ids: [...groupSelected],
+        description: groupDescription.trim() || undefined,
+      });
+      toast(`Grupo criado e conciliado com ${g.member_count} lancamento(s).`);
+      setGroupEntry(null);
+      await openImportDetail(selected);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao agrupar lancamentos", "error");
+    } finally {
+      setGroupSaving(false);
+    }
+  }
+
   async function remove(imp: BankImport) {
     if (!confirm(`Excluir a importacao "${imp.filename}"? As entradas do extrato serao removidas.`)) return;
     try {
@@ -173,6 +238,15 @@ export function BankReconciliationPanel() {
     if (!genEntry) return [] as Category[];
     return categories.filter((c) => c.type === genEntry.direction);
   }, [categories, genEntry]);
+
+  const groupTotal = useMemo(
+    () => groupCandidates
+      .filter((t) => groupSelected.has(t.id))
+      .reduce((sum, t) => sum + t.amount, 0),
+    [groupCandidates, groupSelected],
+  );
+  const groupDiff = groupEntry ? groupEntry.amount - groupTotal : 0;
+  const groupBalanced = Math.abs(groupDiff) < 0.005;
 
   const importColumns: Column<BankImport>[] = [
     { key: "filename", label: "Arquivo", sortable: true, render: (b) => <span className="font-medium">{b.filename || "-"}</span> },
@@ -221,7 +295,7 @@ export function BankReconciliationPanel() {
       key: "actions",
       label: "",
       align: "right",
-      width: "w-56",
+      width: "w-80",
       render: (e) => {
         if (e.status !== "pendente") {
           return <span className="text-xs text-zinc-400">{e.transaction_description ?? ""}</span>;
@@ -234,9 +308,14 @@ export function BankReconciliationPanel() {
               </Button>
             )}
             {canWrite && (
-              <Button size="sm" variant="outline" onClick={() => openGenerate(e)} title="Gerar lancamento a partir do extrato">
-                <Upload className="h-4 w-4" /> Gerar lancamento
-              </Button>
+              <>
+                <Button size="sm" variant="outline" onClick={() => openGroup(e)} title="Agrupar lancamentos e vincular a esta linha">
+                  <Layers className="h-4 w-4" /> Agrupar
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => openGenerate(e)} title="Gerar lancamento a partir do extrato">
+                  <Upload className="h-4 w-4" /> Gerar lancamento
+                </Button>
+              </>
             )}
           </div>
         );
@@ -320,6 +399,106 @@ export function BankReconciliationPanel() {
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="ghost" type="button" onClick={() => setGenEntry(null)}>Cancelar</Button>
                 <Button type="submit" disabled={generating}>{generating ? "Gerando..." : "Gerar lancamento"}</Button>
+              </div>
+            </form>
+          )}
+        </Modal>
+
+        <Modal
+          open={!!groupEntry}
+          onClose={() => { if (!groupSaving) setGroupEntry(null); }}
+          title="Agrupar lancamentos e vincular ao extrato"
+          size="xl"
+        >
+          {groupEntry && (
+            <form onSubmit={submitGroup} className="space-y-3 text-sm">
+              <p className="text-zinc-500">
+                {groupEntry.direction === "income" ? "Credito" : "Debito"} de{" "}
+                <strong>{currency(groupEntry.amount)}</strong> em {datePt(groupEntry.posted_at)}
+                {groupEntry.memo ? ` - ${groupEntry.memo}` : ""}. Selecione os lancamentos cuja soma
+                confere com o valor do extrato.
+              </p>
+
+              <Field label="Descricao do grupo">
+                <Input
+                  value={groupDescription}
+                  onChange={(e) => setGroupDescription(e.target.value)}
+                  placeholder="Ex.: Deposito de dizimos e ofertas"
+                />
+              </Field>
+
+              <div className="max-h-72 overflow-y-auto rounded border border-zinc-200 dark:border-zinc-700">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-zinc-50 dark:bg-zinc-900">
+                    <tr>
+                      <th className="w-8 px-2 py-1.5"></th>
+                      <th className="px-2 py-1.5 text-left font-medium text-zinc-500">Data</th>
+                      <th className="px-2 py-1.5 text-left font-medium text-zinc-500">Conta contabil</th>
+                      <th className="px-2 py-1.5 text-left font-medium text-zinc-500">Doador/Descricao</th>
+                      <th className="px-2 py-1.5 text-right font-medium text-zinc-500">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupLoading && (
+                      <tr><td colSpan={5} className="px-2 py-4 text-center text-zinc-400">Carregando...</td></tr>
+                    )}
+                    {!groupLoading && groupCandidates.length === 0 && (
+                      <tr><td colSpan={5} className="px-2 py-4 text-center text-zinc-400">
+                        Nenhum lancamento pendente nesta conta/tipo.
+                      </td></tr>
+                    )}
+                    {!groupLoading && groupCandidates.map((t) => (
+                      <tr
+                        key={t.id}
+                        className={`cursor-pointer border-t border-zinc-100 dark:border-zinc-800 ${groupSelected.has(t.id) ? "bg-sky-50 dark:bg-sky-950/30" : ""}`}
+                        onClick={() => toggleGroupTxn(t.id)}
+                      >
+                        <td className="px-2 py-1 text-center">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-zinc-300 text-sky-600"
+                            checked={groupSelected.has(t.id)}
+                            onChange={() => toggleGroupTxn(t.id)}
+                            onClick={(ev) => ev.stopPropagation()}
+                          />
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1 text-zinc-500">{datePt(t.occurred_at)}</td>
+                        <td className="px-2 py-1">{t.category_name ?? "-"}</td>
+                        <td className="px-2 py-1 text-zinc-500">
+                          {t.donor_name || t.description || "-"}
+                          {t.donor_name && t.description ? (
+                            <span className="block text-[10px] text-zinc-400">{t.description}</span>
+                          ) : null}
+                        </td>
+                        <td className="px-2 py-1 text-right font-medium tabular-nums">{currency(t.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-zinc-200 px-3 py-2 dark:border-zinc-700">
+                <span className="text-zinc-500">{groupSelected.size} selecionado(s)</span>
+                <div className="flex items-center gap-3">
+                  <span>Soma <b className="tabular-nums">{currency(groupTotal)}</b></span>
+                  <Badge tone={groupBalanced ? "green" : "amber"}>
+                    {groupBalanced
+                      ? "Confere com o extrato"
+                      : `Diferenca de ${currency(Math.abs(groupDiff))}`}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="ghost" type="button" onClick={() => setGroupEntry(null)} disabled={groupSaving}>
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={groupSaving || groupSelected.size < 2 || !groupBalanced}
+                >
+                  {groupSaving ? "Agrupando..." : "Agrupar e conciliar"}
+                </Button>
               </div>
             </form>
           )}

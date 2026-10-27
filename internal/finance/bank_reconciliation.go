@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"errors"
+	"math"
 	"regexp"
 	"strings"
 	"time"
@@ -39,6 +40,8 @@ type BankEntry struct {
 	Status                 string  `json:"status"`
 	TransactionID          *string `json:"transaction_id,omitempty"`
 	TransactionDescription *string `json:"transaction_description,omitempty"`
+	GroupID                *string `json:"group_id,omitempty"`
+	GroupDescription       *string `json:"group_description,omitempty"`
 }
 
 // BankDivergence e um lancamento do ERP que nao aparece no extrato.
@@ -400,7 +403,7 @@ func (r *Repo) matchBankEntries(ctx context.Context, tx pgx.Tx, importID string)
 			SELECT t.id::text
 			FROM financial_transactions t
 			WHERE t.tenant_id = $1::uuid AND t.branch_id = $2::uuid AND t.account_id = $3::uuid
-			  AND t.type = $4 AND t.voided_at IS NULL
+			  AND t.type = $4 AND t.voided_at IS NULL AND t.group_id IS NULL
 			  AND abs(t.amount - $5) < 0.005
 			  AND t.occurred_at::date BETWEEN $6::date - 3 AND $6::date + 3
 			  AND NOT EXISTS (
@@ -408,6 +411,39 @@ func (r *Repo) matchBankEntries(ctx context.Context, tx pgx.Tx, importID string)
 			      WHERE be.transaction_id = t.id AND be.status IN ('conciliado','lancamento_gerado'))
 			ORDER BY abs(t.occurred_at::date - $6::date), t.created_at
 			LIMIT 1`, tenantID, branchID, accountID, p.direction, p.amount, p.posted).Scan(&txID)
+		if err == nil {
+			if _, err := tx.Exec(ctx, `
+				UPDATE bank_statement_entries
+				SET status = 'conciliado', transaction_id = $2::uuid, updated_at = now()
+				WHERE id = $1::uuid`, p.id, *txID); err != nil {
+				return err
+			}
+			continue
+		}
+		if err != pgx.ErrNoRows {
+			return err
+		}
+
+		// Sem lancamento individual: tenta casar com um grupo (deposito que
+		// reune varios lancamentos).
+		var groupID *string
+		err = tx.QueryRow(ctx, `
+			SELECT g.id::text
+			FROM financial_transaction_groups g
+			JOIN LATERAL (
+			    SELECT SUM(t.amount) AS total
+			    FROM financial_transactions t
+			    WHERE t.group_id = g.id AND t.voided_at IS NULL
+			) agg ON true
+			WHERE g.tenant_id = $1::uuid AND g.branch_id = $2::uuid
+			  AND g.account_id = $3::uuid AND g.type = $4
+			  AND abs(agg.total - $5) < 0.005
+			  AND g.occurred_at BETWEEN $6::date - 3 AND $6::date + 3
+			  AND NOT EXISTS (
+			      SELECT 1 FROM bank_statement_entries be
+			      WHERE be.group_id = g.id AND be.status IN ('conciliado','lancamento_gerado'))
+			ORDER BY abs(g.occurred_at - $6::date), g.created_at
+			LIMIT 1`, tenantID, branchID, accountID, p.direction, p.amount, p.posted).Scan(&groupID)
 		if err == pgx.ErrNoRows {
 			continue
 		}
@@ -416,8 +452,8 @@ func (r *Repo) matchBankEntries(ctx context.Context, tx pgx.Tx, importID string)
 		}
 		if _, err := tx.Exec(ctx, `
 			UPDATE bank_statement_entries
-			SET status = 'conciliado', transaction_id = $2::uuid, updated_at = now()
-			WHERE id = $1::uuid`, p.id, *txID); err != nil {
+			SET status = 'conciliado', group_id = $2::uuid, updated_at = now()
+			WHERE id = $1::uuid`, p.id, *groupID); err != nil {
 			return err
 		}
 	}
@@ -440,9 +476,11 @@ func refreshBankCounters(ctx context.Context, tx pgx.Tx, importID string) error 
 func (r *Repo) ListBankEntries(ctx context.Context, tx pgx.Tx, importID string) ([]BankEntry, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT e.id::text, to_char(e.posted_at,'YYYY-MM-DD'), e.amount::float8, e.direction,
-		       e.memo, e.fitid, e.status, e.transaction_id::text, t.description
+		       e.memo, e.fitid, e.status, e.transaction_id::text, t.description,
+		       e.group_id::text, g.description
 		FROM bank_statement_entries e
 		LEFT JOIN financial_transactions t ON t.id = e.transaction_id
+		LEFT JOIN financial_transaction_groups g ON g.id = e.group_id
 		WHERE e.import_id = $1::uuid
 		ORDER BY e.posted_at, e.created_at, e.id`, importID)
 	if err != nil {
@@ -453,7 +491,8 @@ func (r *Repo) ListBankEntries(ctx context.Context, tx pgx.Tx, importID string) 
 	for rows.Next() {
 		var e BankEntry
 		if err := rows.Scan(&e.ID, &e.PostedAt, &e.Amount, &e.Direction,
-			&e.Memo, &e.FitID, &e.Status, &e.TransactionID, &e.TransactionDescription); err != nil {
+			&e.Memo, &e.FitID, &e.Status, &e.TransactionID, &e.TransactionDescription,
+			&e.GroupID, &e.GroupDescription); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
@@ -475,7 +514,9 @@ func (r *Repo) ListBankDivergences(ctx context.Context, tx pgx.Tx, importID stri
 		WHERE i.id = $1::uuid
 		  AND NOT EXISTS (
 		      SELECT 1 FROM bank_statement_entries e
-		      WHERE e.transaction_id = t.id AND e.status IN ('conciliado','lancamento_gerado'))
+		      WHERE e.status IN ('conciliado','lancamento_gerado')
+		        AND (e.transaction_id = t.id
+		             OR (t.group_id IS NOT NULL AND e.group_id = t.group_id)))
 		ORDER BY t.occurred_at, t.created_at, t.id`, importID)
 	if err != nil {
 		return nil, err
@@ -564,6 +605,103 @@ func (r *Repo) GenerateFromBankEntry(ctx context.Context, tx pgx.Tx, tenantID, b
 		return nil, err
 	}
 	return created, nil
+}
+
+type GroupFromBankEntryInput struct {
+	TransactionIDs []string `json:"transaction_ids"`
+	Description    string   `json:"description"`
+}
+
+// GroupFromBankEntry cria um grupo a partir de uma entrada do extrato. A soma
+// dos lancamentos precisa bater com o valor da entrada. A entrada fica
+// conciliada e o grupo e conciliado automaticamente.
+func (r *Repo) GroupFromBankEntry(ctx context.Context, tx pgx.Tx, tenantID, actorID, importID, entryID string, in GroupFromBankEntryInput) (*TransactionGroup, error) {
+	var posted, direction, accountID, status string
+	var amount float64
+	var memo *string
+	err := tx.QueryRow(ctx, `
+		SELECT to_char(e.posted_at,'YYYY-MM-DD'), e.direction, e.amount::float8, e.memo,
+		       COALESCE(i.account_id::text,''), e.status
+		FROM bank_statement_entries e
+		JOIN bank_statement_imports i ON i.id = e.import_id
+		WHERE e.id = $1::uuid AND e.import_id = $2::uuid`, entryID, importID).
+		Scan(&posted, &direction, &amount, &memo, &accountID, &status)
+	if err != nil {
+		return nil, err
+	}
+	if status != "pendente" {
+		return nil, errors.New("entrada do extrato nao esta pendente")
+	}
+	if accountID == "" {
+		return nil, ErrAccountRequired
+	}
+	ids := uniqueIDs(in.TransactionIDs)
+	if len(ids) < 2 {
+		return nil, ErrGroupMinMembers
+	}
+
+	var sum float64
+	var found int
+	if err := tx.QueryRow(ctx, `
+		SELECT COALESCE(SUM(amount),0)::float8, count(*)::int
+		FROM financial_transactions
+		WHERE id = ANY($1::uuid[]) AND tenant_id = $2::uuid
+		  AND account_id = $3::uuid AND type = $4
+		  AND voided_at IS NULL AND group_id IS NULL AND reconciled_at IS NULL
+		  AND NOT EXISTS (
+		      SELECT 1 FROM bank_statement_entries e
+		      WHERE e.transaction_id = financial_transactions.id
+		        AND e.status IN ('conciliado','lancamento_gerado'))`,
+		ids, tenantID, accountID, direction).Scan(&sum, &found); err != nil {
+		return nil, err
+	}
+	if found != len(ids) {
+		return nil, errors.New("um ou mais lancamentos nao conferem com a conta/tipo do extrato")
+	}
+	if math.Abs(sum-amount) >= 0.005 {
+		return nil, errors.New("a soma dos lancamentos nao confere com o valor do extrato")
+	}
+
+	desc := strings.TrimSpace(in.Description)
+	if desc == "" && memo != nil {
+		desc = strings.TrimSpace(*memo)
+	}
+	if desc == "" {
+		desc = "Deposito agrupado"
+	}
+	group, err := r.CreateGroup(ctx, tx, tenantID, actorID, CreateGroupInput{
+		TransactionIDs: ids,
+		OccurredAt:     posted,
+		Description:    &desc,
+		AccountID:      &accountID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE bank_statement_entries
+		SET status = 'conciliado', group_id = $2::uuid, updated_at = now()
+		WHERE id = $1::uuid`, entryID, group.ID); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE financial_transaction_groups
+		SET bank_entry_id = $2::uuid
+		WHERE id = $1::uuid`, group.ID, entryID); err != nil {
+		return nil, err
+	}
+	group, err = r.ReconcileGroup(ctx, tx, group.ID, true, actorID)
+	if err != nil {
+		return nil, err
+	}
+	var impID string
+	if err := tx.QueryRow(ctx, `SELECT import_id::text FROM bank_statement_entries WHERE id = $1::uuid`, entryID).Scan(&impID); err != nil {
+		return nil, err
+	}
+	if err := refreshBankCounters(ctx, tx, impID); err != nil {
+		return nil, err
+	}
+	return group, nil
 }
 
 func (r *Repo) DeleteBankImport(ctx context.Context, tx pgx.Tx, id string) error {

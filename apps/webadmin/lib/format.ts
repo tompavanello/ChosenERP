@@ -30,6 +30,16 @@ export function todayISO(d: Date = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Primeiro dia do mes (fuso LOCAL), como YYYY-MM-DD. */
+export function monthStartISO(d: Date = new Date()): string {
+  return todayISO(new Date(d.getFullYear(), d.getMonth(), 1));
+}
+
+/** Ultimo dia do mes (fuso LOCAL), como YYYY-MM-DD. */
+export function monthEndISO(d: Date = new Date()): string {
+  return todayISO(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+}
+
 export function datePt(s?: string | null) {
   if (!s) return "-";
   try {

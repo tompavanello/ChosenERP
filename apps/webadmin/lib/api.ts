@@ -329,6 +329,43 @@ export interface Transaction {
   reconciled_at?: string;
   attachment_count?: number;
   attachment_url?: string;
+  /** Grupo bancario ao qual o lancamento pertence (uma linha no extrato). */
+  group_id?: string;
+  group_status?: "agrupado" | "conciliado";
+}
+
+export interface TransactionGroupMember {
+  id: string;
+  category_id?: string;
+  category_name?: string;
+  type: "income" | "expense";
+  amount: number;
+  description?: string;
+  donor_name?: string;
+  occurred_at: string;
+  reconciled: boolean;
+  reconciled_at?: string;
+  entry_seq?: number;
+  receipt_id?: string;
+  voided_at?: string;
+}
+
+export interface TransactionGroup {
+  id: string;
+  branch_id: string;
+  account_id: string;
+  account_name?: string;
+  type: "income" | "expense";
+  occurred_at: string;
+  description?: string;
+  status: "agrupado" | "conciliado";
+  reconciled: boolean;
+  reconciled_at?: string;
+  bank_entry_id?: string;
+  total_amount: number;
+  member_count: number;
+  created_at: string;
+  members?: TransactionGroupMember[];
 }
 
 export interface FinancialAttachment {
@@ -1106,6 +1143,8 @@ export interface ReconciliationItem {
   account_name?: string;
   reconciled: boolean;
   reconciled_at?: string;
+  group_id?: string;
+  group_status?: "agrupado" | "conciliado";
 }
 export const listReconciliations = () =>
   api<{ reconciliations: FinancialReconciliation[] }>("/api/v1/finance/reconciliations");
@@ -1144,6 +1183,8 @@ export interface BankEntry {
   status: "pendente" | "conciliado" | "ignorado" | "lancamento_gerado";
   transaction_id?: string;
   transaction_description?: string;
+  group_id?: string;
+  group_description?: string;
 }
 export interface BankDivergence {
   id: string;
@@ -1166,6 +1207,12 @@ export const generateBankEntry = (importId: string, entryId: string, data: Recor
     method: "POST",
     body: JSON.stringify(data),
   });
+/** Agrupa lancamentos e vincula a entrada do extrato ao grupo. */
+export const groupBankEntry = (importId: string, entryId: string, data: { transaction_ids: string[]; description?: string }) =>
+  api<TransactionGroup>(`/api/v1/finance/bank-imports/${importId}/entries/${entryId}/group`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 export const deleteBankImport = (id: string) =>
   api<{ ok: boolean }>(`/api/v1/finance/bank-imports/${id}`, { method: "DELETE" });
 
@@ -1179,9 +1226,13 @@ export const getAssemblyReport = (from: string, to: string) => {
   if (to) q.set("to", to);
   return api<AssemblyReport>(`/api/v1/reports/assembly?${q.toString()}`);
 };
-export const listTransactions = (type = "") => {
-  const q = type ? `?type=${encodeURIComponent(type)}` : "";
-  return api<{ transactions: Transaction[] }>(`/api/v1/finance/transactions${q}`);
+export const listTransactions = (type = "", from = "", to = "") => {
+  const q = new URLSearchParams();
+  if (type) q.set("type", type);
+  if (from) q.set("from", from);
+  if (to) q.set("to", to);
+  const qs = q.toString();
+  return api<{ transactions: Transaction[] }>(`/api/v1/finance/transactions${qs ? `?${qs}` : ""}`);
 };
 export const createTransaction = (data: Record<string, unknown>) =>
   api<{ transaction: Transaction; receipt_ref: string; receipt_token: string }>("/api/v1/finance/transactions", {
@@ -1253,6 +1304,46 @@ export const createTransactionsBatch = (transactions: Record<string, unknown>[])
   api<ImportResult>("/api/v1/finance/transactions/batch", {
     method: "POST",
     body: JSON.stringify({ transactions }),
+  });
+
+// ---- Agrupamento de lancamentos (uma linha bancaria com varios detalhes) ----
+export const listTransactionGroups = (params: { from?: string; to?: string; status?: string } = {}) => {
+  const q = new URLSearchParams();
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  if (params.status) q.set("status", params.status);
+  const qs = q.toString();
+  return api<{ groups: TransactionGroup[] }>(`/api/v1/finance/groups${qs ? `?${qs}` : ""}`);
+};
+export const getTransactionGroup = (id: string) =>
+  api<TransactionGroup>(`/api/v1/finance/groups/${id}`);
+export const createTransactionGroup = (data: {
+  transaction_ids: string[];
+  occurred_at?: string;
+  description?: string;
+}) =>
+  api<TransactionGroup>("/api/v1/finance/groups", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+export const updateTransactionGroup = (id: string, data: { occurred_at?: string; description?: string }) =>
+  api<TransactionGroup>(`/api/v1/finance/groups/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+export const deleteTransactionGroup = (id: string) =>
+  api<{ ok: boolean }>(`/api/v1/finance/groups/${id}`, { method: "DELETE" });
+export const addTransactionGroupMembers = (id: string, transactionIds: string[]) =>
+  api<TransactionGroup>(`/api/v1/finance/groups/${id}/members`, {
+    method: "POST",
+    body: JSON.stringify({ transaction_ids: transactionIds }),
+  });
+export const removeTransactionGroupMember = (id: string, transactionId: string) =>
+  api<TransactionGroup>(`/api/v1/finance/groups/${id}/members/${transactionId}`, { method: "DELETE" });
+export const reconcileTransactionGroup = (id: string, reconciled: boolean) =>
+  api<TransactionGroup>(`/api/v1/finance/groups/${id}/reconcile`, {
+    method: "POST",
+    body: JSON.stringify({ reconciled }),
   });
 
 // ---- Rateio do lancamento por evento ----
@@ -1505,6 +1596,9 @@ export const getMonthlyStatementTransactions = (params: { category_id: string; f
 // ---- Extrato de conta corrente ----
 export interface AccountStatementLine extends Transaction {
   balance_after: number;
+  /** Na visao "bank", indica que a linha representa um grupo. */
+  is_group?: boolean;
+  group_member_count?: number;
 }
 export interface AccountStatementDay {
   date: string;
@@ -1522,6 +1616,7 @@ export interface AccountStatement {
   from: string;
   to: string;
   order: "asc" | "desc";
+  view: "detail" | "bank";
   opening_balance: number;
   total_income: number;
   total_expense: number;
@@ -1534,11 +1629,13 @@ export const getAccountStatement = (params: {
   from?: string;
   to?: string;
   order?: "asc" | "desc";
+  view?: "detail" | "bank";
 }) => {
   const q = new URLSearchParams({ account_id: params.account_id });
   if (params.from) q.set("from", params.from);
   if (params.to) q.set("to", params.to);
   if (params.order) q.set("order", params.order);
+  if (params.view) q.set("view", params.view);
   return api<AccountStatement>(`/api/v1/reports/account-statement?${q.toString()}`);
 };
 

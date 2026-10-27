@@ -25,7 +25,25 @@ var (
 	ErrTransactionVoided     = errors.New("lancamento estornado: nao pode ser conciliado")
 	ErrPeriodClosed          = errors.New("periodo encerrado: lancamentos nao podem ser criados ou alterados")
 	ErrAuditClosed           = errors.New("auditoria fechada: lancamentos nao podem ser alterados")
+	// ErrScopeReconciled impede inserir no meio de uma sequencia que tem
+	// lancamento conciliado (o UPDATE de entry_seq esbarraria no trigger).
+	ErrScopeReconciled = errors.New("ha lancamento conciliado nessa posicao; desconcile antes de inserir")
+	// ErrGroupedReconcile indica que a conciliacao deve ser feita pelo grupo.
+	ErrGroupedReconcile = errors.New("lancamento agrupado: concilie pelo grupo")
 )
+
+// assertTxnNotGrouped impede estornar/excluir um membro de grupo (o vinculo
+// precisa ser desfeito antes).
+func assertTxnNotGrouped(ctx context.Context, tx pgx.Tx, id string) error {
+	var groupID *string
+	if err := tx.QueryRow(ctx, `SELECT group_id::text FROM financial_transactions WHERE id = $1::uuid`, id).Scan(&groupID); err != nil {
+		return err
+	}
+	if groupID != nil {
+		return ErrTransactionGrouped
+	}
+	return nil
+}
 
 // assertDateOpen confere se a data/filial nao esta dentro de uma conciliacao
 // encerrada ou auditoria fechada. A checagem no banco continua sendo a
@@ -176,6 +194,10 @@ type Transaction struct {
 	DueDate    *string    `json:"due_date,omitempty"`
 	PaidAt     *time.Time `json:"paid_at,omitempty"`
 	CostCenter *string    `json:"cost_center,omitempty"`
+	// Agrupamento bancario: quando preenchido, o lancamento compoe um grupo
+	// (uma unica linha no extrato). GroupStatus e "agrupado" ou "conciliado".
+	GroupID     *string `json:"group_id,omitempty"`
+	GroupStatus *string `json:"group_status,omitempty"`
 }
 
 // MarshalJSON serializa occurred_at como data pura (YYYY-MM-DD). A data efetiva
@@ -399,6 +421,10 @@ type CreateTxnInput struct {
 	DonorName     *string `json:"donor_name"`
 	SupplierID    *string `json:"supplier_id"`
 	OccurredAt    *string `json:"occurred_at"`
+	// BranchID permite que a Sede grave em uma filial especifica (ex.: inserir
+	// um lancamento entre linhas de outra filial no escopo "Todas"). Ignorado
+	// para usuarios de filial e validado pelo handler.
+	BranchID *string `json:"branch_id"`
 	// EntrySeq e a posicao desejada no escopo (tenant, filial, conta, data).
 	// Se informada, empurra os lancamentos daquela posicao em diante; se nula,
 	// o lancamento e anexado ao fim do escopo.
@@ -485,6 +511,26 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 	entrySeq := 0
 	if in.EntrySeq != nil && *in.EntrySeq > 0 {
 		entrySeq = *in.EntrySeq
+		// A insercao no meio empurra os lancamentos da posicao em diante. Se
+		// algum deles estiver conciliado, o trigger bloquearia o UPDATE com um
+		// erro generico - devolvemos um erro claro antes.
+		var locked bool
+		if err := tx.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM financial_transactions
+				WHERE tenant_id = $1::uuid
+				  AND branch_id = NULLIF($2,'')::uuid
+				  AND COALESCE(account_id, '00000000-0000-0000-0000-000000000000'::uuid)
+				      = COALESCE(NULLIF($3,'')::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+				  AND (occurred_at AT TIME ZONE 'UTC')::date = $4::date
+				  AND entry_seq >= $5
+				  AND reconciled_at IS NOT NULL)`,
+			tenantID, branchID, acct, scopeDate, entrySeq).Scan(&locked); err != nil {
+			return nil, "", "", "", err
+		}
+		if locked {
+			return nil, "", "", "", ErrScopeReconciled
+		}
 		if _, err := tx.Exec(ctx, `
 			UPDATE financial_transactions
 			SET entry_seq = entry_seq + 1
@@ -848,6 +894,9 @@ func (r *Repo) Void(ctx context.Context, tx pgx.Tx, id, reason, actorID string) 
 	if err := assertTxnMutable(ctx, tx, id); err != nil {
 		return err
 	}
+	if err := assertTxnNotGrouped(ctx, tx, id); err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx, `
 		UPDATE financial_transactions
 		SET voided_at = now(), voided_by = NULLIF($2,'')::uuid, void_reason = NULLIF($3,'')
@@ -871,6 +920,9 @@ func (r *Repo) Void(ctx context.Context, tx pgx.Tx, id, reason, actorID string) 
 // fechada nao pode ser excluido (mesma trava do estorno).
 func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
 	if err := assertTxnMutable(ctx, tx, id); err != nil {
+		return err
+	}
+	if err := assertTxnNotGrouped(ctx, tx, id); err != nil {
 		return err
 	}
 	var tenantID string
@@ -925,13 +977,18 @@ func (r *Repo) CreateBatch(ctx context.Context, tx pgx.Tx, tenantID, branchID st
 	return res, nil
 }
 
-// List retorna lancamentos do escopo, com filtro opcional de tipo.
-func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind string) ([]Transaction, error) {
+// List retorna lancamentos do escopo, com filtro opcional de tipo e de periodo
+// (from/to no formato AAAA-MM-DD, inclusivos). Datas vazias nao filtram.
+func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind, from, to string) ([]Transaction, error) {
 	rows, err := tx.Query(ctx, `
 		WITH recent AS (
 		    SELECT id
 		    FROM financial_transactions
 		    WHERE ($1 = '' OR type = $1)
+		      -- Intervalo sargavel (usa idx_fin_tx_tenant) mantendo a semantica
+		      -- de data em UTC usada na sequencia (entry_seq).
+		      AND ($2 = '' OR occurred_at >= ($2::date::timestamp AT TIME ZONE 'UTC'))
+		      AND ($3 = '' OR occurred_at < (($3::date + 1)::timestamp AT TIME ZONE 'UTC'))
 		    ORDER BY occurred_at DESC, created_at DESC, id DESC
 		)
 		SELECT t.id::text, t.branch_id::text, t.category_id::text, c.name,
@@ -945,7 +1002,8 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind string) ([]Transaction,
 		       t.voided_at, t.void_reason,
 		       (SELECT count(*) FROM financial_attachments fa WHERE fa.transaction_id = t.id)::int,
 		       (SELECT fa.file_url FROM financial_attachments fa WHERE fa.transaction_id = t.id ORDER BY fa.created_at LIMIT 1),
-		       t.due_date::text, t.paid_at, t.cost_center, t.reconciled_at
+		       t.due_date::text, t.paid_at, t.cost_center, t.reconciled_at,
+		       t.group_id::text, g.status
 		FROM financial_transactions t
 		JOIN recent r ON r.id = t.id
 		LEFT JOIN financial_categories c ON c.id = t.category_id
@@ -954,7 +1012,8 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind string) ([]Transaction,
 		LEFT JOIN members dm ON dm.id = t.donor_member_id
 		LEFT JOIN benefactors db ON db.id = t.benefactor_id
 		LEFT JOIN documents d ON d.kind = 'receipt' AND d.content->>'tx_id' = t.id::text
-		ORDER BY t.occurred_at, t.entry_seq NULLS LAST, t.created_at, t.id`, kind)
+		LEFT JOIN financial_transaction_groups g ON g.id = t.group_id
+		ORDER BY t.occurred_at, t.entry_seq NULLS LAST, t.created_at, t.id`, kind, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -970,7 +1029,8 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind string) ([]Transaction,
 			&t.IsAnonymous, &t.Description, &t.ReceiptIssued, &t.Hash, &t.OccurredAt, &t.CreatedAt, &t.EntrySeq,
 			&t.ReceiptID, &t.ReceiptRef, &t.ReceiptToken,
 			&t.VoidedAt, &t.VoidReason, &t.AttachmentCount, &t.AttachmentURL,
-			&t.DueDate, &t.PaidAt, &t.CostCenter, &t.ReconciledAt); err != nil {
+			&t.DueDate, &t.PaidAt, &t.CostCenter, &t.ReconciledAt,
+			&t.GroupID, &t.GroupStatus); err != nil {
 			return nil, err
 		}
 		t.Reconciled = t.ReconciledAt != nil
@@ -1015,17 +1075,21 @@ func (r *Repo) ReconcileTransactions(ctx context.Context, tx pgx.Tx, ids []strin
 func (r *Repo) ReconcileTransaction(ctx context.Context, tx pgx.Tx, id string, reconciled bool, actorID string) error {
 	var tenantID, branchID, date string
 	var reconciledAt, voidedAt *time.Time
+	var groupID *string
 	err := tx.QueryRow(ctx, `
 		SELECT tenant_id::text, branch_id::text,
 		       (occurred_at AT TIME ZONE 'UTC')::date::text,
-		       reconciled_at, voided_at
+		       reconciled_at, voided_at, group_id::text
 		FROM financial_transactions WHERE id = $1::uuid`, id).
-		Scan(&tenantID, &branchID, &date, &reconciledAt, &voidedAt)
+		Scan(&tenantID, &branchID, &date, &reconciledAt, &voidedAt, &groupID)
 	if err != nil {
 		return err
 	}
 	if voidedAt != nil {
 		return ErrTransactionVoided
+	}
+	if groupID != nil {
+		return ErrGroupedReconcile
 	}
 	if (reconciledAt != nil) == reconciled {
 		return nil

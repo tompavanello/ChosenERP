@@ -517,7 +517,7 @@ func (a *App) handleAccountStatement(w http.ResponseWriter, r *http.Request) {
 	var st *finance.AccountStatement
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
 		var e error
-		st, e = a.Finance.BuildAccountStatement(r.Context(), tx, accountID, q.Get("from"), q.Get("to"), q.Get("order"))
+		st, e = a.Finance.BuildAccountStatement(r.Context(), tx, accountID, q.Get("from"), q.Get("to"), q.Get("order"), q.Get("view"))
 		return e
 	})
 	if err != nil {
@@ -547,7 +547,7 @@ func (a *App) handleExportAccountStatement(w http.ResponseWriter, r *http.Reques
 	var st *finance.AccountStatement
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
 		var e error
-		st, e = a.Finance.BuildAccountStatement(r.Context(), tx, accountID, q.Get("from"), q.Get("to"), q.Get("order"))
+		st, e = a.Finance.BuildAccountStatement(r.Context(), tx, accountID, q.Get("from"), q.Get("to"), q.Get("order"), q.Get("view"))
 		return e
 	})
 	if err != nil {
@@ -570,7 +570,9 @@ func (a *App) handleExportAccountStatement(w http.ResponseWriter, r *http.Reques
 			kind = "Saida"
 		}
 		category := ""
-		if l.CategoryName != nil {
+		if l.IsGroup {
+			category = fmt.Sprintf("Agrupamento (%d lancamentos)", l.GroupMemberCount)
+		} else if l.CategoryName != nil {
 			category = *l.CategoryName
 		}
 		lines = append(lines, []string{

@@ -55,6 +55,8 @@ type ReconciliationItem struct {
 	AccountName  *string `json:"account_name,omitempty"`
 	Reconciled   bool    `json:"reconciled"`
 	ReconciledAt *string `json:"reconciled_at,omitempty"`
+	GroupID      *string `json:"group_id,omitempty"`
+	GroupStatus  *string `json:"group_status,omitempty"`
 }
 
 type CreateReconciliationInput struct {
@@ -170,7 +172,8 @@ func (r *Repo) ListReconciliationItems(ctx context.Context, tx pgx.Tx, id string
 		       to_char(t.created_at,'YYYY-MM-DD"T"HH24:MI:SSOF'), t.entry_seq,
 		       t.type, t.amount::float8, t.description, c.name, a.name,
 		       t.reconciled_at IS NOT NULL,
-		       to_char(t.reconciled_at,'YYYY-MM-DD"T"HH24:MI:SSOF')
+		       to_char(t.reconciled_at,'YYYY-MM-DD"T"HH24:MI:SSOF'),
+		       t.group_id::text, g.status
 		FROM financial_reconciliations fr
 		JOIN financial_transactions t
 		  ON t.tenant_id = fr.tenant_id
@@ -179,6 +182,7 @@ func (r *Repo) ListReconciliationItems(ctx context.Context, tx pgx.Tx, id string
 		 AND t.occurred_at::date BETWEEN fr.period_start AND fr.period_end
 		LEFT JOIN financial_categories c ON c.id = t.category_id
 		LEFT JOIN financial_accounts a ON a.id = t.account_id
+		LEFT JOIN financial_transaction_groups g ON g.id = t.group_id
 		WHERE fr.id = $1::uuid
 		ORDER BY t.occurred_at, t.entry_seq NULLS LAST, t.created_at, t.id`, id)
 	if err != nil {
@@ -190,7 +194,7 @@ func (r *Repo) ListReconciliationItems(ctx context.Context, tx pgx.Tx, id string
 		var it ReconciliationItem
 		if err := rows.Scan(&it.ID, &it.OccurredAt, &it.CreatedAt, &it.EntrySeq,
 			&it.Type, &it.Amount, &it.Description, &it.CategoryName, &it.AccountName,
-			&it.Reconciled, &it.ReconciledAt); err != nil {
+			&it.Reconciled, &it.ReconciledAt, &it.GroupID, &it.GroupStatus); err != nil {
 			return nil, err
 		}
 		out = append(out, it)

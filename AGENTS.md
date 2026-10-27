@@ -315,6 +315,35 @@ Camada `internal/payments` com a interface `Gateway` (abstracao de provider) e o
   `occurred_at, entry_seq NULLS LAST, created_at, id`.
 - Na auditoria, a acao de cada linha tem atalhos para anexos e recibo.
 
+### Agrupamento de lancamentos (`000105`)
+
+Um **grupo** representa uma unica movimentacao bancaria (ex.: um deposito) que
+reune varios lancamentos (dizimos, oferta, benfeitor). O grupo **nao e um
+lancamento financeiro**: os membros continuam sendo a verdade contabil (categoria,
+doador, recibo e anexos), entao DRE/balancete/demonstrativo seguem somando os
+lancamentos individuais e nao ha duplicidade.
+
+- Tabela `financial_transaction_groups` + coluna `financial_transactions.group_id`
+  e `bank_statement_entries.group_id`. Status `agrupado`/`conciliado`.
+- Regras: minimo de **2 membros**, mesma filial/conta/tipo; nao aceita lancamento
+  estornado, conciliado ou ja agrupado. Grupo conciliado e imutavel.
+  Lancamento agrupado **nao pode ser estornado/excluido nem conciliado isoladamente**.
+- A conciliacao e **no grupo** (`fin_group_reconcile`): marca/desmarca todos os
+  membros atomicamente e respeita periodo encerrado/auditoria fechada.
+- RPCs `SECURITY DEFINER`: `fin_group_attach/detach` e `fin_group_reconcile`,
+  com validacao de tenant/filial (`rls_write`) alem dos triggers de consistencia.
+- API: `GET/POST /finance/groups`, `GET/PATCH/DELETE /finance/groups/{id}`,
+  `POST /finance/groups/{id}/members`, `DELETE /finance/groups/{id}/members/{txId}`,
+  `POST /finance/groups/{id}/reconcile` e
+  `POST /finance/bank-imports/{id}/entries/{entryId}/group` (cria o grupo a partir
+  do extrato, exige que a soma bata com a linha e concilia tudo).
+- Extrato (`GET /reports/account-statement`): `view=detail` (padrao, um lancamento
+  por linha) ou `view=bank` (um grupo por linha, na data do deposito). A visao
+  banco pode divergir do mes dos lancamentos; o export aceita o mesmo `view`.
+- UI: aba **Agrupamentos** no financeiro, selecao multipla + "Agrupar (N)", badge
+  "Agrupado", detalhe com membros/desagrupar; conciliacao e extrato mostra o grupo
+  como uma linha e permitem conciliar em bloco.
+
 ### 3. Servico Go localmente (para depurar)
 
 ```bash

@@ -39,6 +39,8 @@ export interface TransactionFormState {
   paid: boolean;
   /** Cria o lancamento ja conciliado (imutavel depois). */
   reconciled: boolean;
+  /** Filial de gravacao (Sede no escopo "Todas"; vazio usa o contexto). */
+  branch_id: string;
 }
 
 const EMPTY: TransactionFormState = {
@@ -59,6 +61,7 @@ const EMPTY: TransactionFormState = {
   cost_center: "",
   paid: false,
   reconciled: false,
+  branch_id: "",
 };
 
 export interface TransactionFormProps {
@@ -69,7 +72,7 @@ export interface TransactionFormProps {
    *  componente pai decidir o que fazer (refetch, invalidacao, etc.). */
   onSubmit?: (data: Record<string, unknown>) => Promise<void>;
   /** Se nao informado, usa createTransaction e da reload via onSaved. */
-  onSaved?: () => void;
+  onSaved?: (data?: Record<string, unknown>) => void;
   submitLabel?: string;
   /** Na edicao a posicao (Seq.) nao muda: o campo fica somente leitura. */
   entrySeqReadOnly?: boolean;
@@ -203,6 +206,7 @@ export function TransactionForm({
       cost_center: form.cost_center || undefined,
       paid: form.paid,
       reconciled: form.reconciled || undefined,
+      branch_id: form.branch_id || undefined,
     };
     if (alloc.length > 0) {
       payload.event_allocations = alloc.map((a) => ({
@@ -229,7 +233,7 @@ export function TransactionForm({
         }
       }
       toast("Lancamento registrado com recibo.");
-      onSaved?.();
+      onSaved?.(payload);
       onClose();
       setForm({ ...EMPTY, ...initialState });
       setFile(null);
@@ -354,6 +358,7 @@ export function TransactionForm({
                 if (!v) set("is_anonymous", false);
               }}
               className="w-full"
+              openOnFocus
             />
           </Field>
           {!form.donor_member_id && (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Wallet, Plus, Eye, Send, Filter, Tags, Repeat, Banknote, Upload, Download, FileText, Paperclip, Pencil, Trash2, FolderTree, ChevronUp, ChevronDown, CheckCircle2, RotateCcw, Lock } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Wallet, Plus, Eye, Send, Filter, Tags, Repeat, Banknote, Upload, Download, FileText, Paperclip, Pencil, Trash2, FolderTree, ChevronUp, ChevronDown, CheckCircle2, RotateCcw, Lock, Layers, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,7 +12,6 @@ import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input, Field, Select } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable, Column } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -24,15 +23,18 @@ import {
    uploadAttachment, listAttachments, listDeliveries, updateTransaction, deleteTransaction, settleTransaction,
    reconcileTransaction, downloadFinancialAttachment,
    listTransactionEvents, previewTransactions, importTransactionsFile, reorderTransactions,
+   listTransactionGroups,
    type Category, type CategoryGroup, type Transaction, type Balance, type BankAccount,
    type FinancialAttachment, type Delivery, type ImportResult, type EventAllocation,
+   type TransactionGroup,
  } from "@/lib/api";
 import { PAYMENT_METHODS, ACCOUNT_TYPES } from "@/lib/constants";
-import { currency, datePt, dateTimePt } from "@/lib/format";
+import { currency, datePt, dateTimePt, monthEndISO, monthStartISO, todayISO } from "@/lib/format";
 import { downloadCSVTemplate } from "@/lib/template";
 import { RecurringPanel } from "@/components/finance/recurring-panel";
 import { BulkEntry } from "@/components/finance/bulk-entry";
 import { TransactionForm, type TransactionFormState } from "@/components/finance/transaction-form";
+import { GroupDetailDrawer, GroupSelectionDrawer } from "@/components/finance/transaction-group";
 
 // Modelo de importacao de lancamentos (colunas iguais aos aliases do mapeamento).
 const TX_TEMPLATE: string[][] = [
@@ -65,6 +67,12 @@ function colLetter(i: number): string {
 function scopeKeyOf(t: Transaction): string {
   return `${t.branch_id}|${t.account_id ?? ""}|${t.occurred_at.slice(0, 10)}`;
 }
+
+// Alvo de uma insercao "no meio" da sequencia (mesma filial+conta+data).
+type InsertTarget = {
+  transaction: Transaction;
+  entrySeq: number;
+};
 
 function fileToBase64(f: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -104,8 +112,16 @@ export default function FinancePage() {
   const [groups, setGroups] = useState<CategoryGroup[]>([]);
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [txns, setTxns] = useState<Transaction[]>([]);
+  const [txGroups, setTxGroups] = useState<TransactionGroup[]>([]);
+  const [txGroupsLoading, setTxGroupsLoading] = useState(false);
+  const [selectedTx, setSelectedTx] = useState<Set<string>>(new Set());
+  const [showGroupSelection, setShowGroupSelection] = useState(false);
+  const [groupDetailId, setGroupDetailId] = useState<string | undefined>(undefined);
   const [balance, setBalance] = useState<Balance | null>(null);
   const [loading, setLoading] = useState(true);
+  // Periodo do grid (default: mes atual). Datas vazias mostram todo o historico.
+  const [from, setFrom] = useState(() => monthStartISO());
+  const [to, setTo] = useState(() => monthEndISO());
   const [filterType, setFilterType] = useState("");
   const [filterCat, setFilterCat] = useState("");
   const [filterAcct, setFilterAcct] = useState("");
@@ -120,6 +136,7 @@ export default function FinancePage() {
   const [allocations, setAllocations] = useState<EventAllocation[]>([]);
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const [insertTarget, setInsertTarget] = useState<InsertTarget | null>(null);
   const [showCatForm, setShowCatForm] = useState(false);
   const [showAcctForm, setShowAcctForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -142,31 +159,71 @@ export default function FinancePage() {
   const [sending, setSending] = useState(false);
   const [recipient, setRecipient] = useState("");
 
-  const load = useCallback(async () => {
-    // Cada API e carregada independentemente: uma falha nao deve bloquear o
-    // carregamento do restante. Mas a lista de lancamentos AVISA quando falha
-    // (antes o erro era engolido e a tela so ficava "vazia").
-    const cat = await listCategories().catch(() => ({ categories: [] }));
-    const grp = await listCategoryGroups().catch(() => ({ groups: [] }));
-    const accts = await listAccounts().catch(() => ({ accounts: [] }));
+  // Dados de apoio (plano de contas, grupos e contas) - carregados uma vez.
+  const loadBase = useCallback(async () => {
+    const [cat, grp, accts] = await Promise.all([
+      listCategories().catch(() => ({ categories: [] })),
+      listCategoryGroups().catch(() => ({ groups: [] })),
+      listAccounts().catch(() => ({ accounts: [] })),
+    ]);
+    setCategories(cat.categories);
+    setGroups(grp.groups);
+    setAccounts(accts.accounts);
+  }, []);
+
+  // Saldo atual da igreja (todo o historico), independente do periodo do grid.
+  const loadBalance = useCallback(async () => {
+    const bal = await getBalance().catch(() => null);
+    setBalance(bal);
+  }, []);
+
+  // Lancamentos do periodo selecionado (filtro no servidor).
+  const loadTxns = useCallback(async () => {
+    setLoading(true);
     try {
-      const tx = await listTransactions();
+      const tx = await listTransactions("", from, to);
       setTxns(Array.isArray(tx.transactions) ? tx.transactions : []);
     } catch (e) {
       setTxns([]);
       toast(e instanceof Error ? e.message : "Falha ao carregar lancamentos", "error");
+    } finally {
+      setLoading(false);
     }
-    const bal = await getBalance().catch(() => null);
-    setCategories(cat.categories);
-    setGroups(grp.groups);
-    setAccounts(accts.accounts);
-    setBalance(bal);
-    setLoading(false);
-  }, [toast]);
+  }, [from, to, toast]);
 
   useEffect(() => {
-    load().catch((e) => toast(e.message, "error"));
-  }, [load, toast]);
+    loadBase().catch((e) => toast(e instanceof Error ? e.message : "Falha ao carregar dados", "error"));
+  }, [loadBase, toast]);
+
+  useEffect(() => {
+    if (tab === "lancamentos") loadBalance();
+  }, [tab, loadBalance]);
+
+  useEffect(() => {
+    loadTxns();
+  }, [loadTxns]);
+
+  const loadTxGroups = useCallback(async () => {
+    setTxGroupsLoading(true);
+    try {
+      const res = await listTransactionGroups({ from, to });
+      setTxGroups(Array.isArray(res.groups) ? res.groups : []);
+    } catch (e) {
+      setTxGroups([]);
+      toast(e instanceof Error ? e.message : "Falha ao carregar agrupamentos", "error");
+    } finally {
+      setTxGroupsLoading(false);
+    }
+  }, [from, to, toast]);
+
+  useEffect(() => {
+    if (tab === "agrupamentos") loadTxGroups();
+  }, [tab, loadTxGroups]);
+
+  const selectedTransactions = useMemo(
+    () => txns.filter((t) => selectedTx.has(t.id)),
+    [txns, selectedTx],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -182,7 +239,7 @@ export default function FinancePage() {
     });
   }, [txns, filterType, filterCat, filterAcct, filterRecon, query]);
 
-  useEffect(() => setPage(1), [filterType, filterCat, filterAcct, filterRecon, query]);
+  useEffect(() => setPage(1), [filterType, filterCat, filterAcct, filterRecon, query, from, to]);
 
   const handleSort = (col: string) => {
     if (sortColumn === col) {
@@ -245,6 +302,18 @@ export default function FinancePage() {
         <div className="flex items-center gap-2">
           <span className={t.voided_at ? "text-zinc-400 line-through" : ""}>{t.description ?? "-"}</span>
           {t.voided_at && <Badge tone="red" className="text-[10px]">Estornado</Badge>}
+          {t.group_id && (
+            <button
+              type="button"
+              onClick={() => setGroupDetailId(t.group_id)}
+              title="Ver grupo de lancamentos"
+              className="inline-flex"
+            >
+              <Badge tone={t.group_status === "conciliado" ? "green" : "indigo"} className="gap-1 text-[10px]">
+                <Layers className="h-3 w-3" /> Agrupado
+              </Badge>
+            </button>
+          )}
           {!!t.attachment_count && t.attachment_count > 0 && (
             t.attachment_count === 1 ? (
               <a
@@ -347,7 +416,7 @@ export default function FinancePage() {
             <Button variant="ghost" size="sm" onClick={() => viewReceipt(t)} aria-label="Ver recibo" title="Ver recibo"><Eye className="h-3.5 w-3.5" /> Ver</Button>
           )}
           <Button variant="ghost" size="sm" onClick={() => openDetail(t)} aria-label="Ver detalhes" title="Detalhes"><Eye className="h-3.5 w-3.5" /></Button>
-          {!t.voided_at && hasPerm("finance.reconcile") && (
+          {!t.voided_at && !t.group_id && hasPerm("finance.reconcile") && (
             <Button
               variant="ghost"
               size="sm"
@@ -358,6 +427,11 @@ export default function FinancePage() {
               {t.reconciled ? <RotateCcw className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
             </Button>
           )}
+          {t.group_id && (
+            <Button variant="ghost" size="sm" onClick={() => setGroupDetailId(t.group_id)} title="Abrir grupo">
+              <Layers className="h-3.5 w-3.5" />
+            </Button>
+          )}
           {!t.voided_at && !t.reconciled && hasPerm("finance.write") && (
             <>
               {t.type === "expense" && (
@@ -366,7 +440,9 @@ export default function FinancePage() {
                 </Button>
               )}
               <Button variant="ghost" size="sm" onClick={() => openEdit(t)} aria-label="Editar" title="Editar"><Pencil className="h-3.5 w-3.5" /></Button>
-              <Button variant="ghost" size="sm" onClick={() => removeTxn(t)} aria-label="Excluir" title="Excluir"><Trash2 className="h-3.5 w-3.5 text-red-500" /></Button>
+              {!t.group_id && (
+                <Button variant="ghost" size="sm" onClick={() => removeTxn(t)} aria-label="Excluir" title="Excluir"><Trash2 className="h-3.5 w-3.5 text-red-500" /></Button>
+              )}
             </>
           )}
         </div>
@@ -374,14 +450,18 @@ export default function FinancePage() {
     },
   ], [hasPerm, txns]);
 
-  async function handleTxnSaved() {
-    // Invalidar apenas as listas de transacoes e saldo, nao todas as APIs.
-    const [tx, bal] = await Promise.all([
-      listTransactions().catch(() => ({ transactions: [] })),
-      getBalance().catch(() => null),
+  async function handleTxnSaved(data?: Record<string, unknown>) {
+    const savedDate = typeof data?.occurred_at === "string" ? data.occurred_at.slice(0, 10) : "";
+    const outside = !!savedDate && ((!!from && savedDate < from) || (!!to && savedDate > to));
+    if (outside) {
+      toast(`Lancamento salvo em ${datePt(savedDate)}, fora do periodo exibido.`, "info");
+    }
+    // Recarrega os lancamentos do periodo exibido e o saldo atual.
+    const [tx] = await Promise.all([
+      listTransactions("", from, to).catch(() => ({ transactions: [] })),
+      loadBalance(),
     ]);
     setTxns(tx.transactions);
-    setBalance(bal);
   }
 
   // Move o lancamento uma posicao para cima/baixo dentro do escopo (filial+
@@ -410,6 +490,34 @@ export default function FinancePage() {
     }
   }
 
+  // Insercao entre duas linhas: so no mesmo escopo (filial+conta+data), na
+  // ordem cronologica e sem lancamento conciliado no grupo.
+  function canInsertBetween(prev: Transaction, next: Transaction): boolean {
+    if (!hasPerm("finance.write")) return false;
+    if (sortColumn !== "occurred_at" || sortDirection !== "asc") return false;
+    if (!next.account_id) return false;
+    if (scopeKeyOf(prev) !== scopeKeyOf(next)) return false;
+    const key = scopeKeyOf(next);
+    return !(Array.isArray(txns) ? txns : []).some(
+      (t) => scopeKeyOf(t) === key && t.reconciled
+    );
+  }
+
+  function openInsert(_prev: Transaction, next: Transaction) {
+    const key = scopeKeyOf(next);
+    const group = (Array.isArray(txns) ? txns : [])
+      .filter((t) => scopeKeyOf(t) === key)
+      .sort((a, b) =>
+        (a.entry_seq ?? Number.MAX_SAFE_INTEGER) - (b.entry_seq ?? Number.MAX_SAFE_INTEGER) ||
+        a.occurred_at.localeCompare(b.occurred_at) ||
+        (a.created_at ?? "").localeCompare(b.created_at ?? ""));
+    const idx = group.findIndex((t) => t.id === next.id);
+    const entrySeq = next.entry_seq ?? (idx >= 0 ? idx + 1 : group.length + 1);
+    setEditing(null);
+    setInsertTarget({ transaction: next, entrySeq });
+    setShowNew(true);
+  }
+
   async function viewReceipt(t: Transaction) {
     if (!t.receipt_id) return;
     // Abre a janela ANTES do fetch: abrir depois do await e bloqueado pelo
@@ -432,6 +540,7 @@ export default function FinancePage() {
       toast("Lancamento conciliado: desconcile antes de editar.", "error");
       return;
     }
+    setInsertTarget(null);
     setEditing(t);
     setShowNew(true);
   }
@@ -747,6 +856,22 @@ export default function FinancePage() {
   const incomeCats = categories.filter((c) => c.type === "income");
   const expenseCats = categories.filter((c) => c.type === "expense");
 
+  function changeFrom(v: string) {
+    setFrom(v);
+    if (v && to && v > to) setTo(v);
+  }
+
+  function changeTo(v: string) {
+    setTo(v);
+    if (v && from && v < from) setFrom(v);
+  }
+
+  function closeTxnForm() {
+    setShowNew(false);
+    setEditing(null);
+    setInsertTarget(null);
+  }
+
   return (
     <div className="page">
       <PageHeader
@@ -757,7 +882,7 @@ export default function FinancePage() {
             <Button variant="outline" onClick={() => { setImportResult(null); setShowImport(true); }}>
               <Upload className="h-4 w-4" /> Importar
             </Button>
-            <Button onClick={() => { setEditing(null); setShowNew(true); }}><Plus className="h-4 w-4" /> Lancamento</Button>
+            <Button onClick={() => { setEditing(null); setInsertTarget(null); setShowNew(true); }}><Plus className="h-4 w-4" /> Lancamento</Button>
           </div>
         ) : undefined}
       />
@@ -765,26 +890,23 @@ export default function FinancePage() {
       <Tabs
         tabs={[
           { key: "lancamentos", label: "Lancamentos", icon: <Wallet className="h-4 w-4" /> },
+          { key: "agrupamentos", label: "Agrupamentos", icon: <Layers className="h-4 w-4" /> },
           { key: "recorrentes", label: "Recorrencias", icon: <Repeat className="h-4 w-4" /> },
           { key: "contas", label: "Contas Bancarias", icon: <Banknote className="h-4 w-4" /> },
           { key: "categorias", label: "Plano de Contas", icon: <Tags className="h-4 w-4" /> },
-          { key: "grupos", label: "Grupos", icon: <FolderTree className="h-4 w-4" /> },
+          { key: "grupos", label: "Grupos de contas", icon: <FolderTree className="h-4 w-4" /> },
         ]}
         active={tab}
-        onChange={setTab}
+        onChange={(key) => { setTab(key); setSelectedTx(new Set()); }}
       />
 
       {tab === "lancamentos" && (
         <>
-          {loading ? (
-            <div className="grid gap-4 md:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-24" />)}</div>
-          ) : (
-            <div className="mb-6 grid gap-4 md:grid-cols-3">
-              <StatCard label="Entradas" value={balance ? currency(balance.income) : "..."} icon={ArrowUpRight} tone="green" />
-              <StatCard label="Saidas" value={balance ? currency(balance.expense) : "..."} icon={ArrowDownRight} tone="red" />
-              <StatCard label="Saldo" value={balance ? currency(balance.net) : "..."} icon={Wallet} tone="sky" />
-            </div>
-          )}
+          <div className="mb-6 grid gap-4 md:grid-cols-3">
+            <StatCard label="Entradas" value={balance ? currency(balance.income) : "..."} icon={ArrowUpRight} tone="green" />
+            <StatCard label="Saidas" value={balance ? currency(balance.expense) : "..."} icon={ArrowDownRight} tone="red" />
+            <StatCard label="Saldo atual" value={balance ? currency(balance.net) : "..."} icon={Wallet} tone="sky" />
+          </div>
 
           {hasPerm("finance.write") && (
             <Card className="mb-6 p-4">
@@ -798,6 +920,39 @@ export default function FinancePage() {
           )}
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Input
+              type="date"
+              className="w-36"
+              aria-label="Data inicial"
+              title="Data inicial"
+              value={from}
+              onChange={(e) => changeFrom(e.target.value)}
+            />
+            <span className="text-xs text-zinc-400">a</span>
+            <Input
+              type="date"
+              className="w-36"
+              aria-label="Data final"
+              title="Data final"
+              value={to}
+              onChange={(e) => changeTo(e.target.value)}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setFrom(todayISO()); setTo(todayISO()); }}
+              title="Mostrar somente os lancamentos de hoje"
+            >
+              Hoje
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setFrom(monthStartISO()); setTo(monthEndISO()); }}
+              title="Mostrar os lancamentos do mes atual"
+            >
+              Mes
+            </Button>
             <div className="relative min-w-48 flex-1">
               <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
               <Input className="pl-9" placeholder="Buscar por descricao" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -818,6 +973,11 @@ export default function FinancePage() {
               <option value="reconciled">Conciliados</option>
               <option value="pending">Pendentes</option>
             </Select>
+            {hasPerm("finance.write") && selectedTx.size > 0 && (
+              <Button size="sm" onClick={() => setShowGroupSelection(true)}>
+                <Layers className="h-4 w-4" /> Agrupar ({selectedTx.size})
+              </Button>
+            )}
           </div>
 
           <DataTable
@@ -827,6 +987,11 @@ export default function FinancePage() {
             loading={loading}
             emptyMessage="Sem lancamentos"
             emptyIcon={<Wallet className="h-10 w-10" />}
+            selection={{
+              selectedKeys: selectedTx,
+              onSelectionChange: setSelectedTx,
+              keyExtractor: (t) => t.id,
+            }}
             pagination={{
               page,
               pageSize,
@@ -840,10 +1005,81 @@ export default function FinancePage() {
               direction: sortDirection,
               onSort: handleSort,
             }}
+            insertion={{
+              label: "+ Inserir lancamento aqui",
+              canInsert: canInsertBetween,
+              onInsert: openInsert,
+            }}
             hoverable
             compact
           />
         </>
+      )}
+
+      {tab === "agrupamentos" && (
+        <Card className="overflow-hidden p-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 p-4">
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-700">Agrupamentos bancarios</h3>
+              <p className="text-xs text-zinc-400">
+                Cada grupo representa uma unica movimentacao no extrato, com os lancamentos detalhados por conta contabil.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={loadTxGroups} disabled={txGroupsLoading}>
+                <RefreshCw className="h-4 w-4" /> Atualizar
+              </Button>
+              <Button size="sm" onClick={() => { setTab("lancamentos"); setSelectedTx(new Set()); }}>
+                <Plus className="h-4 w-4" /> Agrupar lancamentos
+              </Button>
+            </div>
+          </div>
+          <Table>
+            <THead>
+              <TRow>
+                <TH>Data do deposito</TH>
+                <TH>Conta bancaria</TH>
+                <TH>Descricao</TH>
+                <TH>Status</TH>
+                <TH className="text-right">Itens</TH>
+                <TH className="text-right">Total</TH>
+                <TH></TH>
+              </TRow>
+            </THead>
+            <TBody>
+              {txGroups.map((g) => (
+                <TRow key={g.id}>
+                  <TD className="whitespace-nowrap text-zinc-500">{datePt(g.occurred_at)}</TD>
+                  <TD>{g.account_name ?? "-"}</TD>
+                  <TD className="text-zinc-500">{g.description ?? "-"}</TD>
+                  <TD>
+                    {g.reconciled ? (
+                      <Badge tone="green" className="gap-1"><Lock className="h-3 w-3" /> Conciliado</Badge>
+                    ) : (
+                      <Badge tone="indigo">Agrupado</Badge>
+                    )}
+                  </TD>
+                  <TD className="text-right text-zinc-500">{g.member_count}</TD>
+                  <TD className={`text-right font-semibold ${g.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
+                    {currency(g.total_amount)}
+                  </TD>
+                  <TD className="text-right">
+                    <Button variant="ghost" size="sm" onClick={() => setGroupDetailId(g.id)}>
+                      <Eye className="h-3.5 w-3.5" /> Detalhes
+                    </Button>
+                  </TD>
+                </TRow>
+              ))}
+              {!txGroupsLoading && txGroups.length === 0 && (
+                <TRow>
+                  <TD colSpan={7} className="py-8 text-center text-zinc-400">
+                    Nenhum agrupamento no periodo. Selecione lancamentos na aba Lancamentos e clique em Agrupar.
+                  </TD>
+                </TRow>
+              )}
+            </TBody>
+          </Table>
+        </Card>
       )}
 
       {tab === "recorrentes" && <RecurringPanel />}
@@ -1084,13 +1320,19 @@ export default function FinancePage() {
         )}
       </Drawer>
 
-      <Drawer open={showNew} onClose={() => { setShowNew(false); setEditing(null); }} size="xl" title={editing ? "Editar lancamento" : "Novo lancamento"}>
+      <Drawer open={showNew} onClose={closeTxnForm} size="xl" title={insertTarget ? "Inserir lancamento" : editing ? "Editar lancamento" : "Novo lancamento"}>
         <TransactionForm
           open={showNew}
-          onClose={() => { setShowNew(false); setEditing(null); }}
+          onClose={closeTxnForm}
           onSaved={handleTxnSaved}
           onSubmit={editing ? amendTxn : undefined}
-          initialState={editing ? {
+          initialState={insertTarget ? {
+            type: insertTarget.transaction.type,
+            account_id: insertTarget.transaction.account_id ?? "",
+            occurred_at: insertTarget.transaction.occurred_at.slice(0, 10),
+            entry_seq: String(insertTarget.entrySeq),
+            branch_id: insertTarget.transaction.branch_id,
+          } : editing ? {
             type: editing.type,
             amount: String(editing.amount),
             category_id: editing.category_id ?? "",
@@ -1108,7 +1350,7 @@ export default function FinancePage() {
             cost_center: editing.cost_center ?? "",
             paid: !!editing.paid_at,
           } : undefined}
-          submitLabel={editing ? "Salvar alteracoes" : "Lancar"}
+          submitLabel={insertTarget ? "Inserir" : editing ? "Salvar alteracoes" : "Lancar"}
           entrySeqReadOnly={!!editing}
         />
       </Drawer>
@@ -1316,6 +1558,26 @@ export default function FinancePage() {
           </div>
         </div>
       </Modal>
+
+      <GroupSelectionDrawer
+        open={showGroupSelection}
+        onClose={() => setShowGroupSelection(false)}
+        transactions={selectedTransactions}
+        onSaved={() => {
+          setSelectedTx(new Set());
+          loadTxns();
+          loadTxGroups();
+        }}
+      />
+
+      <GroupDetailDrawer
+        open={!!groupDetailId}
+        groupId={groupDetailId}
+        onClose={() => setGroupDetailId(undefined)}
+        onChanged={() => { loadTxns(); loadTxGroups(); }}
+        canWrite={hasPerm("finance.write")}
+        canReconcile={hasPerm("finance.reconcile")}
+      />
     </div>
   );
 }

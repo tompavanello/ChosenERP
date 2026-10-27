@@ -113,11 +113,11 @@ export function useCategories() {
   );
 }
 
-export function useTransactions(type = "") {
-  const key = type ? `transactions:${type}` : "transactions";
+export function useTransactions(type = "", from = "", to = "") {
+  const key = `transactions:${type}:${from}:${to}`;
   return useSWR<{ transactions: Transaction[] }>(
     key,
-    () => listTransactions(type),
+    () => listTransactions(type, from, to),
     { revalidateOnFocus: false, dedupingInterval: 30000 }
   );
 }

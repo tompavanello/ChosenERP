@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, Layers, Pencil, Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
@@ -19,6 +19,7 @@ import {
 import { currency, datePt } from "@/lib/format";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import { TransactionForm, type TransactionFormState } from "@/components/finance/transaction-form";
+import { GroupDetailDrawer } from "@/components/finance/transaction-group";
 
 const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -48,8 +49,10 @@ export default function AccountStatementPage() {
   const [from, setFrom] = useState(monthRange().from);
   const [to, setTo] = useState(monthRange().to);
   const [order, setOrder] = useState<"asc" | "desc">("asc");
+  const [view, setView] = useState<"bank" | "detail">("detail");
   const [st, setSt] = useState<AccountStatement | null>(null);
   const [loading, setLoading] = useState(false);
+  const [groupDetailId, setGroupDetailId] = useState<string | undefined>(undefined);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
@@ -71,14 +74,14 @@ export default function AccountStatementPage() {
     }
     setLoading(true);
     try {
-      setSt(await getAccountStatement({ account_id: accountId, from, to, order }));
+      setSt(await getAccountStatement({ account_id: accountId, from, to, order, view }));
     } catch (e) {
       toast(e instanceof Error ? e.message : "Erro ao carregar extrato", "error");
       setSt(null);
     } finally {
       setLoading(false);
     }
-  }, [accountId, from, to, order, toast]);
+  }, [accountId, from, to, order, view, toast]);
 
   useEffect(() => {
     load();
@@ -191,7 +194,7 @@ export default function AccountStatementPage() {
             )}
             <ExportButtons
               path="/api/v1/reports/account-statement/export"
-              params={{ account_id: accountId, from, to, order }}
+              params={{ account_id: accountId, from, to, order, view }}
               filenameBase={`extrato-${account?.name ?? "conta"}-${from}-${to}`}
             />
           </div>
@@ -228,6 +231,27 @@ export default function AccountStatementPage() {
             <option value="asc">Mais antigo primeiro</option>
             <option value="desc">Mais recente primeiro</option>
           </Select>
+        </div>
+        <div>
+          <label className="label">Visao</label>
+          <div className="flex gap-1">
+            <Button
+              variant={view === "detail" ? "primary" : "outline"}
+              size="sm"
+              onClick={() => setView("detail")}
+              title="Um lancamento por linha (data de cada contribuicao)"
+            >
+              Analitica
+            </Button>
+            <Button
+              variant={view === "bank" ? "primary" : "outline"}
+              size="sm"
+              onClick={() => setView("bank")}
+              title="Uma linha por movimentacao bancaria (data do deposito)"
+            >
+              Banco
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap gap-1">
           <Button variant={preset === "month" ? "primary" : "outline"} size="sm" onClick={() => applyPreset("month")}>
@@ -316,40 +340,83 @@ export default function AccountStatementPage() {
                   const dayLines = linesByDay.get(day.date) ?? [];
                   return (
                     <Fragment key={day.date}>
-                      {dayLines.map((l) => (
-                        <TRow key={l.id}>
-                          <TD className="whitespace-nowrap text-zinc-500">{datePt(lineDay(l))}</TD>
-                          <TD className="text-xs text-zinc-400">{l.entry_seq ?? ""}</TD>
-                          <TD className="font-medium">
-                            {l.description || l.donor_name || l.category_name || "-"}
-                            {l.donor_name && l.description ? (
-                              <span className="block text-xs text-zinc-400">{l.donor_name}</span>
-                            ) : null}
-                          </TD>
-                          <TD className="text-zinc-500">{l.category_name ?? "-"}</TD>
-                          <TD>
-                            <Badge tone={l.type === "income" ? "green" : "red"}>
-                              {TYPE_LABEL[l.type] ?? l.type}
-                            </Badge>
-                          </TD>
-                          <TD className={`text-right font-semibold tabular-nums ${l.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
-                            {l.type === "income" ? "+" : "-"} {currency(l.amount)}
-                          </TD>
-                          <TD className="text-right font-medium tabular-nums">{currency(l.balance_after)}</TD>
-                          {canWrite && (
-                            <TD className="text-right">
-                              <div className="flex justify-end gap-1">
-                                <Button variant="ghost" size="sm" onClick={() => openEdit(l)} title="Editar">
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button variant="ghost" size="sm" onClick={() => remove(l)} title="Excluir">
-                                  <Trash2 className="h-3.5 w-3.5 text-red-600" />
-                                </Button>
-                              </div>
+                      {dayLines.map((l) => {
+                        const isGroupLine = !!l.is_group;
+                        return (
+                          <TRow key={l.id} className={isGroupLine ? "bg-sky-50/50 dark:bg-sky-950/20" : undefined}>
+                            <TD className="whitespace-nowrap text-zinc-500">{datePt(lineDay(l))}</TD>
+                            <TD className="text-xs text-zinc-400">{l.entry_seq ?? ""}</TD>
+                            <TD className="font-medium">
+                              {isGroupLine ? (
+                                <span className="inline-flex flex-wrap items-center gap-1.5 text-sky-800 dark:text-sky-300">
+                                  <Layers className="h-3.5 w-3.5" />
+                                  {l.description || "Agrupamento de lancamentos"}
+                                  <Badge tone="indigo" className="text-[10px]">
+                                    {l.group_member_count ?? 0} itens
+                                  </Badge>
+                                  {l.group_status === "conciliado" && (
+                                    <Badge tone="green" className="text-[10px]">Conciliado</Badge>
+                                  )}
+                                </span>
+                              ) : (
+                                <>
+                                  {l.description || l.donor_name || l.category_name || "-"}
+                                  {l.group_id && (
+                                    <Badge tone="indigo" className="ml-2 text-[10px]">Agrupado</Badge>
+                                  )}
+                                  {l.donor_name && l.description ? (
+                                    <span className="block text-xs text-zinc-400">{l.donor_name}</span>
+                                  ) : null}
+                                </>
+                              )}
                             </TD>
-                          )}
-                        </TRow>
-                      ))}
+                            <TD className="text-zinc-500">
+                              {isGroupLine ? <span className="text-xs">Linha bancaria</span> : (l.category_name ?? "-")}
+                            </TD>
+                            <TD>
+                              <Badge tone={l.type === "income" ? "green" : "red"}>
+                                {TYPE_LABEL[l.type] ?? l.type}
+                              </Badge>
+                            </TD>
+                            <TD className={`text-right font-semibold tabular-nums ${l.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
+                              {l.type === "income" ? "+" : "-"} {currency(l.amount)}
+                            </TD>
+                            <TD className="text-right font-medium tabular-nums">{currency(l.balance_after)}</TD>
+                            {canWrite && (
+                              <TD className="text-right">
+                                {isGroupLine ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setGroupDetailId(l.group_id ?? l.id)}
+                                    title="Ver lancamentos do grupo"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" /> Grupo
+                                  </Button>
+                                ) : l.group_id ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setGroupDetailId(l.group_id)}
+                                    title="Ver grupo"
+                                  >
+                                    <Layers className="h-3.5 w-3.5" />
+                                  </Button>
+                                ) : (
+                                  <div className="flex justify-end gap-1">
+                                    <Button variant="ghost" size="sm" onClick={() => openEdit(l)} title="Editar">
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button variant="ghost" size="sm" onClick={() => remove(l)} title="Excluir">
+                                      <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </TD>
+                            )}
+                          </TRow>
+                        );
+                      })}
                       <TRow className="border-y border-sky-100 bg-sky-50/70 dark:border-sky-900/40 dark:bg-sky-950/20">
                         <TD colSpan={canWrite ? 8 : 7} className="py-2">
                           <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 text-xs">
@@ -387,6 +454,12 @@ export default function AccountStatementPage() {
             O saldo inicial da conta nao possui data; ele entra no saldo anterior ao periodo. Lancamentos
             estornados nao aparecem no extrato. Saldo final = saldo anterior + entradas - saidas.
           </p>
+          {view === "bank" && (
+            <p className="mt-1 text-xs text-sky-700 dark:text-sky-400">
+              Visao banco: cada agrupamento aparece como uma unica linha, na data do deposito. Os totais
+              podem divergir dos relatorios mensais, que usam a data de cada contribuicao (visao analitica).
+            </p>
+          )}
         </>
       )}
 
@@ -412,6 +485,15 @@ export default function AccountStatementPage() {
           entrySeqReadOnly={!!editing}
         />
       </Drawer>
+
+      <GroupDetailDrawer
+        open={!!groupDetailId}
+        groupId={groupDetailId}
+        onClose={() => setGroupDetailId(undefined)}
+        onChanged={load}
+        canWrite={canWrite}
+        canReconcile={hasPerm("finance.reconcile")}
+      />
     </div>
   );
 }

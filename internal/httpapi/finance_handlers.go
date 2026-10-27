@@ -12,10 +12,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"chosenerp/internal/auth"
 	"chosenerp/internal/delivery"
 	"chosenerp/internal/documents"
 	"chosenerp/internal/finance"
@@ -238,16 +240,28 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
+// errBranchOutOfScope indica que o usuario tentou gravar em uma filial fora do
+// seu contexto (so a Sede no escopo "Todas" pode escolher a filial).
+var errBranchOutOfScope = errors.New("filial fora do escopo do usuario")
+
 // writeFinanceErr traduz as travas de conciliacao/periodo/auditoria em 409.
 func writeFinanceErr(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, finance.ErrTransactionReconciled):
+		writeErr(w, http.StatusConflict, err.Error())
+	case errors.Is(err, finance.ErrScopeReconciled):
 		writeErr(w, http.StatusConflict, err.Error())
 	case errors.Is(err, finance.ErrTransactionVoided):
 		writeErr(w, http.StatusConflict, err.Error())
 	case errors.Is(err, finance.ErrPeriodClosed):
 		writeErr(w, http.StatusConflict, err.Error())
 	case errors.Is(err, finance.ErrAuditClosed):
+		writeErr(w, http.StatusConflict, err.Error())
+	case errors.Is(err, finance.ErrTransactionGrouped):
+		writeErr(w, http.StatusConflict, err.Error())
+	case errors.Is(err, finance.ErrGroupedReconcile):
+		writeErr(w, http.StatusConflict, err.Error())
+	case errors.Is(err, finance.ErrGroupReconciled):
 		writeErr(w, http.StatusConflict, err.Error())
 	default:
 		var pending finance.ErrPendingReconciliation
@@ -298,6 +312,27 @@ func (a *App) handleCreateTxn(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
+		// A Sede no escopo "Todas" pode inserir em uma filial especifica (ex.:
+		// entre linhas de outra filial). Usuarios de filial so gravam na propria.
+		if in.BranchID != nil {
+			requested := strings.TrimSpace(*in.BranchID)
+			if requested != "" && requested != branchID {
+				if claims.BranchID != "" || !auth.IsHQRole(claims.Role) {
+					return errBranchOutOfScope
+				}
+				var exists bool
+				if err := tx.QueryRow(r.Context(), `
+					SELECT EXISTS (
+						SELECT 1 FROM branches WHERE id = $1::uuid AND is_active
+					)`, requested).Scan(&exists); err != nil {
+					return err
+				}
+				if !exists {
+					return errors.New("filial invalida ou inativa")
+				}
+				branchID = requested
+			}
+		}
 		t, _, ref, token, err = a.Finance.Create(r.Context(), tx, claims.TenantID, branchID, in)
 		if err != nil {
 			return err
@@ -309,6 +344,10 @@ func (a *App) handleCreateTxn(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
+		if errors.Is(err, errBranchOutOfScope) {
+			writeErr(w, http.StatusForbidden, err.Error())
+			return
+		}
 		writeFinanceErr(w, err)
 		return
 	}
@@ -832,18 +871,45 @@ func (a *App) handleListTxnEvents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"allocations": out})
 }
 
+// parseFinDate valida uma data opcional de filtro (AAAA-MM-DD).
+func parseFinDate(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", nil
+	}
+	if _, err := time.Parse("2006-01-02", s); err != nil {
+		return "", errors.New("data invalida (use AAAA-MM-DD)")
+	}
+	return s, nil
+}
+
 func (a *App) handleListTxn(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
 		writeErr(w, http.StatusUnauthorized, "unauthenticated")
 		return
 	}
-	kind := r.URL.Query().Get("type")
+	q := r.URL.Query()
+	kind := q.Get("type")
+	from, err := parseFinDate(q.Get("from"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	to, err := parseFinDate(q.Get("to"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if from != "" && to != "" && from > to {
+		writeErr(w, http.StatusBadRequest, "periodo invalido: data inicial maior que a final")
+		return
+	}
 	b := boundsFromClaims(claims)
 	var out []finance.Transaction
-	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+	err = a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
 		var err error
-		out, err = a.Finance.List(r.Context(), tx, kind)
+		out, err = a.Finance.List(r.Context(), tx, kind, from, to)
 		return err
 	})
 	if err != nil {

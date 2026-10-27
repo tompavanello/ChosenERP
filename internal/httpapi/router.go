@@ -315,6 +315,16 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/finance/attachments/{filename}", authed(app.perm("finance.read", app.handleDownloadFinanceAttachment)))
 	mux.Handle("GET /api/v1/finance/balance", authed(app.perm("finance.read", app.handleBalance)))
 
+	// Agrupamento de lancamentos (uma linha bancaria com varios lancamentos)
+	mux.Handle("GET /api/v1/finance/groups", authed(app.perm("finance.read", app.handleListFinanceGroups)))
+	mux.Handle("POST /api/v1/finance/groups", authed(app.perm("finance.write", app.handleCreateFinanceGroup)))
+	mux.Handle("GET /api/v1/finance/groups/{id}", authed(app.perm("finance.read", app.handleGetFinanceGroup)))
+	mux.Handle("PATCH /api/v1/finance/groups/{id}", authed(app.perm("finance.write", app.handleUpdateFinanceGroup)))
+	mux.Handle("DELETE /api/v1/finance/groups/{id}", authed(app.perm("finance.write", app.handleDeleteFinanceGroup)))
+	mux.Handle("POST /api/v1/finance/groups/{id}/members", authed(app.perm("finance.write", app.handleAddFinanceGroupMembers)))
+	mux.Handle("DELETE /api/v1/finance/groups/{id}/members/{txId}", authed(app.perm("finance.write", app.handleRemoveFinanceGroupMember)))
+	mux.Handle("POST /api/v1/finance/groups/{id}/reconcile", authed(app.perm("finance.reconcile", app.handleReconcileFinanceGroup)))
+
 	// Auditoria analitica do financeiro (documento imutavel apos fechamento)
 	mux.Handle("GET /api/v1/finance/audits", authed(app.perm("finance.read", app.handleListAudits)))
 	mux.Handle("POST /api/v1/finance/audits", authed(app.perm("finance.audit", app.handleCreateAudit)))
@@ -337,6 +347,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/finance/bank-imports/{id}", authed(app.perm("finance.read", app.handleGetBankImport)))
 	mux.Handle("POST /api/v1/finance/bank-imports/{id}/entries/{entryId}/ignore", authed(app.perm("finance.write", app.handleIgnoreBankEntry)))
 	mux.Handle("POST /api/v1/finance/bank-imports/{id}/entries/{entryId}/generate", authed(app.perm("finance.write", app.handleGenerateBankEntry)))
+	mux.Handle("POST /api/v1/finance/bank-imports/{id}/entries/{entryId}/group", authed(app.perm("finance.write", app.handleGroupFromBankEntry)))
 	mux.Handle("DELETE /api/v1/finance/bank-imports/{id}", authed(app.perm("finance.write", app.handleDeleteBankImport)))
 
 	// Fotos de membro (nome opaco) - unico uso publico dos uploads.

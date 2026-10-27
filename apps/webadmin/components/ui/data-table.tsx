@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useMemo, type HTMLAttributes, type ReactNode } from "react";
+import { Fragment, forwardRef, useMemo, type HTMLAttributes, type ReactNode } from "react";
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton, SkeletonRows, EmptyState } from "./skeleton";
@@ -69,6 +69,12 @@ export interface DataTableProps<T> {
     onSelectionChange: (keys: Set<string>) => void;
     keyExtractor: (row: T) => string;
   };
+  /** Permite inserir um registro entre duas linhas consecutivas (hover). */
+  insertion?: {
+    label?: string;
+    canInsert: (prev: T, next: T) => boolean;
+    onInsert: (prev: T, next: T) => void;
+  };
   renderMobileCard?: (row: T, index: number) => ReactNode;
   className?: string;
 }
@@ -127,6 +133,7 @@ export function DataTable<T>({  columns,
   compact = false,
   showIndex = false,
   selection,
+  insertion,
   renderMobileCard,
   className,
 }: DataTableProps<T>) {
@@ -178,6 +185,8 @@ export function DataTable<T>({  columns,
       sort.onSort(columnKey);
     }
   };
+
+  const columnCount = columns.length + (selection ? 1 : 0) + (showIndex ? 1 : 0);
 
   return (
     <div
@@ -231,61 +240,82 @@ export function DataTable<T>({  columns,
             {pageData.map((row, index) => {
               const rowKey = keyExtractor(row);
               const isSelected = selection?.selectedKeys.has(rowKey);
+              const prev = index > 0 ? pageData[index - 1] : undefined;
+              const canInsert = !!insertion && !!prev && insertion.canInsert(prev, row);
 
               return (
-                <tr
-                  key={rowKey}
-                  className={cn(
-                    "transition-colors",
-                    hoverable && "hover:bg-zinc-50/80 dark:hover:bg-zinc-900/60",
-                    striped && index % 2 === 1 && "bg-zinc-50/50 dark:bg-zinc-900/30",
-                    isSelected && "bg-sky-50 dark:bg-sky-500/10",
-                    rowClassName?.(row, index)
+                <Fragment key={rowKey}>
+                  {canInsert && (
+                    <tr className="group">
+                      <td colSpan={columnCount} className="relative h-0 p-0">
+                        <div className="absolute left-2 -top-2 z-20 flex h-4 items-center">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              insertion!.onInsert(prev!, row);
+                            }}
+                            className="pointer-events-none rounded-full border border-sky-200 bg-white px-2 py-0.5 text-[10px] font-medium text-sky-700 opacity-0 shadow-sm transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus:pointer-events-auto focus:opacity-100 dark:border-sky-800 dark:bg-zinc-900 dark:text-sky-300"
+                          >
+                            {insertion!.label ?? "+ Inserir aqui"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   )}
-                  onClick={() => onRowClick?.(row)}
-                  style={{ cursor: onRowClick ? "pointer" : "default" }}
-                >
-                  {selection && (
-                    <td className="px-2 py-1.5">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={(e) => {
-                          const newKeys = new Set(selection.selectedKeys);
-                          if (e.target.checked) {
-                            newKeys.add(rowKey);
-                          } else {
-                            newKeys.delete(rowKey);
-                          }
-                          selection.onSelectionChange(newKeys);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
-                      />
-                    </td>
-                  )}
-                  {showIndex && (
-                    <td className={cn("px-2 py-1.5 text-zinc-400", compact && "py-1")}>
-                      {(pagination ? (pagination.page - 1) * pagination.pageSize : 0) + index + 1}
-                    </td>
-                  )}
-                  {columns.map((column) => (
-                    <td
-                      key={column.key}
-                      className={cn(
-                        "px-2 py-1.5 align-middle",
-                        compact && "py-1",
-                        column.align === "center" && "text-center",
-                        column.align === "right" && "text-right",
-                        column.className
-                      )}
-                    >
-                     {column.render
-                       ? column.render(row, index)
-                       : String(row[column.key as keyof T] ?? "-")}
-                    </td>
-                  ))}
-                </tr>
+                  <tr
+                    className={cn(
+                      "transition-colors",
+                      hoverable && "hover:bg-zinc-50/80 dark:hover:bg-zinc-900/60",
+                      striped && index % 2 === 1 && "bg-zinc-50/50 dark:bg-zinc-900/30",
+                      isSelected && "bg-sky-50 dark:bg-sky-500/10",
+                      rowClassName?.(row, index)
+                    )}
+                    onClick={() => onRowClick?.(row)}
+                    style={{ cursor: onRowClick ? "pointer" : "default" }}
+                  >
+                    {selection && (
+                      <td className="px-2 py-1.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            const newKeys = new Set(selection.selectedKeys);
+                            if (e.target.checked) {
+                              newKeys.add(rowKey);
+                            } else {
+                              newKeys.delete(rowKey);
+                            }
+                            selection.onSelectionChange(newKeys);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
+                        />
+                      </td>
+                    )}
+                    {showIndex && (
+                      <td className={cn("px-2 py-1.5 text-zinc-400", compact && "py-1")}>
+                        {(pagination ? (pagination.page - 1) * pagination.pageSize : 0) + index + 1}
+                      </td>
+                    )}
+                    {columns.map((column) => (
+                      <td
+                        key={column.key}
+                        className={cn(
+                          "px-2 py-1.5 align-middle",
+                          compact && "py-1",
+                          column.align === "center" && "text-center",
+                          column.align === "right" && "text-right",
+                          column.className
+                        )}
+                      >
+                       {column.render
+                         ? column.render(row, index)
+                         : String(row[column.key as keyof T] ?? "-")}
+                      </td>
+                    ))}
+                  </tr>
+                </Fragment>
               );
             })}
           </tbody>

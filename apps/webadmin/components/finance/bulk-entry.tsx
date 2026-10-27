@@ -389,6 +389,7 @@ export function BulkEntry({
                               options={members.map((m) => ({ value: m.id, label: m.full_name }))}
                               onChange={(v) => update(r.key, { donor_member_id: v, benefactor_id: v ? "" : r.benefactor_id, donor_name: v ? "" : r.donor_name })}
                               className="w-44"
+                              openOnFocus
                             />
                           )}
                         </div>

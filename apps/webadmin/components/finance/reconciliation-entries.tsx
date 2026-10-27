@@ -1,20 +1,40 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Search } from "lucide-react";
+import { CheckCircle2, Layers, Search } from "lucide-react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Input, Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
-import { listAccounts, listTransactions, reconcileTransaction, type BankAccount, type Transaction } from "@/lib/api";
+import {
+  listAccounts, listTransactionGroups, listTransactions, reconcileTransaction,
+  reconcileTransactionGroup,
+  type BankAccount, type Transaction, type TransactionGroup,
+} from "@/lib/api";
 import { currency, datePt, todayISO } from "@/lib/format";
+
+type ReconRow = {
+  id: string;
+  kind: "tx" | "group";
+  occurred_at: string;
+  entry_seq?: number;
+  type: "income" | "expense";
+  category_name?: string;
+  description?: string;
+  account_name?: string;
+  amount: number;
+  reconciled: boolean;
+  member_count?: number;
+  tx?: Transaction;
+  group?: TransactionGroup;
+};
 
 /**
  * Visao de lancamentos avulsos da conciliacao: permite marcar/desmarcar um
- * unico lancamento sem precisar criar um periodo. A ordenacao segue a mesma
- * regra da auditoria (data, sequencia, criacao).
+ * unico lancamento sem precisar criar um periodo. Lancamentos agrupados
+ * aparecem como uma unica linha (o grupo) e sao conciliados em bloco.
  */
 export function ReconciliationEntries() {
   const { toast } = useToast();
@@ -27,6 +47,7 @@ export function ReconciliationEntries() {
   const [status, setStatus] = useState("");
   const [query, setQuery] = useState("");
   const [txns, setTxns] = useState<Transaction[]>([]);
+  const [groups, setGroups] = useState<TransactionGroup[]>([]);
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
@@ -35,11 +56,13 @@ export function ReconciliationEntries() {
 
   const load = useCallback(async () => {
     try {
-      const [r, a] = await Promise.all([
+      const [r, g, a] = await Promise.all([
         listTransactions(),
+        listTransactionGroups().catch(() => ({ groups: [] as TransactionGroup[] })),
         listAccounts().catch(() => ({ accounts: [] })),
       ]);
       setTxns(Array.isArray(r.transactions) ? r.transactions : []);
+      setGroups(Array.isArray(g.groups) ? g.groups : []);
       setAccounts(Array.isArray(a.accounts) ? a.accounts : []);
     } catch (e) {
       toast(e instanceof Error ? e.message : "Erro ao carregar lancamentos", "error");
@@ -50,11 +73,16 @@ export function ReconciliationEntries() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function toggle(t: Transaction) {
-    setBusyId(t.id);
+  async function toggle(row: ReconRow) {
+    setBusyId(row.id);
     try {
-      await reconcileTransaction(t.id, !t.reconciled);
-      toast(t.reconciled ? "Lancamento desconciliado." : "Lancamento conciliado e travado.");
+      if (row.kind === "group" && row.group) {
+        await reconcileTransactionGroup(row.group.id, !row.reconciled);
+        toast(row.reconciled ? "Grupo desconciliado." : "Grupo conciliado e travado.");
+      } else if (row.tx) {
+        await reconcileTransaction(row.tx.id, !row.reconciled);
+        toast(row.reconciled ? "Lancamento desconciliado." : "Lancamento conciliado e travado.");
+      }
       await load();
     } catch (e) {
       toast(e instanceof Error ? e.message : "Erro ao alterar conciliacao", "error");
@@ -68,22 +96,83 @@ export function ReconciliationEntries() {
     else { setSortColumn(col); setSortDirection("asc"); }
   };
 
+  const rows = useMemo<ReconRow[]>(() => {
+    const knownGroups = new Map(groups.map((g) => [g.id, g]));
+    const out: ReconRow[] = [];
+    const emittedGroups = new Set<string>();
+
+    for (const g of groups) {
+      emittedGroups.add(g.id);
+      out.push({
+        id: `group:${g.id}`,
+        kind: "group",
+        occurred_at: g.occurred_at,
+        type: g.type,
+        category_name: undefined,
+        description: g.description,
+        account_name: g.account_name,
+        amount: g.total_amount,
+        reconciled: g.reconciled,
+        member_count: g.member_count,
+        group: g,
+      });
+    }
+
+    for (const t of txns) {
+      if (t.voided_at) continue;
+      if (t.group_id) {
+        if (knownGroups.has(t.group_id)) continue;
+        // Grupo fora do retorno (fallback): agrega os membros por group_id.
+        if (emittedGroups.has(t.group_id)) continue;
+        const members = txns.filter((m) => m.group_id === t.group_id && !m.voided_at);
+        if (members.length > 0) {
+          emittedGroups.add(t.group_id);
+          out.push({
+            id: `group:${t.group_id}`,
+            kind: "group",
+            occurred_at: t.occurred_at,
+            type: t.type,
+            description: t.description,
+            account_name: t.account_name,
+            amount: members.reduce((sum, m) => sum + m.amount, 0),
+            reconciled: members.every((m) => m.reconciled),
+            member_count: members.length,
+          });
+        }
+        continue;
+      }
+      out.push({
+        id: t.id,
+        kind: "tx",
+        occurred_at: t.occurred_at,
+        entry_seq: t.entry_seq,
+        type: t.type,
+        category_name: t.category_name,
+        description: t.description,
+        account_name: t.account_name,
+        amount: t.amount,
+        reconciled: !!t.reconciled,
+        tx: t,
+      });
+    }
+    return out;
+  }, [txns, groups]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return txns.filter((t) => {
-      if (t.voided_at) return false;
+    return rows.filter((t) => {
       if (from && t.occurred_at < from) return false;
       if (to && t.occurred_at > to) return false;
       if (status === "reconciled" && !t.reconciled) return false;
       if (status === "pending" && t.reconciled) return false;
       if (q) {
-        const hay = [t.description, t.category_name, t.account_name, t.donor_name, t.supplier_name]
+        const hay = [t.description, t.category_name, t.account_name, t.tx?.donor_name, t.tx?.supplier_name]
           .filter(Boolean).join(" ").toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [txns, from, to, status, query]);
+  }, [rows, from, to, status, query]);
 
   // Saldo apos cada lancamento, na mesma logica do extrato: acumula por conta
   // bancaria a partir do saldo inicial, na ordem cronologica do razao.
@@ -108,13 +197,13 @@ export function ReconciliationEntries() {
     return out;
   }, [txns, accounts]);
 
-  const columns: Column<Transaction>[] = [
+  const columns: Column<ReconRow>[] = [
     {
       key: "occurred_at",
       label: "Data",
       sortable: true,
       width: "w-28",
-      sortValue: (t) => `${t.occurred_at}|${String(t.entry_seq ?? 999999999).padStart(9, "0")}|${t.created_at ?? ""}`,
+      sortValue: (t) => `${t.occurred_at}|${String(t.entry_seq ?? 999999999).padStart(9, "0")}`,
       render: (t) => <span className="text-zinc-500">{datePt(t.occurred_at)}</span>,
     },
     {
@@ -132,7 +221,19 @@ export function ReconciliationEntries() {
       width: "w-24",
       render: (t) => <Badge tone={t.type === "income" ? "green" : "red"}>{t.type === "income" ? "Entrada" : "Saida"}</Badge>,
     },
-    { key: "category_name", label: "Conta contabil", sortable: true, render: (t) => <span className="text-zinc-500">{t.category_name ?? "-"}</span> },
+    {
+      key: "category_name",
+      label: "Conta contabil",
+      sortable: true,
+      render: (t) =>
+        t.kind === "group" ? (
+          <Badge tone="indigo" className="gap-1">
+            <Layers className="h-3 w-3" /> {t.member_count ?? 0} itens
+          </Badge>
+        ) : (
+          <span className="text-zinc-500">{t.category_name ?? "-"}</span>
+        ),
+    },
     { key: "description", label: "Descricao", sortable: true, render: (t) => <span className="text-zinc-500">{t.description ?? "-"}</span> },
     { key: "account_name", label: "Conta", sortable: true, render: (t) => <span className="text-zinc-500">{t.account_name ?? "-"}</span> },
     {
@@ -148,8 +249,13 @@ export function ReconciliationEntries() {
       sortable: true,
       align: "right",
       width: "w-32",
-      sortValue: (t) => balanceAfter.get(t.id) ?? 0,
-      render: (t) => <span className="font-medium tabular-nums">{currency(balanceAfter.get(t.id) ?? 0)}</span>,
+      sortValue: (t) => (t.tx ? (balanceAfter.get(t.tx.id) ?? 0) : Number.MAX_SAFE_INTEGER),
+      render: (t) =>
+        t.tx ? (
+          <span className="font-medium tabular-nums">{currency(balanceAfter.get(t.tx.id) ?? 0)}</span>
+        ) : (
+          <span className="text-zinc-400">-</span>
+        ),
     },
     {
       key: "reconciled",
@@ -160,10 +266,14 @@ export function ReconciliationEntries() {
         <input
           type="checkbox"
           className="h-4 w-4 rounded border-zinc-300 text-sky-600"
-          checked={!!t.reconciled}
+          checked={t.reconciled}
           disabled={!canReconcile || busyId === t.id}
           onChange={() => toggle(t)}
-          title={t.reconciled ? "Desconciliar" : "Conciliar"}
+          title={
+            t.kind === "group"
+              ? (t.reconciled ? "Desconciliar grupo" : "Conciliar grupo")
+              : (t.reconciled ? "Desconciliar" : "Conciliar")
+          }
         />
       ),
     },
@@ -191,7 +301,8 @@ export function ReconciliationEntries() {
       </div>
       <p className="mb-2 flex items-center gap-1 text-xs text-zinc-500">
         <CheckCircle2 className="h-3.5 w-3.5" />
-        Marque um lançamento individualmente; ele fica travado imediatamente. O encerramento por periodo fica na aba Períodos.
+        Marque um lancamento individualmente; ele fica travado imediatamente. Lancamentos agrupados sao
+        conciliados em bloco (uma unica linha). O encerramento por periodo fica na aba Periodos.
       </p>
       <DataTable
         columns={columns}
