@@ -1187,6 +1187,7 @@ export interface BankImport {
 }
 export interface BankEntry {
   id: string;
+  line_no: number;
   posted_at: string;
   amount: number;
   direction: "income" | "expense";
@@ -1219,11 +1220,63 @@ export const generateBankEntry = (importId: string, entryId: string, data: Recor
     method: "POST",
     body: JSON.stringify(data),
   });
-/** Agrupa lancamentos e vincula a entrada do extrato ao grupo. */
-export const groupBankEntry = (importId: string, entryId: string, data: { transaction_ids: string[]; description?: string }) =>
+export interface NewGroupTransaction {
+  category_id: string;
+  amount: number;
+  description?: string;
+  donor_member_id?: string;
+  benefactor_id?: string;
+  donor_name?: string;
+  payment_method?: string;
+  is_anonymous?: boolean;
+}
+/** Agrupa lancamentos (existentes e/ou novos) e vincula a entrada do extrato ao grupo. */
+export const groupBankEntry = (
+  importId: string,
+  entryId: string,
+  data: { transaction_ids: string[]; new_transactions?: NewGroupTransaction[]; description?: string },
+) =>
   api<TransactionGroup>(`/api/v1/finance/bank-imports/${importId}/entries/${entryId}/group`, {
     method: "POST",
     body: JSON.stringify(data),
+  });
+export const generatePendingBankEntries = (importId: string, items: { entry_id: string; category_id: string; description?: string }[]) =>
+  api<{ generated: number }>(`/api/v1/finance/bank-imports/${importId}/generate-pending`, {
+    method: "POST",
+    body: JSON.stringify({ items }),
+  });
+export interface SequenceLine {
+  kind: "transaction" | "group";
+  id: string;
+  line_no?: number;
+  entry_seq?: number;
+  amount: number;
+  direction: "income" | "expense";
+  description?: string;
+}
+export interface SequenceSwap {
+  from_kind: "transaction" | "group";
+  from_id: string;
+  to_kind: "transaction" | "group";
+  to_id: string;
+}
+export interface SequenceSuggestion {
+  date: string;
+  account_id: string;
+  bank: SequenceLine[];
+  ledger: SequenceLine[];
+  suggested: { kind: "transaction" | "group"; id: string }[];
+  swaps: SequenceSwap[];
+  needs_reorder: boolean;
+  applicable: boolean;
+  reason?: string;
+}
+export const getBankSequenceSuggestions = (importId: string) =>
+  api<{ suggestions: SequenceSuggestion[] }>(`/api/v1/finance/bank-imports/${importId}/sequence-suggestions`);
+export const applyBankSequence = (importId: string, date: string, order: { kind: "transaction" | "group"; id: string }[]) =>
+  api<{ ok: boolean }>(`/api/v1/finance/bank-imports/${importId}/apply-sequence`, {
+    method: "POST",
+    body: JSON.stringify({ date, order }),
   });
 export const deleteBankImport = (id: string) =>
   api<{ ok: boolean }>(`/api/v1/finance/bank-imports/${id}`, { method: "DELETE" });

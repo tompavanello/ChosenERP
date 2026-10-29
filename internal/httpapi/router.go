@@ -349,6 +349,9 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/finance/bank-imports/{id}/entries/{entryId}/ignore", authed(app.perm("finance.write", app.handleIgnoreBankEntry)))
 	mux.Handle("POST /api/v1/finance/bank-imports/{id}/entries/{entryId}/generate", authed(app.perm("finance.write", app.handleGenerateBankEntry)))
 	mux.Handle("POST /api/v1/finance/bank-imports/{id}/entries/{entryId}/group", authed(app.perm("finance.write", app.handleGroupFromBankEntry)))
+	mux.Handle("POST /api/v1/finance/bank-imports/{id}/generate-pending", authed(app.perm("finance.write", app.handleGeneratePendingBankEntries)))
+	mux.Handle("GET /api/v1/finance/bank-imports/{id}/sequence-suggestions", authed(app.perm("finance.read", app.handleBankSequenceSuggestions)))
+	mux.Handle("POST /api/v1/finance/bank-imports/{id}/apply-sequence", authed(app.perm("finance.write", app.handleApplyBankSequence)))
 	mux.Handle("DELETE /api/v1/finance/bank-imports/{id}", authed(app.perm("finance.write", app.handleDeleteBankImport)))
 
 	// Fotos de membro (nome opaco) - unico uso publico dos uploads.

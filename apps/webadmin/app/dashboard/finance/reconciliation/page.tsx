@@ -22,7 +22,7 @@ export default function ReconciliationPage() {
     <div className="page">
       <PageHeader
         title="Conciliacao"
-        description="Concilie lancamentos individualmente ou encerre um periodo; o extrato bancario fica na aba Bancaria."
+        description="Concilie lancamentos, encerre o periodo pelo proprio conciliador e importe o extrato bancario na aba Bancaria."
       />
       <Tabs
         tabs={[

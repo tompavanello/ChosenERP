@@ -186,6 +186,105 @@ func (a *App) handleGenerateBankEntry(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"transaction": created})
 }
 
+func (a *App) handleGeneratePendingBankEntries(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var in struct {
+		Items []finance.GeneratePendingItem `json:"items"`
+	}
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
+		return
+	}
+	b := boundsFromClaims(claims)
+	allowed := false
+	generated := 0
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+		var err error
+		allowed, err = a.hasFinancePerm(r.Context(), tx, claims, "finance.write")
+		if err != nil || !allowed {
+			return err
+		}
+		branchID, err := a.writeBranchID(r.Context(), tx, claims)
+		if err != nil {
+			return err
+		}
+		generated, err = a.Finance.GeneratePendingFromBank(r.Context(), tx, claims.TenantID, branchID, r.PathValue("id"), in.Items)
+		return err
+	})
+	if err != nil {
+		if store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "importacao nao encontrada")
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !allowed {
+		writeErr(w, http.StatusForbidden, "sem permissao para lancar (finance.write)")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"generated": generated})
+}
+
+func (a *App) handleBankSequenceSuggestions(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var out []finance.SequenceSuggestion
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		var err error
+		out, err = a.Finance.BankSequenceSuggestions(r.Context(), tx, r.PathValue("id"))
+		return err
+	})
+	if err != nil {
+		if store.IsNotFound(err) || err == pgx.ErrNoRows {
+			writeErr(w, http.StatusNotFound, "importacao nao encontrada")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"suggestions": out})
+}
+
+func (a *App) handleApplyBankSequence(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var in struct {
+		Date  string            `json:"date"`
+		Order []finance.LineRef `json:"order"`
+	}
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
+		return
+	}
+	if in.Date == "" {
+		writeErr(w, http.StatusBadRequest, "informe a data")
+		return
+	}
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		return a.Finance.ApplyBankSequence(r.Context(), tx, r.PathValue("id"), in.Date, in.Order)
+	})
+	if err != nil {
+		if store.IsNotFound(err) || err == pgx.ErrNoRows {
+			writeErr(w, http.StatusNotFound, "importacao ou linha nao encontrada")
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (a *App) handleDeleteBankImport(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
