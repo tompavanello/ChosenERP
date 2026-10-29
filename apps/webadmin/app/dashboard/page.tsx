@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/auth-provider";
 import { getBalance, getMonthlyBalance, listMembers, listVisitors, type Balance, type MonthlyPoint } from "@/lib/api";
 import { currency, monthLabel, number } from "@/lib/format";
+import { ACCOUNT_TYPES } from "@/lib/constants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BirthdaysSummaryCard } from "@/components/reports/birthdays-summary-card";
 
@@ -119,6 +120,16 @@ export default function OverviewPage() {
         <StatCard label="Membros" value={members != null ? number(members) : "..."} icon={Users} tone="sky" />
         <StatCard label="Visitantes" value={visitors != null ? number(visitors) : "..."} icon={DoorOpen} tone="amber" />
       </div>
+
+      {hasPerm("finance.read") && (balance?.by_account_type?.length ?? 0) > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          {(balance?.by_account_type ?? []).map((b) => (
+            <span key={b.account_type} className="rounded border border-zinc-200 bg-white px-2.5 py-1 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
+              {ACCOUNT_TYPES[b.account_type] ?? b.account_type}: <b className="tabular-nums">{currency(b.net)}</b>
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Aniversariantes do mes - resumo (total do mes e quantos hoje) */}
       {hasPerm("members.read") && <BirthdaysSummaryCard className="mt-6" />}

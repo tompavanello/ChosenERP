@@ -907,6 +907,7 @@ func (r *Repo) GroupFromBankEntry(ctx context.Context, tx pgx.Tx, tenantID, acto
 		WHERE id = ANY($1::uuid[]) AND tenant_id = $2::uuid
 		  AND account_id = $3::uuid AND type = $4
 		  AND voided_at IS NULL AND group_id IS NULL AND reconciled_at IS NULL
+		  AND account_transfer_id IS NULL
 		  AND NOT EXISTS (
 		      SELECT 1 FROM bank_statement_entries e
 		      WHERE e.transaction_id = financial_transactions.id

@@ -640,6 +640,7 @@ export function ReconciliationPanel() {
           }}
           emptyMessage="Sem lancamentos"
           emptyDescription="Nenhum lancamento no periodo desta conciliacao."
+          maxHeight="max(280px, calc(100vh - 340px))"
           compact
         />
 
@@ -684,6 +685,7 @@ export function ReconciliationPanel() {
         loading={list === null}
         emptyMessage={list && list.length > 0 ? "Nenhuma conciliacao no filtro" : "Nenhuma conciliacao"}
         emptyDescription={list && list.length > 0 ? "Ajuste a busca." : "Crie uma conciliacao para um periodo e concilie."}
+        maxHeight="max(240px, calc(100vh - 260px))"
       />
 
       <Drawer open={showNew} onClose={() => setShowNew(false)} title="Nova conciliacao">

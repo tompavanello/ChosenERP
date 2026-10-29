@@ -469,7 +469,7 @@ export function TransactionForm({
               <option value="" disabled>Selecione a conta...</option>
               {availableAccounts.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.name} - saldo inicial {currency(a.initial_balance)}{a.is_active ? "" : " (inativa)"}
+                  {a.name} - {ACCOUNT_TYPES[a.account_type] ?? a.account_type} - saldo inicial {currency(a.initial_balance)}{a.is_active ? "" : " (inativa)"}
                 </option>
               ))}
             </Select>

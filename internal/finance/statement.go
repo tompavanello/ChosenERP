@@ -144,7 +144,8 @@ func (r *Repo) BuildMonthlyStatement(ctx context.Context, tx pgx.Tx, month strin
 	if err := tx.QueryRow(ctx, `
 		SELECT COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END), 0)::float8
 		FROM financial_transactions
-		WHERE occurred_at < $1::date AND voided_at IS NULL`, first).Scan(&st.OpeningBalance); err != nil {
+		WHERE occurred_at < $1::date AND voided_at IS NULL
+		  AND account_transfer_id IS NULL`, first).Scan(&st.OpeningBalance); err != nil {
 		return st, err
 	}
 
@@ -193,6 +194,7 @@ func (r *Repo) BuildMonthlyStatement(ctx context.Context, tx pgx.Tx, month strin
 		FROM financial_transactions t
 		WHERE t.occurred_at >= $2::date AND t.occurred_at < $3::date
 		  AND t.voided_at IS NULL
+		  AND t.account_transfer_id IS NULL
 		  AND t.category_id IS NOT NULL
 		GROUP BY 1, 2`, weekStart, first, next)
 	if err != nil {

@@ -314,19 +314,19 @@ type Tenant struct {
 
 // TenantInput e o corpo de edicao do tenant.
 type TenantInput struct {
-	Name         string  `json:"name"`
-	Slug         *string `json:"slug"`
-	LegalName    *string `json:"legal_name"`
-	CNPJ         *string `json:"cnpj"`
-	Plan         *string `json:"plan"`
-	Locale       *string `json:"locale"`
-	Timezone     *string `json:"timezone"`
-	LogoURL      *string `json:"logo_url"`
-	BrandColor   *string `json:"brand_color"`
-	FaviconURL   *string `json:"favicon_url"`
-	CustomDomain *string `json:"custom_domain"`
-	PixKey       *string `json:"pix_key"`
-	PixName      *string `json:"pix_name"`
+	Name           string  `json:"name"`
+	Slug           *string `json:"slug"`
+	LegalName      *string `json:"legal_name"`
+	CNPJ           *string `json:"cnpj"`
+	Plan           *string `json:"plan"`
+	Locale         *string `json:"locale"`
+	Timezone       *string `json:"timezone"`
+	LogoURL        *string `json:"logo_url"`
+	BrandColor     *string `json:"brand_color"`
+	FaviconURL     *string `json:"favicon_url"`
+	CustomDomain   *string `json:"custom_domain"`
+	PixKey         *string `json:"pix_key"`
+	PixName        *string `json:"pix_name"`
 	BibleVersionID *string `json:"bible_version_id"`
 }
 
@@ -455,10 +455,12 @@ func (r *Repo) Consolidated(ctx context.Context, tx pgx.Tx, from, to string) ([]
 			(SELECT count(*) FROM visitors v WHERE v.branch_id = b.id)::int,
 			COALESCE((SELECT sum(t.amount) FROM financial_transactions t
 				WHERE t.branch_id = b.id AND t.type = 'income' AND t.voided_at IS NULL
+				  AND t.account_transfer_id IS NULL
 				  AND ($1 = '' OR t.occurred_at::date >= $1::date)
 				  AND ($2 = '' OR t.occurred_at::date <= $2::date)), 0)::float8,
 			COALESCE((SELECT sum(t.amount) FROM financial_transactions t
 				WHERE t.branch_id = b.id AND t.type = 'expense' AND t.voided_at IS NULL
+				  AND t.account_transfer_id IS NULL
 				  AND ($1 = '' OR t.occurred_at::date >= $1::date)
 				  AND ($2 = '' OR t.occurred_at::date <= $2::date)), 0)::float8
 		FROM branches b

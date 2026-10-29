@@ -24,6 +24,7 @@ import {
   type Transaction, type SequenceSuggestion, type NewGroupTransaction,
 } from "@/lib/api";
 import { currency, datePt } from "@/lib/format";
+import { ACCOUNT_TYPES } from "@/lib/constants";
 
 const ENTRY_STATUS: Record<
   BankEntry["status"],
@@ -229,7 +230,7 @@ export function BankReconciliationPanel() {
       const accountID = selected.account_id ?? "";
       const candidates = (Array.isArray(r.transactions) ? r.transactions : [])
         .filter((t) =>
-          !t.voided_at && !t.reconciled && !t.group_id &&
+          !t.voided_at && !t.reconciled && !t.group_id && !t.account_transfer_id &&
           t.account_id === accountID && t.type === entry.direction,
         )
         .sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
@@ -664,6 +665,7 @@ export function BankReconciliationPanel() {
           emptyIcon={<Landmark className="h-10 w-10" />}
           emptyMessage="Extrato vazio"
           emptyDescription="Nenhuma linha importada."
+          maxHeight="max(320px, calc(100vh - 620px))"
           compact
         />
 
@@ -676,6 +678,7 @@ export function BankReconciliationPanel() {
           emptyIcon={<CheckCircle2 className="h-10 w-10" />}
           emptyMessage="Sem divergencias"
           emptyDescription="Todos os lancamentos do periodo tem correspondencia no extrato."
+          maxHeight="max(200px, calc(100vh - 940px))"
           compact
         />
 
@@ -946,6 +949,7 @@ export function BankReconciliationPanel() {
         emptyIcon={<Landmark className="h-10 w-10" />}
         emptyMessage="Nenhum extrato importado"
         emptyDescription="Importe um arquivo OFX ou CSV do seu banco."
+        maxHeight="max(240px, calc(100vh - 260px))"
       />
 
       <Drawer open={showImport} onClose={() => setShowImport(false)} title="Importar extrato bancario">
@@ -953,7 +957,7 @@ export function BankReconciliationPanel() {
           <Field label="Conta bancaria *">
             <Select value={impForm.account_id} onChange={(e) => setImpForm({ account_id: e.target.value })}>
               <option value="">Selecione...</option>
-              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} - {ACCOUNT_TYPES[a.account_type] ?? a.account_type}</option>)}
             </Select>
           </Field>
           <Field label="Arquivo (OFX ou CSV) *">
@@ -981,3 +985,4 @@ export function BankReconciliationPanel() {
     </div>
   );
 }
+

@@ -292,6 +292,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("PATCH /api/v1/finance/category-groups/{id}", authed(app.perm("finance.write", app.handleUpdateCategoryGroup)))
 	mux.Handle("DELETE /api/v1/finance/category-groups/{id}", authed(app.perm("finance.write", app.handleDeleteCategoryGroup)))
 	mux.Handle("GET /api/v1/finance/accounts", authed(app.perm("finance.read", app.handleListAccounts)))
+	mux.Handle("GET /api/v1/finance/accounts/balances", authed(app.perm("finance.read", app.handleListAccountBalances)))
 	mux.Handle("POST /api/v1/finance/accounts", authed(app.perm("finance.write", app.handleCreateAccount)))
 	mux.Handle("PATCH /api/v1/finance/accounts/{id}", authed(app.perm("finance.write", app.handleUpdateAccount)))
 	mux.Handle("DELETE /api/v1/finance/accounts/{id}", authed(app.perm("finance.write", app.handleDeleteAccount)))
@@ -308,6 +309,10 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/finance/transactions/reconcile-batch", authed(app.perm("finance.reconcile", app.handleReconcileTxnBatch)))
 	mux.Handle("GET /api/v1/finance/split", authed(app.perm("finance.read", app.handleGetSplit)))
 	mux.Handle("PUT /api/v1/finance/split", authed(app.perm("finance.write", app.handlePutSplit)))
+	// Transferencias entre contas bancarias (deposito/resgate de aplicacao).
+	mux.Handle("GET /api/v1/finance/account-transfers", authed(app.perm("finance.read", app.handleListAccountTransfers)))
+	mux.Handle("POST /api/v1/finance/account-transfers", authed(app.perm("finance.write", app.handleCreateAccountTransfer)))
+	mux.Handle("DELETE /api/v1/finance/account-transfers/{id}", authed(app.perm("finance.write", app.handleDeleteAccountTransfer)))
 	mux.Handle("PATCH /api/v1/finance/transactions/{id}", authed(app.perm("finance.write", app.handleUpdateTxn)))
 	mux.Handle("DELETE /api/v1/finance/transactions/{id}", authed(app.perm("finance.write", app.handleDeleteTxn)))
 	mux.Handle("GET /api/v1/finance/transactions/{id}/events", authed(app.perm("finance.read", app.handleListTxnEvents)))

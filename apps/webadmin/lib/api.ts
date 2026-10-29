@@ -282,7 +282,7 @@ export interface BankAccount {
   bank_code?: string;
   agency?: string;
   account_number?: string;
-  account_type: "checking" | "savings" | "cash";
+  account_type: "checking" | "savings" | "cash" | "investment";
   initial_balance: number;
   is_active: boolean;
   created_at: string;
@@ -332,6 +332,10 @@ export interface Transaction {
   /** Grupo bancario ao qual o lancamento pertence (uma linha no extrato). */
   group_id?: string;
   group_status?: "agrupado" | "conciliado";
+  /** Perna de transferencia entre contas (deposito/resgate). */
+  account_transfer_id?: string;
+  transfer_kind?: "deposit" | "redeem" | "transfer";
+  counterpart_account_name?: string;
 }
 
 export interface TransactionGroupMember {
@@ -402,11 +406,54 @@ export interface DRE {
   lines: DRELine[];
   comparison?: { prev_income: number; prev_expense: number; prev_net: number; delta_pct: number };
 }
+export interface AccountTypeBalance {
+  account_type: "checking" | "savings" | "cash" | "investment";
+  initial_balance: number;
+  income: number;
+  expense: number;
+  net: number;
+}
 export interface Balance {
   income: number;
   expense: number;
   net: number;
   by_category: { category_id: string; code: string; category: string; type: string; total: number }[];
+  by_account_type: AccountTypeBalance[];
+}
+export interface AccountBalance {
+  id: string;
+  branch_id?: string;
+  name: string;
+  bank?: string;
+  account_type: "checking" | "savings" | "cash" | "investment";
+  initial_balance: number;
+  income: number;
+  expense: number;
+  balance: number;
+  is_active: boolean;
+}
+export interface AccountBalances {
+  as_of?: string;
+  accounts: AccountBalance[];
+  by_account_type: AccountTypeBalance[];
+  total: number;
+}
+export interface AccountTransfer {
+  id: string;
+  branch_id: string;
+  from_account_id: string;
+  from_account_name?: string;
+  to_account_id: string;
+  to_account_name?: string;
+  kind: "deposit" | "redeem" | "transfer";
+  amount: number;
+  occurred_at: string;
+  description?: string;
+  created_at: string;
+  from_transaction_id?: string;
+  to_transaction_id?: string;
+  from_reconciled: boolean;
+  to_reconciled: boolean;
 }
 export interface Relationship {
   id: string;
@@ -1058,6 +1105,30 @@ export const createAccount = (data: Record<string, unknown>) =>
   api<BankAccount>("/api/v1/finance/accounts", { method: "POST", body: JSON.stringify(data) });
 export const updateAccount = (id: string, data: Record<string, unknown>) =>
   api<BankAccount>(`/api/v1/finance/accounts/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export const getAccountBalances = (asOf = "") => {
+  const q = new URLSearchParams();
+  if (asOf) q.set("as_of", asOf);
+  const qs = q.toString();
+  return api<AccountBalances>(`/api/v1/finance/accounts/balances${qs ? `?${qs}` : ""}`);
+};
+export const listAccountTransfers = (from = "", to = "", accountId = "") => {
+  const q = new URLSearchParams();
+  if (from) q.set("from", from);
+  if (to) q.set("to", to);
+  if (accountId) q.set("account_id", accountId);
+  const qs = q.toString();
+  return api<{ transfers: AccountTransfer[] }>(`/api/v1/finance/account-transfers${qs ? `?${qs}` : ""}`);
+};
+export const createAccountTransfer = (data: {
+  from_account_id: string;
+  to_account_id: string;
+  kind: "deposit" | "redeem" | "transfer";
+  amount: number;
+  occurred_at: string;
+  description?: string;
+}) => api<AccountTransfer>("/api/v1/finance/account-transfers", { method: "POST", body: JSON.stringify(data) });
+export const deleteAccountTransfer = (id: string) =>
+  api<{ ok: boolean }>(`/api/v1/finance/account-transfers/${id}`, { method: "DELETE" });
 export const deleteAccount = (id: string) =>
   api<{ ok: boolean }>(`/api/v1/finance/accounts/${id}`, { method: "DELETE" });
 

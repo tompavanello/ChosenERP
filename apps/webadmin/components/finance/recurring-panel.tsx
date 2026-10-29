@@ -8,6 +8,7 @@ import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input, Field, Select } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { ACCOUNT_TYPES } from "@/lib/constants";
 import { SkeletonRows, EmptyState } from "@/components/ui/skeleton";
 import { Drawer } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
@@ -155,7 +156,7 @@ export function RecurringPanel() {
               onChange={(e) => setForm({ ...form, account_id: e.target.value })}
             >
               <option value="" disabled>Selecione a conta...</option>
-              {accts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
+              {accts.map((a) => (<option key={a.id} value={a.id}>{a.name} - {ACCOUNT_TYPES[a.account_type] ?? a.account_type}</option>))}
             </Select>
             {accts.length === 0 && (
               <p className="mt-1 text-xs text-red-600">
@@ -194,3 +195,4 @@ export function RecurringPanel() {
     </div>
   );
 }
+

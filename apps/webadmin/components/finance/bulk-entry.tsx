@@ -17,7 +17,7 @@ import {
   type Category, type BankAccount, type Member, type Benefactor, type Supplier, type ChurchEvent,
   type ImportResult,
 } from "@/lib/api";
-import { PAYMENT_METHODS } from "@/lib/constants";
+import { ACCOUNT_TYPES, PAYMENT_METHODS } from "@/lib/constants";
 import { currency, todayISO } from "@/lib/format";
 
 // Linha editavel do grid. `key` e apenas local (nao vai para o backend).
@@ -281,7 +281,7 @@ export function BulkEntry({
           >
             <option value="" disabled>Selecione a conta...</option>
             {accounts.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
+              <option key={a.id} value={a.id}>{a.name} - {ACCOUNT_TYPES[a.account_type] ?? a.account_type}</option>
             ))}
           </Select>
         </div>
@@ -497,7 +497,7 @@ export function BulkEntry({
                             >
                               <option value="">-</option>
                               {accounts.map((a) => (
-                                <option key={a.id} value={a.id}>{a.name}</option>
+                                <option key={a.id} value={a.id}>{a.name} - {ACCOUNT_TYPES[a.account_type] ?? a.account_type}</option>
                               ))}
                             </Select>
                           </SubField>
@@ -655,3 +655,4 @@ export function BulkEntry({
     </div>
   );
 }
+

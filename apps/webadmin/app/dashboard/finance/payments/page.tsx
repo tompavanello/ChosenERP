@@ -15,6 +15,7 @@ import { EmptyState, SkeletonRows } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
 import { currency, datePt } from "@/lib/format";
+import { ACCOUNT_TYPES } from "@/lib/constants";
 import {
   listPaymentProducts, createPaymentProduct, updatePaymentProduct, deletePaymentProduct,
   listPaymentCharges, createPaymentCharge, refundPaymentCharge,
@@ -434,7 +435,7 @@ export default function PaymentMethodsPage() {
               >
                 <option value="" disabled>Selecione...</option>
                 {accounts.filter((a) => a.is_active || a.id === productForm.account_id).map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}{a.is_active ? "" : " (inativa)"}</option>
+                  <option key={a.id} value={a.id}>{a.name} - {ACCOUNT_TYPES[a.account_type] ?? a.account_type}{a.is_active ? "" : " (inativa)"}</option>
                 ))}
               </Select>
               {accounts.filter((a) => a.is_active).length === 0 && (
@@ -532,3 +533,5 @@ export default function PaymentMethodsPage() {
     </div>
   );
 }
+
+

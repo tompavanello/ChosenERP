@@ -104,6 +104,7 @@ func (r *Repo) CreateGroup(ctx context.Context, tx pgx.Tx, tenantID, actorID str
 	rows, err := tx.Query(ctx, `
 		SELECT id::text, tenant_id::text, branch_id::text, COALESCE(account_id::text,''),
 		       type, amount::float8, voided_at, reconciled_at, group_id::text,
+		       account_transfer_id::text,
 		       (occurred_at AT TIME ZONE 'UTC')::date::text
 		FROM financial_transactions
 		WHERE id = ANY($1::uuid[])
@@ -118,11 +119,15 @@ func (r *Repo) CreateGroup(ctx context.Context, tx pgx.Tx, tenantID, actorID str
 		var id, tTenant, tBranch, tAccount, tType, tDate string
 		var amount float64
 		var voidedAt, reconciledAt *time.Time
-		var groupID *string
+		var groupID, transferID *string
 		if err := rows.Scan(&id, &tTenant, &tBranch, &tAccount, &tType, &amount,
-			&voidedAt, &reconciledAt, &groupID, &tDate); err != nil {
+			&voidedAt, &reconciledAt, &groupID, &transferID, &tDate); err != nil {
 			rows.Close()
 			return nil, err
+		}
+		if transferID != nil {
+			rows.Close()
+			return nil, ErrTransactionIsTransfer
 		}
 		if found == 0 {
 			rowTenant, branch, account, kind, memberDate = tTenant, tBranch, tAccount, tType, tDate

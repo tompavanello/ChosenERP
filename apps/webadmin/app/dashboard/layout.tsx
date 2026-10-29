@@ -52,6 +52,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
     items: [
       { key: "finance", href: "/dashboard/finance", label: "Financeiro", icon: Wallet, perms: ["finance.read"], feature: "finance" },
       { key: "reconciliation", href: "/dashboard/finance/reconciliation", label: "Conciliacao", icon: ClipboardCheck, perms: ["finance.read"], feature: "finance" },
+      { key: "account-transfers", href: "/dashboard/finance/account-transfers", label: "Transferencias entre contas", icon: ArrowLeftRight, perms: ["finance.read"], feature: "finance" },
       { key: "rep-account-statement", href: "/dashboard/reports/account-statement", label: "Extrato de conta corrente", icon: ScrollText, perms: ["finance.read"], feature: "finance" },
       { key: "payments", href: "/dashboard/finance/payments", label: "Meios de pagamento", icon: CreditCard, perms: ["payments.read"], feature: "finance" },
       { key: "audit", href: "/dashboard/reports/audit", label: "Auditoria financeira", icon: ShieldCheck, perms: ["finance.read"], feature: "finance" },

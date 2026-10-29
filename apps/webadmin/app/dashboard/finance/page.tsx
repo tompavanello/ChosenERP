@@ -19,16 +19,16 @@ import {
    listCategories, listTransactions, getBalance,
    getReceiptHTML, sendReceipt, createCategory, updateCategory, deleteCategory,
    listCategoryGroups, createCategoryGroup, updateCategoryGroup, deleteCategoryGroup,
-   listAccounts, createAccount, updateAccount, deleteAccount,
+   listAccounts, createAccount, updateAccount, deleteAccount, getAccountBalances,
    uploadAttachment, listAttachments, listDeliveries, updateTransaction, deleteTransaction, settleTransaction,
    reconcileTransaction, downloadFinancialAttachment, reconcileTransactionGroup,
    listTransactionEvents, previewTransactions, importTransactionsFile, reorderFinanceLines,
    listTransactionGroups,
    type Category, type CategoryGroup, type Transaction, type Balance, type BankAccount,
    type FinancialAttachment, type Delivery, type ImportResult, type EventAllocation,
-   type TransactionGroup,
+   type TransactionGroup, type AccountBalances,
  } from "@/lib/api";
-import { PAYMENT_METHODS, ACCOUNT_TYPES } from "@/lib/constants";
+import { PAYMENT_METHODS, ACCOUNT_TYPES, TRANSFER_KINDS } from "@/lib/constants";
 import { currency, datePt, dateTimePt, monthEndISO, monthStartISO, todayISO } from "@/lib/format";
 import { downloadCSVTemplate } from "@/lib/template";
 import { RecurringPanel } from "@/components/finance/recurring-panel";
@@ -163,6 +163,7 @@ export default function FinancePage() {
   const [groupForm, setGroupForm] = useState({ name: "", sort_order: "" });
   const [editingGroup, setEditingGroup] = useState<CategoryGroup | null>(null);
   const [acctForm, setAcctForm] = useState({ name: "", bank: "", bank_code: "", agency: "", account_number: "", account_type: "checking", initial_balance: "" });
+  const [accountBalances, setAccountBalances] = useState<AccountBalances | null>(null);
   const [editingCat, setEditingCat] = useState<Category | null>(null);
   const [editingAcct, setEditingAcct] = useState<BankAccount | null>(null);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
@@ -171,14 +172,16 @@ export default function FinancePage() {
 
   // Dados de apoio (plano de contas, grupos e contas) - carregados uma vez.
   const loadBase = useCallback(async () => {
-    const [cat, grp, accts] = await Promise.all([
+    const [cat, grp, accts, bals] = await Promise.all([
       listCategories().catch(() => ({ categories: [] })),
       listCategoryGroups().catch(() => ({ groups: [] })),
       listAccounts().catch(() => ({ accounts: [] })),
+      getAccountBalances().catch(() => null),
     ]);
     setCategories(cat.categories);
     setGroups(grp.groups);
     setAccounts(accts.accounts);
+    setAccountBalances(bals);
   }, []);
 
   // Saldo atual da igreja (todo o historico), independente do periodo do grid.
@@ -481,8 +484,17 @@ export default function FinancePage() {
       render: (t) => (
         <div>
           <p className="font-medium">
-            {t._kind === "group" ? <Badge tone="indigo">{t._members?.length ?? 0} itens</Badge> : (t.category_name ?? "-")}
+            {t._kind === "group" ? (
+              <Badge tone="indigo">{t._members?.length ?? 0} itens</Badge>
+            ) : t.account_transfer_id ? (
+              <Badge tone="sky">{TRANSFER_KINDS[t.transfer_kind ?? "transfer"] ?? "Transferencia"}</Badge>
+            ) : (
+              t.category_name ?? "-"
+            )}
           </p>
+          {t.counterpart_account_name && (
+            <p className="text-xs text-zinc-400">{t.counterpart_account_name}</p>
+          )}
           {t.payment_method && <p className="text-xs text-zinc-400">{PAYMENT_METHODS[t.payment_method] ?? t.payment_method}</p>}
         </div>
       ),
@@ -594,7 +606,7 @@ export default function FinancePage() {
                 {t.reconciled ? <RotateCcw className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
               </Button>
             )}
-            {!t.voided_at && !t.reconciled && hasPerm("finance.write") && (
+            {!t.voided_at && !t.reconciled && !t.account_transfer_id && hasPerm("finance.write") && (
               <>
                 {t.type === "expense" && (
                   <Button variant="ghost" size="sm" onClick={() => togglePaid(t)} title={t.paid_at ? "Reabrir" : "Quitar"}>
@@ -978,7 +990,7 @@ export default function FinancePage() {
         toast("Conta criada.");
       }
       closeAcctForm();
-      setAccounts(await listAccounts().then((r) => r.accounts));
+      await loadBase();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro", "error");
     }
@@ -1003,7 +1015,7 @@ export default function FinancePage() {
   async function toggleAccountActive(a: BankAccount) {
     try {
       await updateAccount(a.id, { is_active: !a.is_active });
-      setAccounts(await listAccounts().then((r) => r.accounts));
+      await loadBase();
       toast(a.is_active ? "Conta desativada." : "Conta reativada.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro", "error");
@@ -1015,7 +1027,7 @@ export default function FinancePage() {
     try {
       await deleteAccount(a.id);
       toast("Conta excluida.");
-      setAccounts(await listAccounts().then((r) => r.accounts));
+      await loadBase();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro", "error");
     }
@@ -1023,6 +1035,11 @@ export default function FinancePage() {
 
   const incomeCats = categories.filter((c) => c.type === "income");
   const expenseCats = categories.filter((c) => c.type === "expense");
+  const balanceByAccount = useMemo(
+    () => new Map((accountBalances?.accounts ?? []).map((a) => [a.id, a])),
+    [accountBalances],
+  );
+  const hasInvestment = accounts.some((a) => a.account_type === "investment");
 
   function changeFrom(v: string) {
     setFrom(v);
@@ -1070,11 +1087,19 @@ export default function FinancePage() {
 
       {tab === "lancamentos" && (
         <>
-          <div className="mb-6 grid gap-4 md:grid-cols-3">
+          <div className="mb-4 grid gap-4 md:grid-cols-3">
             <StatCard label="Entradas" value={balance ? currency(balance.income) : "..."} icon={ArrowUpRight} tone="green" />
             <StatCard label="Saidas" value={balance ? currency(balance.expense) : "..."} icon={ArrowDownRight} tone="red" />
             <StatCard label="Saldo atual" value={balance ? currency(balance.net) : "..."} icon={Wallet} tone="sky" />
           </div>
+          <div className="mb-6 flex flex-wrap gap-2 text-xs">
+            {(balance?.by_account_type ?? []).map((b) => (
+              <span key={b.account_type} className="rounded border border-zinc-200 bg-white px-2.5 py-1 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
+                {ACCOUNT_TYPES[b.account_type] ?? b.account_type}: <b className="tabular-nums">{currency(b.net)}</b>
+              </span>
+            ))}
+          </div>
+
 
           {hasPerm("finance.write") && (
             <Card className="mb-6 p-4">
@@ -1159,7 +1184,7 @@ export default function FinancePage() {
               selectedKeys: selectedTx,
               onSelectionChange: setSelectedTx,
               keyExtractor: (t) => t.id,
-              isRowSelectable: (t) => t._kind !== "group",
+              isRowSelectable: (t) => t._kind !== "group" && !t.account_transfer_id,
             }}
             expansion={{
               expandedKeys: expandedRows,
@@ -1274,25 +1299,69 @@ export default function FinancePage() {
 
       {tab === "contas" && (
         <Card className="overflow-hidden p-0">
-          <div className="flex items-center justify-between border-b border-zinc-100 p-4">
-            <h3 className="text-sm font-semibold text-zinc-700">Contas bancarias</h3>
-            {hasPerm("finance.write") && <Button size="sm" onClick={() => setShowAcctForm(true)}><Plus className="h-4 w-4" /> Conta</Button>}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 p-4">
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-700">Contas bancarias</h3>
+              <p className="mt-0.5 text-xs text-zinc-400">Saldo atual = saldo inicial + movimentacoes, separado por tipo de conta.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {hasPerm("finance.write") && (
+                <Button size="sm" variant="outline" onClick={() => { window.location.href = "/dashboard/finance/account-transfers"; }}>
+                  <ArrowDownRight className="h-4 w-4" /> Transferencias
+                </Button>
+              )}
+              {hasPerm("finance.write") && <Button size="sm" onClick={() => setShowAcctForm(true)}><Plus className="h-4 w-4" /> Conta</Button>}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 border-b border-zinc-100 px-4 py-2 text-xs dark:border-zinc-800">
+            {(accountBalances?.by_account_type ?? []).map((b) => (
+              <span key={b.account_type} className="rounded bg-zinc-100 px-2 py-1 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+                {ACCOUNT_TYPES[b.account_type] ?? b.account_type}: <b className="tabular-nums">{currency(b.net)}</b>
+              </span>
+            ))}
+            {accountBalances && (
+              <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
+                Total: <b className="tabular-nums">{currency(accountBalances.total)}</b>
+              </span>
+            )}
           </div>
           <Table>
-            <THead><TRow><TH>Nome</TH><TH>Banco</TH><TH>Agencia</TH><TH>Conta</TH><TH>Tipo</TH><TH className="text-right">Saldo Inicial</TH><TH>Ativa</TH><TH></TH></TRow></THead>
+            <THead><TRow><TH>Nome</TH><TH>Tipo</TH><TH>Banco</TH><TH>Agencia</TH><TH>Conta</TH><TH className="text-right">Saldo Inicial</TH><TH className="text-right">Saldo Atual</TH><TH>Ativa</TH><TH></TH></TRow></THead>
             <TBody>
-              {accounts.map((a) => (
+              {accounts.map((a) => {
+                const bal = balanceByAccount.get(a.id);
+                return (
                 <TRow key={a.id}>
                   <TD className="font-medium">{a.name}</TD>
+                  <TD><Badge tone={a.account_type === "investment" ? "indigo" : "zinc"}>{ACCOUNT_TYPES[a.account_type] ?? a.account_type}</Badge></TD>
                   <TD className="text-zinc-500">{a.bank ?? "-"}</TD>
                   <TD className="text-zinc-500">{a.agency ?? "-"}</TD>
                   <TD className="text-zinc-500">{a.account_number ?? "-"}</TD>
-                  <TD className="text-zinc-500">{ACCOUNT_TYPES[a.account_type] ?? a.account_type}</TD>
                   <TD className="text-right text-zinc-500">{currency(a.initial_balance)}</TD>
+                  <TD className={`text-right font-semibold tabular-nums ${(bal?.balance ?? a.initial_balance) >= 0 ? "text-sky-700" : "text-red-600"}`}>
+                    {currency(bal?.balance ?? a.initial_balance)}
+                  </TD>
                   <TD><Badge tone={a.is_active ? "green" : "zinc"}>{a.is_active ? "Sim" : "Nao"}</Badge></TD>
                   <TD className="text-center">
                     {hasPerm("finance.write") && (
                       <div className="flex justify-center gap-1">
+                        {a.account_type === "investment" ? (
+                          <Button
+                            variant="ghost" size="sm"
+                            onClick={() => { window.location.href = `/dashboard/finance/account-transfers?kind=redeem&from=${a.id}`; }}
+                            title="Resgatar desta aplicacao"
+                          >
+                            Resgatar
+                          </Button>
+                        ) : hasInvestment ? (
+                          <Button
+                            variant="ghost" size="sm"
+                            onClick={() => { window.location.href = `/dashboard/finance/account-transfers?kind=deposit&from=${a.id}`; }}
+                            title="Aplicar a partir desta conta"
+                          >
+                            Aplicar
+                          </Button>
+                        ) : null}
                         <Button
                           variant="ghost" size="sm"
                           onClick={() => toggleAccountActive(a)}
@@ -1309,8 +1378,9 @@ export default function FinancePage() {
                     )}
                   </TD>
                 </TRow>
-              ))}
-              {accounts.length === 0 && <TRow><TD colSpan={8} className="py-8 text-center text-zinc-400">Nenhuma conta cadastrada.</TD></TRow>}
+                );
+              })}
+              {accounts.length === 0 && <TRow><TD colSpan={9} className="py-8 text-center text-zinc-400">Nenhuma conta cadastrada.</TD></TRow>}
             </TBody>
           </Table>
         </Card>
@@ -1769,3 +1839,5 @@ export default function FinancePage() {
     </div>
   );
 }
+
+

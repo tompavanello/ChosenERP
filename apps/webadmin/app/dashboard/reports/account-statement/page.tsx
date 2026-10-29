@@ -16,7 +16,8 @@ import {
   listAccounts, getAccountStatement, createTransaction, updateTransaction, deleteTransaction,
   type AccountStatement, type AccountStatementLine, type BankAccount, type Transaction,
 } from "@/lib/api";
-import { currency, datePt } from "@/lib/format";
+import { currency, datePt, todayISO } from "@/lib/format";
+import { ACCOUNT_TYPES } from "@/lib/constants";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import { TransactionForm, type TransactionFormState } from "@/components/finance/transaction-form";
 import { GroupDetailDrawer } from "@/components/finance/transaction-group";
@@ -58,6 +59,7 @@ export default function AccountStatementPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const [yieldMode, setYieldMode] = useState(false);
 
   useEffect(() => {
     listAccounts()
@@ -122,11 +124,19 @@ export default function AccountStatementPage() {
 
   function openNew() {
     setEditing(null);
+    setYieldMode(false);
+    setFormOpen(true);
+  }
+
+  function openYield() {
+    setEditing(null);
+    setYieldMode(true);
     setFormOpen(true);
   }
 
   function openEdit(l: AccountStatementLine) {
     setEditing(l);
+    setYieldMode(false);
     setFormOpen(true);
   }
 
@@ -168,7 +178,14 @@ export default function AccountStatementPage() {
         cost_center: editing.cost_center ?? "",
         paid: !!editing.paid_at,
       }
-    : undefined;
+    : yieldMode && account
+      ? {
+          type: "income",
+          account_id: account.id,
+          occurred_at: todayISO(),
+          description: "Rendimento de aplicacao",
+        }
+      : undefined;
 
   const lineDay = (l: AccountStatementLine) => l.occurred_at.slice(0, 10);
 
@@ -193,10 +210,26 @@ export default function AccountStatementPage() {
   return (
     <div className="page">
       <PageHeader
-        title="Extrato de conta corrente"
-        description="Movimento da conta, saldo anterior e saldo apos cada lancamento"
+        title={account ? `Extrato de ${(ACCOUNT_TYPES[account.account_type] ?? "conta").toLowerCase()}` : "Extrato de conta"}
+        description={`${account?.name ?? ""} - movimento da conta, saldo anterior e saldo apos cada lancamento`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {canWrite && account && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const kind = account.account_type === "investment" ? "redeem" : "deposit";
+                  window.location.href = `/dashboard/finance/account-transfers?kind=${kind}&from=${account.id}`;
+                }}
+              >
+                {account.account_type === "investment" ? "Resgatar" : "Aplicar"}
+              </Button>
+            )}
+            {canWrite && account?.account_type === "investment" && (
+              <Button variant="outline" onClick={openYield}>
+                Linha de rendimento
+              </Button>
+            )}
             {canWrite && account && (
               <Button onClick={openNew}>
                 <Plus className="h-4 w-4" /> Novo lancamento
@@ -218,7 +251,7 @@ export default function AccountStatementPage() {
             <option value="" disabled>Selecione...</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.name}{a.is_active ? "" : " (inativa)"}
+                {a.name} - {ACCOUNT_TYPES[a.account_type] ?? a.account_type}{a.is_active ? "" : " (inativa)"}
               </option>
             ))}
           </Select>
@@ -501,6 +534,7 @@ export default function AccountStatementPage() {
         onClose={() => {
           setFormOpen(false);
           setEditing(null);
+          setYieldMode(false);
         }}
         size="xl"
         title={editing ? "Editar lancamento" : "Novo lancamento"}
@@ -509,7 +543,8 @@ export default function AccountStatementPage() {
           open={formOpen}
           onClose={() => {
             setFormOpen(false);
-            setEditing(null);
+          setEditing(null);
+          setYieldMode(false);
           }}
           onSaved={load}
           onSubmit={editing ? submitEdit : undefined}
@@ -530,3 +565,4 @@ export default function AccountStatementPage() {
     </div>
   );
 }
+

@@ -75,6 +75,7 @@ func (r *Repo) MonthlySeries(ctx context.Context, tx pgx.Tx, from, to string) ([
 		WHERE occurred_at >= NULLIF($1,'')::date
 		  AND occurred_at < (NULLIF($2,'')::date + 1)
 		  AND voided_at IS NULL
+		  AND account_transfer_id IS NULL
 		GROUP BY 1 ORDER BY 1`, from, to)
 	if err != nil {
 		return nil, err
@@ -105,7 +106,8 @@ func (r *Repo) BuildDRE(ctx context.Context, tx pgx.Tx, from, to string) (DRE, e
 		FROM financial_transactions
 		WHERE occurred_at >= NULLIF($1,'')::date
 		  AND occurred_at < (NULLIF($2,'')::date + 1)
-		  AND voided_at IS NULL`, from, to).
+		  AND voided_at IS NULL
+		  AND account_transfer_id IS NULL`, from, to).
 		Scan(&dre.Income, &dre.Expense)
 	if err != nil {
 		return dre, err
@@ -120,6 +122,7 @@ func (r *Repo) BuildDRE(ctx context.Context, tx pgx.Tx, from, to string) (DRE, e
 		WHERE t.occurred_at >= NULLIF($1,'')::date
 		  AND t.occurred_at < (NULLIF($2,'')::date + 1)
 		  AND t.voided_at IS NULL
+		  AND t.account_transfer_id IS NULL
 		GROUP BY 1,2,3,4
 		ORDER BY t.type,
 		         NULLIF(regexp_replace(COALESCE(c.code,''), '\D', '', 'g'), '')::int NULLS LAST,
@@ -148,7 +151,8 @@ func (r *Repo) BuildDRE(ctx context.Context, tx pgx.Tx, from, to string) (DRE, e
 		FROM financial_transactions
 		WHERE occurred_at >= (NULLIF($1,'')::date - (NULLIF($2,'')::date - NULLIF($1,'')::date + 1))
 		  AND occurred_at < NULLIF($1,'')::date
-		  AND voided_at IS NULL`, from, to).
+		  AND voided_at IS NULL
+		  AND account_transfer_id IS NULL`, from, to).
 		Scan(&prevIncome, &prevExpense)
 	if err != nil {
 		return dre, err

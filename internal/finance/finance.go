@@ -198,6 +198,12 @@ type Transaction struct {
 	// (uma unica linha no extrato). GroupStatus e "agrupado" ou "conciliado".
 	GroupID     *string `json:"group_id,omitempty"`
 	GroupStatus *string `json:"group_status,omitempty"`
+	// Transferencia entre contas: as duas pernas (saida/entrada) compartilham o
+	// mesmo id. TransferKind e deposit|redeem|transfer e CounterpartAccountName
+	// e a outra conta envolvida (para exibicao).
+	AccountTransferID      *string `json:"account_transfer_id,omitempty"`
+	TransferKind           *string `json:"transfer_kind,omitempty"`
+	CounterpartAccountName *string `json:"counterpart_account_name,omitempty"`
 }
 
 // MarshalJSON serializa occurred_at como data pura (YYYY-MM-DD). A data efetiva
@@ -222,11 +228,21 @@ type BalanceItem struct {
 	Total      float64 `json:"total"`
 }
 
+// AccountTypeBalance consolida o saldo das contas de um mesmo tipo.
+type AccountTypeBalance struct {
+	AccountType    string  `json:"account_type"`
+	InitialBalance float64 `json:"initial_balance"`
+	Income         float64 `json:"income"`
+	Expense        float64 `json:"expense"`
+	Net            float64 `json:"net"`
+}
+
 type Balance struct {
-	Income     float64       `json:"income"`
-	Expense    float64       `json:"expense"`
-	Net        float64       `json:"net"`
-	ByCategory []BalanceItem `json:"by_category"`
+	Income        float64              `json:"income"`
+	Expense       float64              `json:"expense"`
+	Net           float64              `json:"net"`
+	ByCategory    []BalanceItem        `json:"by_category"`
+	ByAccountType []AccountTypeBalance `json:"by_account_type"`
 }
 
 type Repo struct{}
@@ -439,6 +455,9 @@ type CreateTxnInput struct {
 	// ActorID e preenchido pelo handler, nunca pelo cliente.
 	Reconciled bool   `json:"reconciled"`
 	ActorID    string `json:"-"`
+	// AccountTransferID marca uma perna de transferencia entre contas. Nesse
+	// caso a categoria e opcional, nao ha recibo nem split de repasses.
+	AccountTransferID *string `json:"-"`
 }
 
 type EventAllocationInput struct {
@@ -458,7 +477,8 @@ type EventAllocation struct {
 // A conta do plano de contas (category_id) e OBRIGATORIA e precisa bater com o
 // tipo do lancamento (nao da para lancar uma despesa numa conta de entrada).
 func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string, in CreateTxnInput) (*Transaction, string, string, string, error) {
-	if in.CategoryID == nil || *in.CategoryID == "" {
+	isTransfer := in.AccountTransferID != nil && *in.AccountTransferID != ""
+	if !isTransfer && (in.CategoryID == nil || *in.CategoryID == "") {
 		return nil, "", "", "", ErrCategoryRequired
 	}
 	if in.Amount <= 0 {
@@ -473,12 +493,14 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 	}
 	// O RLS esconde contas fora do escopo, entao um id de outro tenant/filial
 	// resulta em ErrNoRows - tratado como conta invalida.
-	var catType string
-	if err := tx.QueryRow(ctx, `SELECT type FROM financial_categories WHERE id = $1::uuid`, *in.CategoryID).Scan(&catType); err != nil {
-		return nil, "", "", "", err
-	}
-	if catType != in.Type {
-		return nil, "", "", "", fmt.Errorf("a conta selecionada e de %s, mas o lancamento e de %s", catType, in.Type)
+	if !isTransfer {
+		var catType string
+		if err := tx.QueryRow(ctx, `SELECT type FROM financial_categories WHERE id = $1::uuid`, *in.CategoryID).Scan(&catType); err != nil {
+			return nil, "", "", "", err
+		}
+		if catType != in.Type {
+			return nil, "", "", "", fmt.Errorf("a conta selecionada e de %s, mas o lancamento e de %s", catType, in.Type)
+		}
 	}
 
 	// A identificacao livre (doador avulso) so vale quando nao ha membro nem
@@ -605,32 +627,39 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 		INSERT INTO financial_transactions
 			(tenant_id, branch_id, category_id, type, amount, currency,
 			 payment_method, donor_member_id, benefactor_id, donor_name, supplier_id, is_anonymous, description, occurred_at, account_id, entry_seq,
-			 due_date, cost_center, paid_at, reconciled_at, reconciled_by)
+			 due_date, cost_center, paid_at, reconciled_at, reconciled_by, account_transfer_id)
 		VALUES ($1, NULLIF($2,'')::uuid, NULLIF($3,'')::uuid, $4, $5, 'BRL',
 			 $6, NULLIF($7,'')::uuid, NULLIF($8,'')::uuid, NULLIF($14,''), NULLIF($13,'')::uuid, $9, $10, $11, NULLIF($12,'')::uuid, $15,
 			 NULLIF($16,'')::date, NULLIF($17,''), CASE WHEN $18 THEN now() ELSE NULL END,
 			 CASE WHEN $19 THEN now() ELSE NULL END,
-			 CASE WHEN $19 THEN NULLIF($20,'')::uuid ELSE NULL END)
+			 CASE WHEN $19 THEN NULLIF($20,'')::uuid ELSE NULL END,
+			 NULLIF($21,'')::uuid)
 		RETURNING id::text, branch_id::text, category_id::text, account_id::text,
 		          donor_member_id::text, benefactor_id::text, donor_name, entry_seq,
 		          type, amount::float8, currency, payment_method, is_anonymous,
 		          description, receipt_issued, hash, occurred_at, created_at,
-		          due_date::text, paid_at, cost_center, reconciled_at`,
+		          due_date::text, paid_at, cost_center, reconciled_at, account_transfer_id::text`,
 		tenantID, branchID, nullIfEmpty(in.CategoryID), in.Type, in.Amount,
 		in.PaymentMethod, in.DonorMemberID, in.BenefactorID, in.IsAnonymous, in.Description, when, in.AccountID,
 		in.SupplierID, in.DonorName, entrySeq, in.DueDate, in.CostCenter, in.Paid != nil && *in.Paid,
-		in.Reconciled, in.ActorID).
+		in.Reconciled, in.ActorID, in.AccountTransferID).
 		Scan(&t.ID, &t.BranchID, &t.CategoryID, &t.AccountID,
 			&t.DonorMemberID, &t.BenefactorID, &t.DonorName, &outSeq,
 			&t.Type, &t.Amount, &t.Currency,
 			&t.PaymentMethod, &t.IsAnonymous, &t.Description, &status, &t.Hash, &t.OccurredAt, &t.CreatedAt,
-			&t.DueDate, &t.PaidAt, &t.CostCenter, &t.ReconciledAt)
+			&t.DueDate, &t.PaidAt, &t.CostCenter, &t.ReconciledAt, &t.AccountTransferID)
 	if err != nil {
 		return nil, "", "", "", err
 	}
 	t.EntrySeq = &outSeq
 	t.ReceiptIssued = status
 	t.Reconciled = t.ReconciledAt != nil
+
+	// Perna de transferencia interna: nao emite recibo, nao tem rateio de evento
+	// e nao entra no split de repasses (nao e receita/despesa de resultado).
+	if isTransfer {
+		return &t, "", "", "", nil
+	}
 
 	// Gera recibo digital automatico (documento).
 	docID, ref, token, err := r.issueReceipt(ctx, tx, tenantID, branchID, t)
@@ -707,6 +736,9 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, tenantID, id string, in Up
 		return err
 	}
 	if err := assertTxnMutable(ctx, tx, id); err != nil {
+		return err
+	}
+	if err := assertTxnNotTransfer(ctx, tx, id); err != nil {
 		return err
 	}
 
@@ -935,6 +967,9 @@ func (r *Repo) Void(ctx context.Context, tx pgx.Tx, id, reason, actorID string) 
 	if err := assertTxnMutable(ctx, tx, id); err != nil {
 		return err
 	}
+	if err := assertTxnNotTransfer(ctx, tx, id); err != nil {
+		return err
+	}
 	if err := assertTxnNotGrouped(ctx, tx, id); err != nil {
 		return err
 	}
@@ -961,6 +996,9 @@ func (r *Repo) Void(ctx context.Context, tx pgx.Tx, id, reason, actorID string) 
 // fechada nao pode ser excluido (mesma trava do estorno).
 func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
 	if err := assertTxnMutable(ctx, tx, id); err != nil {
+		return err
+	}
+	if err := assertTxnNotTransfer(ctx, tx, id); err != nil {
 		return err
 	}
 	if err := assertTxnNotGrouped(ctx, tx, id); err != nil {
@@ -1044,7 +1082,13 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind, from, to string) ([]Tr
 		       (SELECT count(*) FROM financial_attachments fa WHERE fa.transaction_id = t.id)::int,
 		       (SELECT fa.file_url FROM financial_attachments fa WHERE fa.transaction_id = t.id ORDER BY fa.created_at LIMIT 1),
 		       t.due_date::text, t.paid_at, t.cost_center, t.reconciled_at,
-		       t.group_id::text, g.status
+		       t.group_id::text, g.status,
+		       t.account_transfer_id::text, at.kind,
+		       (SELECT fa.name FROM account_transfers tr2
+		          JOIN financial_accounts fa
+		            ON fa.id = CASE WHEN tr2.from_account_id = t.account_id
+		                            THEN tr2.to_account_id ELSE tr2.from_account_id END
+		         WHERE tr2.id = t.account_transfer_id)
 		FROM financial_transactions t
 		JOIN recent r ON r.id = t.id
 		LEFT JOIN financial_categories c ON c.id = t.category_id
@@ -1054,6 +1098,7 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind, from, to string) ([]Tr
 		LEFT JOIN benefactors db ON db.id = t.benefactor_id
 		LEFT JOIN documents d ON d.kind = 'receipt' AND d.content->>'tx_id' = t.id::text
 		LEFT JOIN financial_transaction_groups g ON g.id = t.group_id
+		LEFT JOIN account_transfers at ON at.id = t.account_transfer_id
 		ORDER BY t.occurred_at, t.entry_seq NULLS LAST, t.created_at, t.id`, kind, from, to)
 	if err != nil {
 		return nil, err
@@ -1071,7 +1116,8 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind, from, to string) ([]Tr
 			&t.ReceiptID, &t.ReceiptRef, &t.ReceiptToken,
 			&t.VoidedAt, &t.VoidReason, &t.AttachmentCount, &t.AttachmentURL,
 			&t.DueDate, &t.PaidAt, &t.CostCenter, &t.ReconciledAt,
-			&t.GroupID, &t.GroupStatus); err != nil {
+			&t.GroupID, &t.GroupStatus,
+			&t.AccountTransferID, &t.TransferKind, &t.CounterpartAccountName); err != nil {
 			return nil, err
 		}
 		t.Reconciled = t.ReconciledAt != nil
@@ -1156,6 +1202,7 @@ func (r *Repo) SumBalance(ctx context.Context, tx pgx.Tx, kind string) (Balance,
 			FROM financial_transactions
 			WHERE ($1 = '' OR type = $1)
 			  AND voided_at IS NULL
+			  AND account_transfer_id IS NULL
 		),
 		acct_init AS (
 			SELECT COALESCE(SUM(initial_balance),0) AS init_balance
@@ -1180,6 +1227,7 @@ func (r *Repo) SumBalance(ctx context.Context, tx pgx.Tx, kind string) (Balance,
 		LEFT JOIN financial_categories c ON c.id = t.category_id
 		WHERE ($1 = '' OR t.type = $1)
 		  AND t.voided_at IS NULL
+		  AND t.account_transfer_id IS NULL
 		GROUP BY 1,2,3,4
 		ORDER BY t.type,
 		         NULLIF(regexp_replace(COALESCE(c.code,''), '\D', '', 'g'), '')::int NULLS LAST,
@@ -1195,7 +1243,49 @@ func (r *Repo) SumBalance(ctx context.Context, tx pgx.Tx, kind string) (Balance,
 		}
 		b.ByCategory = append(b.ByCategory, it)
 	}
-	return b, rows.Err()
+	if err := rows.Err(); err != nil {
+		return b, err
+	}
+	rows.Close()
+
+	// Saldo por tipo de conta (posicao de caixa). Inclui as transferencias entre
+	// contas, que alteram o saldo de cada conta mas somam zero no total.
+	b.ByAccountType = []AccountTypeBalance{}
+	acctRows, err := tx.Query(ctx, `
+		WITH acct AS (
+			SELECT id, account_type, initial_balance
+			FROM financial_accounts
+			WHERE is_active
+		),
+		agg AS (
+			SELECT account_id,
+			       COALESCE(SUM(amount) FILTER (WHERE type='income'),0) AS inc,
+			       COALESCE(SUM(amount) FILTER (WHERE type='expense'),0) AS exp
+			FROM financial_transactions
+			WHERE voided_at IS NULL
+			GROUP BY account_id
+		)
+		SELECT acct.account_type,
+		       COALESCE(SUM(acct.initial_balance),0)::float8,
+		       COALESCE(SUM(agg.inc),0)::float8,
+		       COALESCE(SUM(agg.exp),0)::float8
+		FROM acct
+		LEFT JOIN agg ON agg.account_id = acct.id
+		GROUP BY acct.account_type
+		ORDER BY acct.account_type`)
+	if err != nil {
+		return b, err
+	}
+	defer acctRows.Close()
+	for acctRows.Next() {
+		var a AccountTypeBalance
+		if err := acctRows.Scan(&a.AccountType, &a.InitialBalance, &a.Income, &a.Expense); err != nil {
+			return b, err
+		}
+		a.Net = a.InitialBalance + a.Income - a.Expense
+		b.ByAccountType = append(b.ByAccountType, a)
+	}
+	return b, acctRows.Err()
 }
 
 func nullIfEmpty(s *string) *string {

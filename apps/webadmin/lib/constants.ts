@@ -129,6 +129,13 @@ export const ACCOUNT_TYPES: Record<string, string> = {
   checking: "Conta corrente",
   savings: "Poupanca",
   cash: "Caixa",
+  investment: "Aplicacao",
+};
+
+export const TRANSFER_KINDS: Record<string, string> = {
+  deposit: "Deposito",
+  redeem: "Resgate",
+  transfer: "Transferencia",
 };
 
 export const JOURNEY_STAGES: Record<string, { label: string; tone: string; order: number }> = {

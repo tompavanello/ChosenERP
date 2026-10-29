@@ -86,6 +86,9 @@ export interface DataTableProps<T> {
   };
   renderMobileCard?: (row: T, index: number) => ReactNode;
   className?: string;
+  /** Limita a altura do corpo da tabela e cria scroll vertical interno, com o
+   * cabecalho fixo. Ex.: "max(280px, calc(100vh - 380px))". */
+  maxHeight?: string;
 }
 
 // Devolve o CONTEUDO do <th> (texto ou botao de ordenacao), nunca um <th>:
@@ -146,6 +149,7 @@ export function DataTable<T>({  columns,
   insertion,
   renderMobileCard,
   className,
+  maxHeight,
 }: DataTableProps<T>) {
   const sortedData = useMemo(() => {
     if (!sort?.column) return data;
@@ -211,7 +215,10 @@ export function DataTable<T>({  columns,
       {/* Tabela. So e escondida no mobile quando existe card equivalente; sem
           renderMobileCard ela continua visivel e rola na horizontal, em vez de
           a pagina ficar em branco abaixo de 1024px. */}
-      <div className={cn("overflow-x-auto", renderMobileCard && "hidden lg:block")}>
+      <div
+        className={cn("overflow-x-auto", maxHeight && "overflow-y-auto", renderMobileCard && "hidden lg:block")}
+        style={maxHeight ? { maxHeight } : undefined}
+      >
         <table className="w-full text-[13px]" role="grid">
           <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-zinc-50/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
             <tr>

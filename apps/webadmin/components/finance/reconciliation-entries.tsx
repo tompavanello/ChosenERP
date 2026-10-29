@@ -611,6 +611,7 @@ export function ReconciliationEntries() {
         }}
         emptyMessage="Nenhum lancamento no filtro"
         emptyDescription="Ajuste o periodo, o status ou a busca."
+        maxHeight="max(280px, calc(100vh - 380px))"
         compact
       />
 
