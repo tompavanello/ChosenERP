@@ -91,7 +91,12 @@ var (
 // parseStatement detecta o formato (OFX/CSV) e devolve as entradas normalizadas.
 func parseStatement(filename string, raw []byte) ([]parsedEntry, string, error) {
 	text := string(raw)
-	if strings.Contains(strings.ToUpper(text), "<OFX") || strings.HasSuffix(strings.ToLower(filename), ".ofx") {
+	upper := strings.ToUpper(text)
+	lowerName := strings.ToLower(filename)
+	// OFX e OFC compartilham os blocos <STMTTRN>; o OFC e um formato mais antigo
+	// com raiz <OFC> (usado por alguns bancos).
+	if strings.Contains(upper, "<OFX") || strings.Contains(upper, "<OFC") ||
+		strings.HasSuffix(lowerName, ".ofx") || strings.HasSuffix(lowerName, ".ofc") {
 		entries, err := parseOFX(text)
 		return entries, "ofx", err
 	}
@@ -206,15 +211,15 @@ func parseCSVStatement(text string) ([]parsedEntry, error) {
 	idx := map[string]int{}
 	for i, h := range header {
 		switch normalizeHeader(h) {
-		case "data", "dia", "date", "dt":
+		case "data", "dia", "date", "dt", "data_mov", "data_movimento", "dt_mov", "data_lancamento":
 			idx["data"] = i
-		case "valor", "amount", "value", "credito", "debito":
+		case "valor", "amount", "value", "credito", "debito", "valor_lancamento":
 			idx["valor"] = i
 		case "descricao", "historico", "memo", "observacao", "lancamento":
 			idx["memo"] = i
-		case "tipo", "type", "natureza":
+		case "tipo", "type", "natureza", "deb_cred", "debito_credito", "credito_debito", "dc":
 			idx["tipo"] = i
-		case "fitid", "id", "documento":
+		case "fitid", "id", "documento", "doc", "nr_doc", "num_doc", "numero_documento":
 			idx["fitid"] = i
 		}
 	}

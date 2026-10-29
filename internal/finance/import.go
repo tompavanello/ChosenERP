@@ -289,7 +289,7 @@ func parseData(s string) (time.Time, error) {
 	if s == "" {
 		return time.Now(), nil
 	}
-	for _, l := range []string{"2006-01-02", "02/01/2006", "02-01-2006", time.RFC3339} {
+	for _, l := range []string{"2006-01-02", "02/01/2006", "02-01-2006", "20060102", "20060102150405", time.RFC3339} {
 		if t, err := time.Parse(l, s); err == nil {
 			return t, nil
 		}
