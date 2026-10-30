@@ -285,6 +285,61 @@ func (a *App) handleApplyBankSequence(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (a *App) handleMoveBankEntry(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var in struct {
+		Direction string `json:"direction"`
+	}
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
+		return
+	}
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		return a.Finance.MoveBankEntry(r.Context(), tx, r.PathValue("id"), r.PathValue("entryId"), in.Direction)
+	})
+	if err != nil {
+		if store.IsNotFound(err) || err == pgx.ErrNoRows {
+			writeErr(w, http.StatusNotFound, "linha do extrato nao encontrada")
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *App) handleReorderBankEntries(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var in struct {
+		Date     string   `json:"date"`
+		EntryIDs []string `json:"entry_ids"`
+	}
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "corpo invalido: "+err.Error())
+		return
+	}
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		return a.Finance.ReorderBankEntries(r.Context(), tx, r.PathValue("id"), in.Date, in.EntryIDs)
+	})
+	if err != nil {
+		if store.IsNotFound(err) || err == pgx.ErrNoRows {
+			writeErr(w, http.StatusNotFound, "importacao nao encontrada")
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (a *App) handleDeleteBankImport(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {

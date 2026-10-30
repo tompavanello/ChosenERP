@@ -1259,6 +1259,8 @@ export interface BankImport {
 export interface BankEntry {
   id: string;
   line_no: number;
+  /** Ordem de trabalho no extrato (pode ser alterada na conciliacao). */
+  sequence_no: number;
   posted_at: string;
   amount: number;
   direction: "income" | "expense";
@@ -1298,6 +1300,7 @@ export interface NewGroupTransaction {
   donor_member_id?: string;
   benefactor_id?: string;
   donor_name?: string;
+  supplier_id?: string;
   payment_method?: string;
   is_anonymous?: boolean;
 }
@@ -1311,10 +1314,31 @@ export const groupBankEntry = (
     method: "POST",
     body: JSON.stringify(data),
   });
-export const generatePendingBankEntries = (importId: string, items: { entry_id: string; category_id: string; description?: string }[]) =>
+export interface GeneratePendingBankItem {
+  entry_id: string;
+  category_id: string;
+  description?: string;
+  donor_member_id?: string;
+  benefactor_id?: string;
+  donor_name?: string;
+  supplier_id?: string;
+  payment_method?: string;
+  is_anonymous?: boolean;
+}
+export const generatePendingBankEntries = (importId: string, items: GeneratePendingBankItem[]) =>
   api<{ generated: number }>(`/api/v1/finance/bank-imports/${importId}/generate-pending`, {
     method: "POST",
     body: JSON.stringify({ items }),
+  });
+export const moveBankEntry = (importId: string, entryId: string, direction: "up" | "down") =>
+  api<{ ok: boolean }>(`/api/v1/finance/bank-imports/${importId}/entries/${entryId}/move`, {
+    method: "POST",
+    body: JSON.stringify({ direction }),
+  });
+export const reorderBankEntries = (importId: string, date: string, entryIds: string[]) =>
+  api<{ ok: boolean }>(`/api/v1/finance/bank-imports/${importId}/reorder`, {
+    method: "POST",
+    body: JSON.stringify({ date, entry_ids: entryIds }),
   });
 export interface SequenceLine {
   kind: "transaction" | "group";

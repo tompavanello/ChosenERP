@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, ArrowLeft, ArrowRightLeft, CheckCircle2, Landmark, Layers,
-  Link2, Plus, RefreshCw, Trash2, Upload, X,
+  AlertTriangle, ArrowLeft, ArrowRightLeft, CheckCircle2, ChevronDown, ChevronUp,
+  Landmark, Layers, Link2, Plus, RefreshCw, Trash2, Upload, X,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Input, Field, Select } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { Combobox } from "@/components/ui/combobox";
 import { Badge } from "@/components/ui/badge";
 import { Drawer, Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
@@ -20,11 +21,13 @@ import {
   generateBankEntry, deleteBankImport, listAccounts, listCategories,
   listTransactions, groupBankEntry, generatePendingBankEntries,
   getBankSequenceSuggestions, applyBankSequence,
+  listMembers, listBenefactors, listSuppliers, moveBankEntry, reorderBankEntries,
   type BankImport, type BankEntry, type BankDivergence, type BankAccount, type Category,
   type Transaction, type SequenceSuggestion, type NewGroupTransaction,
+  type Member, type Benefactor, type Supplier, type GeneratePendingBankItem,
 } from "@/lib/api";
 import { currency, datePt } from "@/lib/format";
-import { ACCOUNT_TYPES } from "@/lib/constants";
+import { ACCOUNT_TYPES, PAYMENT_METHODS } from "@/lib/constants";
 
 const ENTRY_STATUS: Record<
   BankEntry["status"],
@@ -36,18 +39,61 @@ const ENTRY_STATUS: Record<
   lancamento_gerado: { label: "Lancamento gerado", tone: "sky", icon: CheckCircle2, iconClass: "text-sky-600" },
 };
 
+// Preferencia (por navegador) de esconder as linhas do extrato ja associadas
+// a lancamentos/agrupamentos, deixando a conferencia focada no que falta.
+const HIDE_MATCHED_KEY = "chosen_bank_hide_matched";
+
 type NewTxnRow = {
   key: string;
   category_id: string;
   amount: string;
   description: string;
+  donor_member_id: string;
+  benefactor_id: string;
   donor_name: string;
+  supplier_id: string;
+  payment_method: string;
+  is_anonymous: boolean;
+};
+
+type PendingDetail = {
+  donor_member_id: string;
+  benefactor_id: string;
+  donor_name: string;
+  supplier_id: string;
+  payment_method: string;
+  is_anonymous: boolean;
+};
+
+type GenForm = PendingDetail & {
+  category_id: string;
+  description: string;
+};
+
+const EMPTY_DETAIL: PendingDetail = {
+  donor_member_id: "",
+  benefactor_id: "",
+  donor_name: "",
+  supplier_id: "",
+  payment_method: "pix",
+  is_anonymous: false,
 };
 
 let rowSeq = 0;
 function newRow(): NewTxnRow {
   rowSeq += 1;
-  return { key: `new-${rowSeq}`, category_id: "", amount: "", description: "", donor_name: "" };
+  return {
+    key: `new-${rowSeq}`,
+    category_id: "",
+    amount: "",
+    description: "",
+    donor_member_id: "",
+    benefactor_id: "",
+    donor_name: "",
+    supplier_id: "",
+    payment_method: "pix",
+    is_anonymous: false,
+  };
 }
 
 function fileToBase64(f: File): Promise<string> {
@@ -86,7 +132,7 @@ export function BankReconciliationPanel() {
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   const [genEntry, setGenEntry] = useState<BankEntry | null>(null);
-  const [genForm, setGenForm] = useState({ category_id: "", description: "" });
+  const [genForm, setGenForm] = useState<GenForm>({ ...EMPTY_DETAIL, category_id: "", description: "" });
   const [generating, setGenerating] = useState(false);
 
   const [groupEntry, setGroupEntry] = useState<BankEntry | null>(null);
@@ -100,12 +146,21 @@ export function BankReconciliationPanel() {
   const [showPending, setShowPending] = useState(false);
   const [pendingCats, setPendingCats] = useState<Record<string, string>>({});
   const [pendingDesc, setPendingDesc] = useState<Record<string, string>>({});
+  const [pendingDetails, setPendingDetails] = useState<Record<string, PendingDetail>>({});
+  const [pendingOrder, setPendingOrder] = useState<string[]>([]);
+  const [pendingDetailOpen, setPendingDetailOpen] = useState<string | null>(null);
   const [pendingSel, setPendingSel] = useState<Set<string>>(new Set());
   const [pendingSaving, setPendingSaving] = useState(false);
+  const [pendingRefsLoaded, setPendingRefsLoaded] = useState(false);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [benefactors, setBenefactors] = useState<Benefactor[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [movingEntry, setMovingEntry] = useState("");
 
   const [suggestions, setSuggestions] = useState<SequenceSuggestion[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [applyingDate, setApplyingDate] = useState("");
+  const [hideMatched, setHideMatched] = useState(true);
 
   const load = useCallback(async () => {
     try {
@@ -120,6 +175,16 @@ export function BankReconciliationPanel() {
     listAccounts().then((r) => setAccounts(r.accounts.filter((a) => a.is_active))).catch(() => {});
     listCategories().then((r) => setCategories(r.categories)).catch(() => {});
   }, [load]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(HIDE_MATCHED_KEY);
+    if (stored != null) setHideMatched(stored === "1");
+  }, []);
+
+  function toggleHideMatched(next: boolean) {
+    setHideMatched(next);
+    localStorage.setItem(HIDE_MATCHED_KEY, next ? "1" : "0");
+  }
 
   const loadSuggestions = useCallback(async (importID: string) => {
     setSuggestionsLoading(true);
@@ -192,7 +257,8 @@ export function BankReconciliationPanel() {
 
   function openGenerate(entry: BankEntry) {
     setGenEntry(entry);
-    setGenForm({ category_id: "", description: entry.memo ?? "" });
+    setGenForm({ ...EMPTY_DETAIL, category_id: "", description: entry.memo ?? "" });
+    ensurePendingRefs();
   }
 
   async function submitGenerate(e: React.FormEvent) {
@@ -207,6 +273,12 @@ export function BankReconciliationPanel() {
       await generateBankEntry(selected.id, genEntry.id, {
         category_id: genForm.category_id,
         description: genForm.description || undefined,
+        donor_member_id: genForm.donor_member_id || undefined,
+        benefactor_id: genForm.benefactor_id || undefined,
+        donor_name: genForm.donor_name.trim() || undefined,
+        supplier_id: genForm.supplier_id || undefined,
+        payment_method: genForm.payment_method || undefined,
+        is_anonymous: genForm.is_anonymous,
       });
       toast("Lancamento gerado e vinculado ao extrato.");
       setGenEntry(null);
@@ -225,6 +297,7 @@ export function BankReconciliationPanel() {
     setGroupNew([]);
     setGroupDescription(entry.memo ?? "");
     setGroupLoading(true);
+    ensurePendingRefs();
     try {
       const r = await listTransactions();
       const accountID = selected.account_id ?? "";
@@ -273,7 +346,12 @@ export function BankReconciliationPanel() {
         category_id: r.category_id,
         amount: Number(r.amount),
         description: r.description.trim() || undefined,
+        donor_member_id: r.donor_member_id || undefined,
+        benefactor_id: r.benefactor_id || undefined,
         donor_name: r.donor_name.trim() || undefined,
+        supplier_id: r.supplier_id || undefined,
+        payment_method: r.payment_method || undefined,
+        is_anonymous: r.is_anonymous,
       }))
       .filter((r) => r.amount > 0 || r.category_id);
     const invalid = fresh.find((r) => !r.category_id || !(r.amount > 0));
@@ -309,20 +387,52 @@ export function BankReconciliationPanel() {
     }
   }
 
+  async function ensurePendingRefs() {
+    if (pendingRefsLoaded) return;
+    try {
+      const [m, b, s] = await Promise.all([
+        listMembers().catch(() => ({ members: [] as Member[] })),
+        listBenefactors().catch(() => ({ benefactors: [] as Benefactor[] })),
+        listSuppliers().catch(() => ({ suppliers: [] as Supplier[] })),
+      ]);
+      setMembers(m.members);
+      setBenefactors(b.benefactors);
+      setSuppliers(s.suppliers);
+      setPendingRefsLoaded(true);
+    } catch {
+      /* opcional: o usuario ainda pode gerar sem vinculo */
+    }
+  }
+
   function openPending() {
     const nextCats: Record<string, string> = {};
     const nextDesc: Record<string, string> = {};
+    const nextDetails: Record<string, PendingDetail> = {};
+    const order: string[] = [];
     const sel = new Set<string>();
     for (const e of entries) {
       if (e.status !== "pendente") continue;
       nextCats[e.id] = "";
       nextDesc[e.id] = e.memo ?? "";
+      nextDetails[e.id] = {
+        donor_member_id: "",
+        benefactor_id: "",
+        donor_name: "",
+        supplier_id: "",
+        payment_method: "pix",
+        is_anonymous: false,
+      };
+      order.push(e.id);
       sel.add(e.id);
     }
     setPendingCats(nextCats);
     setPendingDesc(nextDesc);
+    setPendingDetails(nextDetails);
+    setPendingOrder(order);
+    setPendingDetailOpen(null);
     setPendingSel(sel);
     setShowPending(true);
+    ensurePendingRefs();
   }
 
   function togglePending(id: string) {
@@ -334,16 +444,64 @@ export function BankReconciliationPanel() {
     });
   }
 
+  function updatePendingDetail(id: string, patch: Partial<PendingDetail>) {
+    setPendingDetails((prev) => ({
+      ...prev,
+      [id]: {
+        ...(prev[id] ?? {
+          donor_member_id: "",
+          benefactor_id: "",
+          donor_name: "",
+          supplier_id: "",
+          payment_method: "pix",
+          is_anonymous: false,
+        }),
+        ...patch,
+      },
+    }));
+  }
+
+  function movePendingRow(id: string, dir: -1 | 1) {
+    setPendingOrder((prev) => {
+      const next = [...prev];
+      const idx = next.indexOf(id);
+      const swap = idx + dir;
+      if (idx < 0 || swap < 0 || swap >= next.length) return prev;
+      // A sequencia e por conta/data: nao deixa atravessar o limite de data.
+      const current = pendingById.get(id);
+      const neighbor = pendingById.get(next[swap]);
+      if (current && neighbor && current.posted_at.slice(0, 10) !== neighbor.posted_at.slice(0, 10)) return prev;
+      [next[idx], next[swap]] = [next[swap], next[idx]];
+      return next;
+    });
+  }
+
   async function submitPending(e: React.FormEvent) {
     e.preventDefault();
     if (!selected) return;
-    const items = entries
-      .filter((x) => x.status === "pendente" && pendingSel.has(x.id))
-      .map((x) => ({
-        entry_id: x.id,
-        category_id: pendingCats[x.id] ?? "",
-        description: pendingDesc[x.id]?.trim() || undefined,
-      }));
+    const items: GeneratePendingBankItem[] = pendingOrder
+      .filter((id) => pendingSel.has(id))
+      .map((id) => {
+        const d = pendingDetails[id] ?? {
+          donor_member_id: "",
+          benefactor_id: "",
+          donor_name: "",
+          supplier_id: "",
+          payment_method: "pix",
+          is_anonymous: false,
+        };
+        return {
+          entry_id: id,
+          category_id: pendingCats[id] ?? "",
+          description: pendingDesc[id]?.trim() || undefined,
+          donor_member_id: d.donor_member_id || undefined,
+          benefactor_id: d.benefactor_id || undefined,
+          donor_name: d.donor_name.trim() || undefined,
+          supplier_id: d.supplier_id || undefined,
+          payment_method: d.payment_method || undefined,
+          is_anonymous: d.is_anonymous,
+        };
+      });
     if (items.length === 0) {
       toast("Selecione ao menos uma linha pendente.", "error");
       return;
@@ -355,14 +513,45 @@ export function BankReconciliationPanel() {
     }
     setPendingSaving(true);
     try {
+      // Persiste a ordem escolhida no modal antes de gerar: as linhas pendentes
+      // sao reordenadas dentro dos espacos que ja ocupam na data.
+      const byId = new Map(entries.map((x) => [x.id, x]));
+      const pendingSet = new Set(pendingOrder);
+      const dates = Array.from(new Set(pendingOrder.map((id) => byId.get(id)?.posted_at.slice(0, 10) ?? ""))).filter(Boolean);
+      for (const date of dates) {
+        const all = entries
+          .filter((x) => x.posted_at.slice(0, 10) === date)
+          .sort((a, b) => a.sequence_no - b.sequence_no || a.line_no - b.line_no)
+          .map((x) => x.id);
+        const slots: number[] = [];
+        all.forEach((id, idx) => { if (pendingSet.has(id)) slots.push(idx); });
+        const ordered = pendingOrder.filter((id) => byId.get(id)?.posted_at.slice(0, 10) === date);
+        if (slots.length !== ordered.length) continue;
+        const nextOrder = [...all];
+        slots.forEach((slot, i) => { nextOrder[slot] = ordered[i]; });
+        await reorderBankEntries(selected.id, date, nextOrder);
+      }
       const res = await generatePendingBankEntries(selected.id, items);
-      toast(`${res.generated} lancamento(s) gerado(s) na ordem do arquivo.`);
+      toast(`${res.generated} lancamento(s) gerado(s) na ordem escolhida.`);
       setShowPending(false);
       await refreshDetail();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao gerar lancamentos", "error");
     } finally {
       setPendingSaving(false);
+    }
+  }
+
+  async function moveEntry(entry: BankEntry, dir: "up" | "down") {
+    if (!selected) return;
+    setMovingEntry(entry.id);
+    try {
+      await moveBankEntry(selected.id, entry.id, dir);
+      await refreshDetail();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao reordenar linha", "error");
+    } finally {
+      setMovingEntry("");
     }
   }
 
@@ -403,11 +592,26 @@ export function BankReconciliationPanel() {
   }, [categories, groupEntry]);
 
   const pendingEntries = useMemo(() => entries.filter((e) => e.status === "pendente"), [entries]);
+  const associatedEntries = useMemo(
+    () => entries.filter((e) => e.status === "conciliado" || e.status === "lancamento_gerado"),
+    [entries],
+  );
+  const visibleEntries = useMemo(
+    () =>
+      hideMatched
+        ? entries.filter((e) => e.status !== "conciliado" && e.status !== "lancamento_gerado")
+        : entries,
+    [entries, hideMatched],
+  );
+  const pendingById = useMemo(() => new Map(pendingEntries.map((e) => [e.id, e])), [pendingEntries]);
+  const memberName = (id: string) => members.find((m) => m.id === id)?.full_name;
+  const benefactorName = (id: string) => benefactors.find((b) => b.id === id)?.name;
+  const supplierName = (id: string) => suppliers.find((s) => s.id === id)?.name;
 
   const balanceAfter = useMemo(() => {
     const ordered = entries
       .slice()
-      .sort((a, b) => `${a.posted_at}|${String(a.line_no).padStart(6, "0")}`.localeCompare(`${b.posted_at}|${String(b.line_no).padStart(6, "0")}`));
+      .sort((a, b) => `${a.posted_at}|${String(a.sequence_no ?? a.line_no).padStart(6, "0")}`.localeCompare(`${b.posted_at}|${String(b.sequence_no ?? b.line_no).padStart(6, "0")}`));
     const out = new Map<string, number>();
     let running = 0;
     for (const e of ordered) {
@@ -491,7 +695,47 @@ export function BankReconciliationPanel() {
   ];
 
   const entryColumns: Column<BankEntry>[] = [
-    { key: "line_no", label: "Seq.", sortable: true, width: "w-16", render: (e) => <span className="text-xs tabular-nums text-zinc-400">{e.line_no || "-"}</span> },
+    {
+      key: "sequence_no",
+      label: "Seq.",
+      sortable: true,
+      width: "w-20",
+      sortValue: (e) => e.sequence_no ?? 999999999,
+      render: (e) => (
+        <div className="flex items-center gap-1">
+          <span
+            className="text-xs tabular-nums text-zinc-400"
+            title={`Ordem de trabalho. Linha original do arquivo: ${e.line_no || "-"}.`}
+          >
+            {e.sequence_no || "-"}
+          </span>
+          {canWrite && (
+            <div className="flex flex-col">
+              <button
+                type="button"
+                aria-label="Mover para cima"
+                title="Mover para cima"
+                disabled={movingEntry === e.id}
+                className="text-zinc-400 hover:text-sky-600 disabled:opacity-40"
+                onClick={() => moveEntry(e, "up")}
+              >
+                <ChevronUp className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                aria-label="Mover para baixo"
+                title="Mover para baixo"
+                disabled={movingEntry === e.id}
+                className="text-zinc-400 hover:text-sky-600 disabled:opacity-40"
+                onClick={() => moveEntry(e, "down")}
+              >
+                <ChevronDown className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+        </div>
+      ),
+    },
     { key: "posted_at", label: "Data", sortable: true, width: "w-28", render: (e) => <span className="text-zinc-500">{datePt(e.posted_at)}</span> },
     { key: "memo", label: "Historico", sortable: true, render: (e) => <span className="text-zinc-500">{e.memo ?? "-"}</span> },
     { key: "direction", label: "Tipo", sortable: true, width: "w-24", render: (e) => <Badge tone={e.direction === "income" ? "green" : "red"}>{e.direction === "income" ? "Credito" : "Debito"}</Badge> },
@@ -656,15 +900,37 @@ export function BankReconciliationPanel() {
           </Card>
         )}
 
-        <h3 className="mb-2 text-sm font-semibold text-zinc-700">Linhas do extrato</h3>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-zinc-700">Linhas do extrato</h3>
+          <div className="flex flex-wrap items-center gap-3">
+            {hideMatched && (
+              <span className="text-xs text-zinc-400">
+                Mostrando {visibleEntries.length} de {entries.length} linha(s)
+              </span>
+            )}
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
+                checked={hideMatched}
+                onChange={(e) => toggleHideMatched(e.target.checked)}
+              />
+              Ocultar ja associados ({associatedEntries.length})
+            </label>
+          </div>
+        </div>
         <DataTable
           columns={entryColumns}
-          data={entries}
+          data={visibleEntries}
           keyExtractor={(e) => e.id}
           loading={loadingDetail}
           emptyIcon={<Landmark className="h-10 w-10" />}
-          emptyMessage="Extrato vazio"
-          emptyDescription="Nenhuma linha importada."
+          emptyMessage={hideMatched && entries.length > 0 ? "Todas as linhas ja foram associadas" : "Extrato vazio"}
+          emptyDescription={
+            hideMatched && entries.length > 0
+              ? "Desligue a flag para revisar as linhas conciliadas."
+              : "Nenhuma linha importada."
+          }
           maxHeight="max(320px, calc(100vh - 620px))"
           compact
         />
@@ -695,6 +961,90 @@ export function BankReconciliationPanel() {
                   {catsFor.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
                 </Select>
               </Field>
+              <Field label="Forma de pagamento">
+                <Select
+                  value={genForm.payment_method}
+                  onChange={(e) => setGenForm({ ...genForm, payment_method: e.target.value })}
+                >
+                  {Object.entries(PAYMENT_METHODS).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </Select>
+              </Field>
+              {genEntry.direction === "income" ? (
+                <>
+                  <Field label="Membro doador">
+                    <Combobox
+                      value={genForm.donor_member_id}
+                      placeholder="Buscar membro..."
+                      searchPlaceholder="Buscar membro..."
+                      emptyMessage="Nenhum membro encontrado"
+                      options={members.map((m) => ({ value: m.id, label: m.full_name }))}
+                      onChange={(v) => setGenForm({
+                        ...genForm,
+                        donor_member_id: v,
+                        benefactor_id: v ? "" : genForm.benefactor_id,
+                        donor_name: v ? "" : genForm.donor_name,
+                        is_anonymous: v ? false : genForm.is_anonymous,
+                      })}
+                      className="w-full"
+                      openOnFocus
+                    />
+                  </Field>
+                  {!genForm.donor_member_id && (
+                    <Field label="Benfeitor">
+                      <Combobox
+                        value={genForm.benefactor_id}
+                        placeholder="Buscar benfeitor..."
+                        searchPlaceholder="Buscar benfeitor..."
+                        emptyMessage="Nenhum benfeitor encontrado"
+                        options={benefactors.map((b) => ({ value: b.id, label: b.name }))}
+                        onChange={(v) => setGenForm({
+                          ...genForm,
+                          benefactor_id: v,
+                          donor_member_id: "",
+                          donor_name: v ? "" : genForm.donor_name,
+                        })}
+                        className="w-full"
+                      />
+                    </Field>
+                  )}
+                  {!genForm.donor_member_id && !genForm.benefactor_id && (
+                    <Field label="Doador avulso">
+                      <Input
+                        value={genForm.donor_name}
+                        onChange={(e) => setGenForm({ ...genForm, donor_name: e.target.value, is_anonymous: false })}
+                        placeholder="Nome/documento (opcional)"
+                      />
+                    </Field>
+                  )}
+                  {!genForm.donor_member_id && !genForm.benefactor_id && !genForm.donor_name && (
+                    <Field label="Anonimo">
+                      <label className="flex items-center gap-2 pt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                        <input
+                          type="checkbox"
+                          checked={genForm.is_anonymous}
+                          onChange={(e) => setGenForm({ ...genForm, is_anonymous: e.target.checked })}
+                          className="h-4 w-4 rounded border-zinc-300 text-sky-600"
+                        />
+                        Doacao sem identificacao
+                      </label>
+                    </Field>
+                  )}
+                </>
+              ) : (
+                <Field label="Fornecedor">
+                  <Combobox
+                    value={genForm.supplier_id}
+                    placeholder="Buscar fornecedor..."
+                    searchPlaceholder="Buscar fornecedor..."
+                    emptyMessage="Nenhum fornecedor encontrado"
+                    options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
+                    onChange={(v) => setGenForm({ ...genForm, supplier_id: v })}
+                    className="w-full"
+                  />
+                </Field>
+              )}
               <Field label="Descricao">
                 <Input value={genForm.description} onChange={(e) => setGenForm({ ...genForm, description: e.target.value })} />
               </Field>
@@ -808,7 +1158,7 @@ export function BankReconciliationPanel() {
                 ) : (
                   <div className="space-y-2">
                     {groupNew.map((r) => (
-                      <div key={r.key} className="grid gap-2 sm:grid-cols-12">
+                      <div key={r.key} className="grid gap-2 rounded border border-zinc-200 p-2 sm:grid-cols-12 dark:border-zinc-700">
                         <div className="sm:col-span-4">
                           <Select value={r.category_id} onChange={(e) => updateNewRow(r.key, { category_id: e.target.value })}>
                             <option value="">Conta contabil...</option>
@@ -819,7 +1169,14 @@ export function BankReconciliationPanel() {
                           <CurrencyInput value={r.amount} onChange={(v) => updateNewRow(r.key, { amount: v })} placeholder="Valor" />
                         </div>
                         <div className="sm:col-span-3">
-                          <Input value={r.donor_name} onChange={(e) => updateNewRow(r.key, { donor_name: e.target.value })} placeholder="Doador (opcional)" />
+                          <Select
+                            value={r.payment_method}
+                            onChange={(e) => updateNewRow(r.key, { payment_method: e.target.value })}
+                          >
+                            {Object.entries(PAYMENT_METHODS).map(([k, v]) => (
+                              <option key={k} value={k}>{v}</option>
+                            ))}
+                          </Select>
                         </div>
                         <div className="sm:col-span-2">
                           <Input value={r.description} onChange={(e) => updateNewRow(r.key, { description: e.target.value })} placeholder="Descricao" />
@@ -829,6 +1186,76 @@ export function BankReconciliationPanel() {
                             <Trash2 className="h-3.5 w-3.5 text-red-500" />
                           </Button>
                         </div>
+                        {groupEntry.direction === "income" ? (
+                          <>
+                            <div className={r.donor_member_id ? "sm:col-span-8" : "sm:col-span-4"}>
+                              <Combobox
+                                value={r.donor_member_id}
+                                placeholder="Membro doador (opcional)"
+                                searchPlaceholder="Buscar membro..."
+                                emptyMessage="Nenhum membro encontrado"
+                                options={members.map((m) => ({ value: m.id, label: m.full_name }))}
+                                onChange={(v) => updateNewRow(r.key, {
+                                  donor_member_id: v,
+                                  benefactor_id: v ? "" : r.benefactor_id,
+                                  donor_name: v ? "" : r.donor_name,
+                                  is_anonymous: v ? false : r.is_anonymous,
+                                })}
+                                className="w-full"
+                                openOnFocus
+                              />
+                            </div>
+                            {!r.donor_member_id && (
+                              <div className="sm:col-span-4">
+                                <Combobox
+                                  value={r.benefactor_id}
+                                  placeholder="Benfeitor (opcional)"
+                                  searchPlaceholder="Buscar benfeitor..."
+                                  emptyMessage="Nenhum benfeitor encontrado"
+                                  options={benefactors.map((b) => ({ value: b.id, label: b.name }))}
+                                  onChange={(v) => updateNewRow(r.key, {
+                                    benefactor_id: v,
+                                    donor_member_id: "",
+                                    donor_name: v ? "" : r.donor_name,
+                                  })}
+                                  className="w-full"
+                                />
+                              </div>
+                            )}
+                            {!r.donor_member_id && !r.benefactor_id && (
+                              <div className="sm:col-span-4">
+                                <Input
+                                  value={r.donor_name}
+                                  onChange={(e) => updateNewRow(r.key, { donor_name: e.target.value, is_anonymous: false })}
+                                  placeholder="Doador avulso (opcional)"
+                                />
+                              </div>
+                            )}
+                            {!r.donor_member_id && !r.benefactor_id && !r.donor_name && (
+                              <label className="flex items-center gap-2 text-xs text-zinc-600 sm:col-span-4 dark:text-zinc-300">
+                                <input
+                                  type="checkbox"
+                                  checked={r.is_anonymous}
+                                  onChange={(e) => updateNewRow(r.key, { is_anonymous: e.target.checked })}
+                                  className="h-4 w-4 rounded border-zinc-300 text-sky-600"
+                                />
+                                Doador anonimo
+                              </label>
+                            )}
+                          </>
+                        ) : (
+                          <div className="sm:col-span-6">
+                            <Combobox
+                              value={r.supplier_id}
+                              placeholder="Fornecedor (opcional)"
+                              searchPlaceholder="Buscar fornecedor..."
+                              emptyMessage="Nenhum fornecedor encontrado"
+                              options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
+                              onChange={(v) => updateNewRow(r.key, { supplier_id: v })}
+                              className="w-full"
+                            />
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -864,53 +1291,212 @@ export function BankReconciliationPanel() {
         <Modal open={showPending} onClose={() => { if (!pendingSaving) setShowPending(false); }} title="Gerar lancamentos pendentes" size="xl">
           <form onSubmit={submitPending} className="space-y-3 text-sm">
             <p className="text-zinc-500">
-              Os lancamentos serao criados na mesma sequencia do arquivo (data e ordem da linha). Informe a conta
-              contabil de cada linha.
+              Confira a conta contabil e, se necessario, vincule o membro/benfeitor/fornecedor. Use as setas para
+              definir a sequencia dos lancamentos gerados; a linha original do arquivo e preservada.
             </p>
-            <div className="max-h-96 overflow-y-auto rounded border border-zinc-200 dark:border-zinc-700">
+            <div className="max-h-[28rem] overflow-y-auto rounded border border-zinc-200 dark:border-zinc-700">
               <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-zinc-50 dark:bg-zinc-900">
+                <thead className="sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-900">
                   <tr>
                     <th className="w-8 px-2 py-1.5"></th>
-                    <th className="w-16 px-2 py-1.5 text-left font-medium text-zinc-500">Seq.</th>
+                    <th className="w-10 px-1 py-1.5"></th>
+                    <th className="w-12 px-2 py-1.5 text-left font-medium text-zinc-500">Seq.</th>
                     <th className="px-2 py-1.5 text-left font-medium text-zinc-500">Data</th>
                     <th className="px-2 py-1.5 text-left font-medium text-zinc-500">Historico</th>
                     <th className="px-2 py-1.5 text-left font-medium text-zinc-500">Conta contabil</th>
+                    <th className="px-2 py-1.5 text-left font-medium text-zinc-500">Vinculo</th>
                     <th className="px-2 py-1.5 text-right font-medium text-zinc-500">Valor</th>
+                    <th className="w-20 px-2 py-1.5"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {pendingEntries.map((e) => {
+                  {pendingOrder.map((id, orderIdx) => {
+                    const e = pendingById.get(id);
+                    if (!e) return null;
                     const sel = pendingSel.has(e.id);
                     const cats = categories.filter((c) => c.type === e.direction);
+                    const d = pendingDetails[e.id] ?? {
+                      donor_member_id: "",
+                      benefactor_id: "",
+                      donor_name: "",
+                      supplier_id: "",
+                      payment_method: "pix",
+                      is_anonymous: false,
+                    };
+                    const link = e.direction === "income"
+                      ? (memberName(d.donor_member_id) ?? benefactorName(d.benefactor_id) ?? (d.is_anonymous ? "Anonimo" : d.donor_name))
+                      : supplierName(d.supplier_id);
+                    const detailOpen = pendingDetailOpen === e.id;
+                    const prevDate = pendingById.get(pendingOrder[orderIdx - 1] ?? "")?.posted_at.slice(0, 10);
+                    const nextDate = pendingById.get(pendingOrder[orderIdx + 1] ?? "")?.posted_at.slice(0, 10);
+                    const entryDate = e.posted_at.slice(0, 10);
                     return (
-                      <tr key={e.id} className={`border-t border-zinc-100 dark:border-zinc-800 ${sel ? "bg-sky-50 dark:bg-sky-950/30" : ""}`}>
-                        <td className="px-2 py-1 text-center">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-zinc-300 text-sky-600"
-                            checked={sel}
-                            onChange={() => togglePending(e.id)}
-                          />
-                        </td>
-                        <td className="px-2 py-1 text-zinc-400 tabular-nums">{e.line_no || "-"}</td>
-                        <td className="whitespace-nowrap px-2 py-1 text-zinc-500">{datePt(e.posted_at)}</td>
-                        <td className="px-2 py-1 text-zinc-500">{e.memo ?? "-"}</td>
-                        <td className="px-2 py-1">
-                          <Select
-                            className="h-8 text-xs"
-                            value={pendingCats[e.id] ?? ""}
-                            disabled={!sel}
-                            onChange={(ev) => setPendingCats((prev) => ({ ...prev, [e.id]: ev.target.value }))}
-                          >
-                            <option value="">Selecione...</option>
-                            {cats.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
-                          </Select>
-                        </td>
-                        <td className={`px-2 py-1 text-right font-medium tabular-nums ${e.direction === "income" ? "text-emerald-600" : "text-red-600"}`}>
-                          {currency(e.amount)}
-                        </td>
-                      </tr>
+                      <Fragment key={e.id}>
+                        <tr className={`border-t border-zinc-100 dark:border-zinc-800 ${sel ? "bg-sky-50 dark:bg-sky-950/30" : ""}`}>
+                          <td className="px-2 py-1 text-center">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-zinc-300 text-sky-600"
+                              checked={sel}
+                              onChange={() => togglePending(e.id)}
+                            />
+                          </td>
+                          <td className="px-1 py-1">
+                            <div className="flex flex-col">
+                              <button
+                                type="button"
+                                aria-label="Mover para cima"
+                                title="Mover para cima"
+                                disabled={orderIdx === 0 || pendingSaving || prevDate !== entryDate}
+                                className="text-zinc-400 hover:text-sky-600 disabled:opacity-30"
+                                onClick={() => movePendingRow(e.id, -1)}
+                              >
+                                <ChevronUp className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                aria-label="Mover para baixo"
+                                title="Mover para baixo"
+                                disabled={orderIdx === pendingOrder.length - 1 || pendingSaving || nextDate !== entryDate}
+                                className="text-zinc-400 hover:text-sky-600 disabled:opacity-30"
+                                onClick={() => movePendingRow(e.id, 1)}
+                              >
+                                <ChevronDown className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </td>
+                          <td className="px-2 py-1 text-zinc-400 tabular-nums" title={`Linha original do arquivo: ${e.line_no}`}>
+                            {e.sequence_no || "-"}
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-1 text-zinc-500">{datePt(e.posted_at)}</td>
+                          <td className="px-2 py-1 text-zinc-500">{e.memo ?? "-"}</td>
+                          <td className="px-2 py-1">
+                            <Select
+                              className="h-8 text-xs"
+                              value={pendingCats[e.id] ?? ""}
+                              disabled={!sel}
+                              onChange={(ev) => setPendingCats((prev) => ({ ...prev, [e.id]: ev.target.value }))}
+                            >
+                              <option value="">Selecione...</option>
+                              {cats.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
+                            </Select>
+                          </td>
+                          <td className="px-2 py-1 text-zinc-500">{link || "-"}</td>
+                          <td className={`px-2 py-1 text-right font-medium tabular-nums ${e.direction === "income" ? "text-emerald-600" : "text-red-600"}`}>
+                            {currency(e.amount)}
+                          </td>
+                          <td className="px-2 py-1 text-right">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                setPendingDetailOpen(detailOpen ? null : e.id);
+                                if (!sel) togglePending(e.id);
+                              }}
+                            >
+                              {detailOpen ? "Fechar" : "Detalhes"}
+                            </Button>
+                          </td>
+                        </tr>
+                        {detailOpen && sel && (
+                          <tr className="border-t border-sky-100 bg-sky-50/40 dark:border-sky-900/40 dark:bg-sky-950/20">
+                            <td colSpan={9} className="px-3 py-3">
+                              <div className="grid gap-3 sm:grid-cols-3">
+                                {e.direction === "income" ? (
+                                  <>
+                                    <Field label="Membro doador">
+                                      <Combobox
+                                        value={d.donor_member_id}
+                                        placeholder="Buscar membro..."
+                                        searchPlaceholder="Buscar membro..."
+                                        emptyMessage="Nenhum membro encontrado"
+                                        options={members.map((m) => ({ value: m.id, label: m.full_name }))}
+                                        onChange={(v) => updatePendingDetail(e.id, {
+                                          donor_member_id: v,
+                                          benefactor_id: v ? "" : d.benefactor_id,
+                                          donor_name: v ? "" : d.donor_name,
+                                          is_anonymous: v ? false : d.is_anonymous,
+                                        })}
+                                        className="w-full"
+                                        openOnFocus
+                                      />
+                                    </Field>
+                                    {!d.donor_member_id && (
+                                      <Field label="Benfeitor">
+                                        <Combobox
+                                          value={d.benefactor_id}
+                                          placeholder="Buscar benfeitor..."
+                                          searchPlaceholder="Buscar benfeitor..."
+                                          emptyMessage="Nenhum benfeitor encontrado"
+                                          options={benefactors.map((b) => ({ value: b.id, label: b.name }))}
+                                          onChange={(v) => updatePendingDetail(e.id, {
+                                            benefactor_id: v,
+                                            donor_member_id: "",
+                                            donor_name: v ? "" : d.donor_name,
+                                          })}
+                                          className="w-full"
+                                        />
+                                      </Field>
+                                    )}
+                                    {!d.donor_member_id && !d.benefactor_id && (
+                                      <Field label="Doador avulso">
+                                        <Input
+                                          value={d.donor_name}
+                                          onChange={(ev) => updatePendingDetail(e.id, { donor_name: ev.target.value, is_anonymous: false })}
+                                          placeholder="Nome/documento (opcional)"
+                                        />
+                                      </Field>
+                                    )}
+                                    {!d.donor_member_id && !d.benefactor_id && !d.donor_name && (
+                                      <Field label="Anonimo">
+                                        <label className="flex items-center gap-2 pt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                                          <input
+                                            type="checkbox"
+                                            checked={d.is_anonymous}
+                                            onChange={(ev) => updatePendingDetail(e.id, { is_anonymous: ev.target.checked })}
+                                            className="h-4 w-4 rounded border-zinc-300 text-sky-600"
+                                          />
+                                          Doacao sem identificacao
+                                        </label>
+                                      </Field>
+                                    )}
+                                  </>
+                                ) : (
+                                  <Field label="Fornecedor">
+                                    <Combobox
+                                      value={d.supplier_id}
+                                      placeholder="Buscar fornecedor..."
+                                      searchPlaceholder="Buscar fornecedor..."
+                                      emptyMessage="Nenhum fornecedor encontrado"
+                                      options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
+                                      onChange={(v) => updatePendingDetail(e.id, { supplier_id: v })}
+                                      className="w-full"
+                                    />
+                                  </Field>
+                                )}
+                                <Field label="Forma de pagamento">
+                                  <Select
+                                    value={d.payment_method}
+                                    onChange={(ev) => updatePendingDetail(e.id, { payment_method: ev.target.value })}
+                                  >
+                                    {Object.entries(PAYMENT_METHODS).map(([k, v]) => (
+                                      <option key={k} value={k}>{v}</option>
+                                    ))}
+                                  </Select>
+                                </Field>
+                                <Field label="Descricao" className="sm:col-span-2">
+                                  <Input
+                                    value={pendingDesc[e.id] ?? ""}
+                                    onChange={(ev) => setPendingDesc((prev) => ({ ...prev, [e.id]: ev.target.value }))}
+                                  />
+                                </Field>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -985,4 +1571,6 @@ export function BankReconciliationPanel() {
     </div>
   );
 }
+
+
 

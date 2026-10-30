@@ -35,6 +35,7 @@ type BankImport struct {
 type BankEntry struct {
 	ID                     string  `json:"id"`
 	LineNo                 int     `json:"line_no"`
+	SequenceNo             int     `json:"sequence_no"`
 	PostedAt               string  `json:"posted_at"`
 	Amount                 float64 `json:"amount"`
 	Direction              string  `json:"direction"`
@@ -64,8 +65,14 @@ type ImportBankInput struct {
 }
 
 type GenerateBankEntryInput struct {
-	CategoryID  string `json:"category_id"`
-	Description string `json:"description"`
+	CategoryID    string `json:"category_id"`
+	Description   string `json:"description"`
+	DonorMemberID string `json:"donor_member_id"`
+	BenefactorID  string `json:"benefactor_id"`
+	DonorName     string `json:"donor_name"`
+	SupplierID    string `json:"supplier_id"`
+	PaymentMethod string `json:"payment_method"`
+	IsAnonymous   bool   `json:"is_anonymous"`
 }
 
 type parsedEntry struct {
@@ -358,8 +365,8 @@ func (r *Repo) ImportBankStatement(ctx context.Context, tx pgx.Tx, tenantID, bra
 	}
 	for _, e := range entries {
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO bank_statement_entries (import_id, posted_at, amount, direction, memo, fitid, line_no)
-			VALUES ($1::uuid, $2::date, $3, $4, NULLIF($5,''), NULLIF($6,''), $7)
+			INSERT INTO bank_statement_entries (import_id, posted_at, amount, direction, memo, fitid, line_no, sequence_no)
+			VALUES ($1::uuid, $2::date, $3, $4, NULLIF($5,''), NULLIF($6,''), $7, $7)
 			ON CONFLICT DO NOTHING`,
 			importID, e.PostedAt.Format(dateLayout), e.Amount, e.Direction, e.Memo, e.FitID, e.LineNo); err != nil {
 			return nil, err
@@ -488,14 +495,14 @@ func refreshBankCounters(ctx context.Context, tx pgx.Tx, importID string) error 
 
 func (r *Repo) ListBankEntries(ctx context.Context, tx pgx.Tx, importID string) ([]BankEntry, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT e.id::text, e.line_no, to_char(e.posted_at,'YYYY-MM-DD'), e.amount::float8, e.direction,
+		SELECT e.id::text, e.line_no, e.sequence_no, to_char(e.posted_at,'YYYY-MM-DD'), e.amount::float8, e.direction,
 		       e.memo, e.fitid, e.status, e.transaction_id::text, t.description,
 		       e.group_id::text, g.description
 		FROM bank_statement_entries e
 		LEFT JOIN financial_transactions t ON t.id = e.transaction_id
 		LEFT JOIN financial_transaction_groups g ON g.id = e.group_id
 		WHERE e.import_id = $1::uuid
-		ORDER BY e.posted_at, e.line_no, e.created_at, e.id`, importID)
+		ORDER BY e.posted_at, e.sequence_no, e.line_no, e.created_at, e.id`, importID)
 	if err != nil {
 		return nil, err
 	}
@@ -503,7 +510,7 @@ func (r *Repo) ListBankEntries(ctx context.Context, tx pgx.Tx, importID string) 
 	out := []BankEntry{}
 	for rows.Next() {
 		var e BankEntry
-		if err := rows.Scan(&e.ID, &e.LineNo, &e.PostedAt, &e.Amount, &e.Direction,
+		if err := rows.Scan(&e.ID, &e.LineNo, &e.SequenceNo, &e.PostedAt, &e.Amount, &e.Direction,
 			&e.Memo, &e.FitID, &e.Status, &e.TransactionID, &e.TransactionDescription,
 			&e.GroupID, &e.GroupDescription); err != nil {
 			return nil, err
@@ -592,13 +599,38 @@ func (r *Repo) GenerateFromBankEntry(ctx context.Context, tx pgx.Tx, tenantID, b
 	if accountID != "" {
 		acct = &accountID
 	}
+	// Vinculos permitidos por tipo: entrada aceita membro/benfeitor/doador
+	// avulso; saida aceita fornecedor. Membro/benfeitor tem precedencia sobre o
+	// nome avulso, como no formulario de lancamento.
+	donorMemberID := optString(in.DonorMemberID)
+	benefactorID := optString(in.BenefactorID)
+	donorName := optString(in.DonorName)
+	supplierID := optString(in.SupplierID)
+	if direction != "income" {
+		donorMemberID, benefactorID, donorName = nil, nil, nil
+	}
+	if direction != "expense" {
+		supplierID = nil
+	}
+	if donorMemberID != nil {
+		benefactorID, donorName = nil, nil
+	} else if benefactorID != nil {
+		donorName = nil
+	}
+	isAnonymous := in.IsAnonymous && donorMemberID == nil && benefactorID == nil && donorName == nil
 	created, _, _, _, err := r.Create(ctx, tx, tenantID, branchID, CreateTxnInput{
-		Type:        direction,
-		Amount:      amount,
-		CategoryID:  &catID,
-		AccountID:   acct,
-		Description: &desc,
-		OccurredAt:  &posted,
+		Type:          direction,
+		Amount:        amount,
+		CategoryID:    &catID,
+		AccountID:     acct,
+		Description:   &desc,
+		OccurredAt:    &posted,
+		DonorMemberID: donorMemberID,
+		BenefactorID:  benefactorID,
+		DonorName:     donorName,
+		SupplierID:    supplierID,
+		PaymentMethod: optString(in.PaymentMethod),
+		IsAnonymous:   isAnonymous,
 	})
 	if err != nil {
 		return nil, err
@@ -629,9 +661,15 @@ func (r *Repo) GenerateFromBankEntry(ctx context.Context, tx pgx.Tx, tenantID, b
 
 // GeneratePendingItem configura a geracao de uma linha pendente do extrato.
 type GeneratePendingItem struct {
-	EntryID     string `json:"entry_id"`
-	CategoryID  string `json:"category_id"`
-	Description string `json:"description"`
+	EntryID       string `json:"entry_id"`
+	CategoryID    string `json:"category_id"`
+	Description   string `json:"description"`
+	DonorMemberID string `json:"donor_member_id"`
+	BenefactorID  string `json:"benefactor_id"`
+	DonorName     string `json:"donor_name"`
+	SupplierID    string `json:"supplier_id"`
+	PaymentMethod string `json:"payment_method"`
+	IsAnonymous   bool   `json:"is_anonymous"`
 }
 
 // GeneratePendingFromBank gera os lancamentos das linhas pendentes informadas,
@@ -655,7 +693,7 @@ func (r *Repo) GeneratePendingFromBank(ctx context.Context, tx pgx.Tx, tenantID,
 		SELECT e.id::text
 		FROM bank_statement_entries e
 		WHERE e.import_id = $1::uuid AND e.status = 'pendente'
-		ORDER BY e.posted_at, e.line_no, e.created_at, e.id`, importID)
+		ORDER BY e.posted_at, e.sequence_no, e.line_no, e.created_at, e.id`, importID)
 	if err != nil {
 		return 0, err
 	}
@@ -680,8 +718,14 @@ func (r *Repo) GeneratePendingFromBank(ctx context.Context, tx pgx.Tx, tenantID,
 			continue
 		}
 		if _, err := r.GenerateFromBankEntry(ctx, tx, tenantID, branchID, id, GenerateBankEntryInput{
-			CategoryID:  it.CategoryID,
-			Description: it.Description,
+			CategoryID:    it.CategoryID,
+			Description:   it.Description,
+			DonorMemberID: it.DonorMemberID,
+			BenefactorID:  it.BenefactorID,
+			DonorName:     it.DonorName,
+			SupplierID:    it.SupplierID,
+			PaymentMethod: it.PaymentMethod,
+			IsAnonymous:   it.IsAnonymous,
 		}); err != nil {
 			return generated, err
 		}
@@ -694,9 +738,9 @@ func (r *Repo) GeneratePendingFromBank(ctx context.Context, tx pgx.Tx, tenantID,
 }
 
 // alignBankDateSequence reordena as linhas visiveis (lancamentos avulsos +
-// grupos) de uma conta/data para seguir a ordem do arquivo bancario. Linhas do
-// extrato vinculadas vem primeiro, na ordem de line_no; as demais linhas do
-// escopo (fora do extrato) mantem a ordem relativa atual no fim.
+// grupos) de uma conta/data para seguir a ordem de trabalho do extrato
+// (sequence_no). As linhas vinculadas ao extrato sao reordenadas ENTRE AS
+// POSICOES que ja ocupam; as demais linhas do razao ficam onde estao.
 func (r *Repo) alignBankDateSequence(ctx context.Context, tx pgx.Tx, importID, accountID, date string) error {
 	type line struct {
 		key  string
@@ -710,9 +754,9 @@ func (r *Repo) alignBankDateSequence(ctx context.Context, tx pgx.Tx, importID, a
 		return err
 	}
 
-	// Ordem do arquivo: entradas vinculadas a um lancamento avulso ou grupo.
+	// Ordem de trabalho: entradas vinculadas a um lancamento avulso ou grupo.
 	rows, err := tx.Query(ctx, `
-		SELECT e.line_no,
+		SELECT COALESCE(e.sequence_no, e.line_no),
 		       CASE WHEN COALESCE(e.group_id, t.group_id) IS NOT NULL THEN 'group' ELSE 'transaction' END,
 		       COALESCE(e.group_id, t.group_id, e.transaction_id)::text
 		FROM bank_statement_entries e
@@ -721,7 +765,7 @@ func (r *Repo) alignBankDateSequence(ctx context.Context, tx pgx.Tx, importID, a
 		  AND e.posted_at = $2::date
 		  AND e.status IN ('conciliado','lancamento_gerado')
 		  AND COALESCE(e.group_id, t.group_id, e.transaction_id) IS NOT NULL
-		ORDER BY e.line_no, e.created_at, e.id`, importID, date)
+		ORDER BY COALESCE(e.sequence_no, e.line_no), e.line_no, e.created_at, e.id`, importID, date)
 	if err != nil {
 		return err
 	}
@@ -764,7 +808,7 @@ func (r *Repo) alignBankDateSequence(ctx context.Context, tx pgx.Tx, importID, a
 		id   string
 	}
 	current := []currentLine{}
-	present := map[string]bool{}
+	indexByKey := map[string]int{}
 	for rows.Next() {
 		var c currentLine
 		var seq *int
@@ -773,8 +817,8 @@ func (r *Repo) alignBankDateSequence(ctx context.Context, tx pgx.Tx, importID, a
 			return err
 		}
 		c.key = c.kind + "|" + c.id
+		indexByKey[c.key] = len(current)
 		current = append(current, c)
-		present[c.key] = true
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
@@ -784,22 +828,28 @@ func (r *Repo) alignBankDateSequence(ctx context.Context, tx pgx.Tx, importID, a
 		return nil
 	}
 
-	target := make([]currentLine, 0, len(current))
+	// Posicoes atualmente ocupadas pelas linhas do extrato. Elas sao mantidas;
+	// apenas a ordem ENTRE elas muda, conforme o sequence_no.
+	positions := []int{}
+	linked := []currentLine{}
 	used := map[string]bool{}
 	for _, l := range fileOrder {
-		if !present[l.key] || used[l.key] {
+		idx, ok := indexByKey[l.key]
+		if !ok || used[l.key] {
 			continue
 		}
 		used[l.key] = true
-		target = append(target, currentLine{key: l.key, kind: l.kind, id: l.id})
+		positions = append(positions, idx)
+		linked = append(linked, current[idx])
 	}
-	for _, c := range current {
-		if !used[c.key] {
-			target = append(target, c)
-		}
-	}
-	if len(target) != len(current) {
+	if len(linked) == 0 {
 		return nil
+	}
+	sort.Ints(positions)
+	target := make([]currentLine, len(current))
+	copy(target, current)
+	for i, pos := range positions {
+		target[pos] = linked[i]
 	}
 
 	changed := false
@@ -820,6 +870,134 @@ func (r *Repo) alignBankDateSequence(ctx context.Context, tx pgx.Tx, importID, a
 	return nil
 }
 
+// MoveBankEntry troca a linha do extrato com a vizinha da mesma data (up/down)
+// e realinha a sequencia dos lancamentos vinculados.
+func (r *Repo) MoveBankEntry(ctx context.Context, tx pgx.Tx, importID, entryID, direction string) error {
+	if direction != "up" && direction != "down" {
+		return errors.New("direcao invalida (use up ou down)")
+	}
+	var posted, accountID string
+	if err := tx.QueryRow(ctx, `
+		SELECT to_char(e.posted_at,'YYYY-MM-DD'), COALESCE(i.account_id::text,'')
+		FROM bank_statement_entries e
+		JOIN bank_statement_imports i ON i.id = e.import_id
+		WHERE e.id = $1::uuid AND e.import_id = $2::uuid`, entryID, importID).
+		Scan(&posted, &accountID); err != nil {
+		return err
+	}
+
+	rows, err := tx.Query(ctx, `
+		SELECT id::text FROM bank_statement_entries
+		WHERE import_id = $1::uuid AND posted_at = $2::date
+		ORDER BY sequence_no, line_no, created_at, id`, importID, posted)
+	if err != nil {
+		return err
+	}
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	idx := -1
+	for i, id := range ids {
+		if id == entryID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return pgx.ErrNoRows
+	}
+	swap := idx - 1
+	if direction == "down" {
+		swap = idx + 1
+	}
+	if swap < 0 || swap >= len(ids) {
+		return nil
+	}
+	ids[idx], ids[swap] = ids[swap], ids[idx]
+
+	for i, id := range ids {
+		if _, err := tx.Exec(ctx, `
+			UPDATE bank_statement_entries SET sequence_no = $2, updated_at = now()
+			WHERE id = $1::uuid`, id, i+1); err != nil {
+			return err
+		}
+	}
+	if accountID != "" {
+		return r.alignBankDateSequence(ctx, tx, importID, accountID, posted)
+	}
+	return nil
+}
+
+// ReorderBankEntries aplica a ordem completa de uma data (usada pelo modal de
+// geracao de pendentes). entry_ids precisa conter todas as linhas da data.
+func (r *Repo) ReorderBankEntries(ctx context.Context, tx pgx.Tx, importID, date string, entryIDs []string) error {
+	if strings.TrimSpace(date) == "" {
+		return errors.New("informe a data")
+	}
+	var accountID string
+	if err := tx.QueryRow(ctx, `
+		SELECT COALESCE(account_id::text,'') FROM bank_statement_imports WHERE id = $1::uuid`, importID).
+		Scan(&accountID); err != nil {
+		return err
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT id::text FROM bank_statement_entries
+		WHERE import_id = $1::uuid AND posted_at = $2::date
+		ORDER BY sequence_no, line_no, created_at, id`, importID, date)
+	if err != nil {
+		return err
+	}
+	all := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		all = append(all, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(entryIDs) != len(all) {
+		return errors.New("a ordem precisa incluir todas as linhas da data")
+	}
+	seen := map[string]bool{}
+	for _, id := range entryIDs {
+		if seen[id] {
+			return errors.New("linha duplicada na reordenacao")
+		}
+		seen[id] = true
+	}
+	for _, id := range all {
+		if !seen[id] {
+			return errors.New("a ordem precisa incluir todas as linhas da data")
+		}
+	}
+	for i, id := range entryIDs {
+		if _, err := tx.Exec(ctx, `
+			UPDATE bank_statement_entries SET sequence_no = $2, updated_at = now()
+			WHERE id = $1::uuid`, id, i+1); err != nil {
+			return err
+		}
+	}
+	if accountID != "" {
+		return r.alignBankDateSequence(ctx, tx, importID, accountID, date)
+	}
+	return nil
+}
+
 type NewGroupTransactionInput struct {
 	CategoryID    string  `json:"category_id"`
 	Amount        float64 `json:"amount"`
@@ -827,6 +1005,7 @@ type NewGroupTransactionInput struct {
 	DonorMemberID string  `json:"donor_member_id"`
 	BenefactorID  string  `json:"benefactor_id"`
 	DonorName     string  `json:"donor_name"`
+	SupplierID    string  `json:"supplier_id"`
 	PaymentMethod string  `json:"payment_method"`
 	IsAnonymous   bool    `json:"is_anonymous"`
 }
@@ -880,6 +1059,22 @@ func (r *Repo) GroupFromBankEntry(ctx context.Context, tx pgx.Tx, tenantID, acto
 		if nt.Amount <= 0 {
 			return nil, errors.New("o valor dos novos lancamentos deve ser positivo")
 		}
+		donorMemberID := optString(nt.DonorMemberID)
+		benefactorID := optString(nt.BenefactorID)
+		donorName := optString(nt.DonorName)
+		supplierID := optString(nt.SupplierID)
+		if direction != "income" {
+			donorMemberID, benefactorID, donorName = nil, nil, nil
+		}
+		if direction != "expense" {
+			supplierID = nil
+		}
+		if donorMemberID != nil {
+			benefactorID, donorName = nil, nil
+		} else if benefactorID != nil {
+			donorName = nil
+		}
+		isAnonymous := nt.IsAnonymous && donorMemberID == nil && benefactorID == nil && donorName == nil
 		created, _, _, _, err := r.Create(ctx, tx, tenantID, branchID, CreateTxnInput{
 			Type:          direction,
 			Amount:        nt.Amount,
@@ -887,11 +1082,12 @@ func (r *Repo) GroupFromBankEntry(ctx context.Context, tx pgx.Tx, tenantID, acto
 			AccountID:     &accountID,
 			Description:   optString(nt.Description),
 			OccurredAt:    &posted,
-			DonorMemberID: optString(nt.DonorMemberID),
-			BenefactorID:  optString(nt.BenefactorID),
-			DonorName:     optString(nt.DonorName),
+			DonorMemberID: donorMemberID,
+			BenefactorID:  benefactorID,
+			DonorName:     donorName,
+			SupplierID:    supplierID,
 			PaymentMethod: optString(nt.PaymentMethod),
-			IsAnonymous:   nt.IsAnonymous,
+			IsAnonymous:   isAnonymous,
 			ActorID:       actorID,
 		})
 		if err != nil {
@@ -1080,7 +1276,7 @@ func (r *Repo) sequenceSuggestion(ctx context.Context, tx pgx.Tx, importID, tena
 		  AND e.posted_at = $2::date
 		  AND e.status IN ('conciliado','lancamento_gerado')
 		  AND COALESCE(e.group_id, t.group_id, e.transaction_id) IS NOT NULL
-		ORDER BY e.line_no, e.created_at, e.id`, importID, date)
+		ORDER BY COALESCE(e.sequence_no, e.line_no), e.line_no, e.created_at, e.id`, importID, date)
 	if err != nil {
 		return nil, err
 	}
