@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Search, Lock, ArrowLeft, Trash2, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Layers } from "lucide-react";
+import { Plus, Search, Lock, ArrowLeft, Trash2, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Layers, Paperclip } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -19,6 +19,7 @@ import {
 } from "@/lib/api";
 import { currency, datePt, dateTimePt, todayISO } from "@/lib/format";
 import { GroupMembersInline } from "@/components/finance/group-members-inline";
+import { AttachmentDrawer, type AttachmentOwner } from "@/components/finance/attachments";
 
 type PeriodRow = {
   id: string;
@@ -37,6 +38,7 @@ type PeriodRow = {
   reconciled: boolean;
   member_count: number;
   total_members: number;
+  attachment_count: number;
   tx?: ReconciliationItem;
 };
 
@@ -61,6 +63,7 @@ export function ReconciliationPanel() {
   const [sortColumn, setSortColumn] = useState("occurred_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [attachOwner, setAttachOwner] = useState<AttachmentOwner | null>(null);
 
   const [showNew, setShowNew] = useState(false);
   const now = new Date();
@@ -371,6 +374,7 @@ export function ReconciliationPanel() {
         reconciled: it.reconciled,
         member_count: 1,
         total_members: 1,
+        attachment_count: it.attachment_count,
         tx: it,
       });
     }
@@ -397,6 +401,7 @@ export function ReconciliationPanel() {
         total_members: first.group_member_count && first.group_member_count > 0
           ? first.group_member_count
           : members.length,
+        attachment_count: first.group_attachment_count ?? members.reduce((sum, m) => sum + m.attachment_count, 0),
       });
     }
     return out;
@@ -502,6 +507,43 @@ export function ReconciliationPanel() {
           <span className="text-zinc-500">{row.description ?? "-"}</span>
         </div>
       ),
+    },
+    {
+      key: "attachment_count",
+      label: "Anexos",
+      align: "center",
+      width: "w-20",
+      render: (row) => {
+        if (row.kind === "group" && row.group_id) {
+          return (
+            <button
+              type="button"
+              onClick={() => setAttachOwner({ groupId: row.group_id })}
+              className="inline-flex items-center gap-0.5 text-sky-600 hover:text-sky-700"
+              title={row.attachment_count ? `Ver ${row.attachment_count} anexo(s)` : "Anexar comprovante ao agrupamento"}
+              aria-label={row.attachment_count ? `Ver ${row.attachment_count} anexo(s)` : "Anexar comprovante ao agrupamento"}
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+              {!!row.attachment_count && <span className="text-[10px] font-medium">{row.attachment_count}</span>}
+            </button>
+          );
+        }
+        if (row.tx && row.attachment_count > 0) {
+          return (
+            <button
+              type="button"
+              onClick={() => setAttachOwner({ transactionId: row.tx!.id })}
+              className="inline-flex items-center gap-0.5 text-sky-600 hover:text-sky-700"
+              title={`Ver ${row.attachment_count} anexo(s)`}
+              aria-label={`Ver ${row.attachment_count} anexo(s)`}
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+              <span className="text-[10px] font-medium">{row.attachment_count}</span>
+            </button>
+          );
+        }
+        return <span className="text-zinc-300">-</span>;
+      },
     },
     {
       key: "amount",
@@ -635,6 +677,7 @@ export function ReconciliationPanel() {
                   groupId={row.group_id}
                   from={selected?.period_start}
                   to={selected?.period_end}
+                  onOpenTransaction={(m) => setAttachOwner({ transactionId: m.id })}
                 />
               ) : null,
           }}
@@ -660,6 +703,14 @@ export function ReconciliationPanel() {
             </div>
           </div>
         </Modal>
+
+        <AttachmentDrawer
+          open={!!attachOwner}
+          onClose={() => setAttachOwner(null)}
+          owner={attachOwner ?? {}}
+          canUpload={canWrite}
+          onUploaded={reloadItems}
+        />
       </div>
     );
   }

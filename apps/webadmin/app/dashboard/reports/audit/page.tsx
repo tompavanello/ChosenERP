@@ -39,6 +39,7 @@ type AuditRow = {
   audited: boolean;
   member_count: number;
   total_members: number;
+  attachment_count: number;
   tx?: AuditItem;
   members?: AuditItem[];
 };
@@ -296,6 +297,7 @@ export default function AuditReportPage() {
         audited: it.audited,
         member_count: 1,
         total_members: 1,
+        attachment_count: it.attachment_count,
         tx: it,
       });
     }
@@ -322,6 +324,7 @@ export default function AuditReportPage() {
         total_members: first.group_member_count && first.group_member_count > 0
           ? first.group_member_count
           : members.length,
+        attachment_count: first.group_attachment_count ?? members.reduce((sum, m) => sum + m.attachment_count, 0),
         members,
       });
     }
@@ -517,9 +520,21 @@ export default function AuditReportPage() {
       render: (row) => {
         if (row.kind === "group") {
           return (
-            <Button variant="ghost" className="h-7 px-1.5" title="Detalhes do agrupamento" onClick={() => setGroupDetailId(row.group_id)}>
-              <Layers className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center justify-center gap-0.5">
+              <Button variant="ghost" className="h-7 px-1.5" title="Detalhes do agrupamento" onClick={() => setGroupDetailId(row.group_id)}>
+                <Layers className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                className="h-7 px-1.5"
+                title={row.attachment_count > 0 ? `Ver ${row.attachment_count} anexo(s)` : "Sem anexos"}
+                disabled={row.attachment_count === 0}
+                onClick={() => setGroupDetailId(row.group_id)}
+              >
+                <Paperclip className="h-4 w-4" />
+                {row.attachment_count > 0 && <span className="ml-0.5 text-[10px]">{row.attachment_count}</span>}
+              </Button>
+            </div>
           );
         }
         const it = row.tx;

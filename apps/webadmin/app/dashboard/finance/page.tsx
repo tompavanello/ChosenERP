@@ -261,7 +261,7 @@ export default function FinancePage() {
       const g = groupsById.get(gid);
       const first = members[0];
       const amount = members.reduce((sum, m) => sum + Number(m.amount || 0), 0);
-      const attachmentCount = members.reduce((sum, m) => sum + (m.attachment_count ?? 0), 0);
+      const attachmentCount = g?.attachment_count ?? members.reduce((sum, m) => sum + (m.attachment_count ?? 0), 0);
       const reconciled = g ? g.reconciled : members.every((m) => m.reconciled);
       const seqs = members
         .map((m) => m.entry_seq)
@@ -452,15 +452,19 @@ export default function FinancePage() {
                   <span className="text-[10px] font-medium">{t.attachment_count}</span>
                 </button>
               ) : t.attachment_count === 1 ? (
-                <a
-                  href={t.attachment_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (t.attachment_url) {
+                      downloadFinancialAttachment(t.attachment_url, t.attachment_url.split("/").pop() ?? "anexo")
+                        .catch(() => toast("Nao foi possivel abrir o anexo", "error"));
+                    }
+                  }}
                   title="Ver anexo"
                   className="inline-flex items-center text-sky-600 hover:text-sky-700"
                 >
                   <Paperclip className="h-3.5 w-3.5" />
-                </a>
+                </button>
               ) : (
                 <button
                   type="button"
@@ -1254,6 +1258,7 @@ export default function FinancePage() {
                 <TH>Descricao</TH>
                 <TH>Status</TH>
                 <TH className="text-right">Itens</TH>
+                <TH className="text-center">Anexos</TH>
                 <TH className="text-right">Total</TH>
                 <TH></TH>
               </TRow>
@@ -1273,6 +1278,22 @@ export default function FinancePage() {
                     )}
                   </TD>
                   <TD className="text-right text-zinc-500">{g.member_count}</TD>
+                  <TD className="text-center">
+                    {g.attachment_count > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setGroupDetailId(g.id)}
+                        className="inline-flex items-center gap-0.5 text-sky-600 hover:text-sky-700"
+                        title={`Ver ${g.attachment_count} anexo(s)`}
+                        aria-label={`Ver ${g.attachment_count} anexo(s)`}
+                      >
+                        <Paperclip className="h-3.5 w-3.5" />
+                        <span className="text-[10px] font-medium">{g.attachment_count}</span>
+                      </button>
+                    ) : (
+                      <span className="text-zinc-300">-</span>
+                    )}
+                  </TD>
                   <TD className={`text-right font-semibold ${g.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
                     {currency(g.total_amount)}
                   </TD>
@@ -1285,7 +1306,7 @@ export default function FinancePage() {
               ))}
               {!txGroupsLoading && txGroups.length === 0 && (
                 <TRow>
-                  <TD colSpan={8} className="py-8 text-center text-zinc-400">
+                  <TD colSpan={9} className="py-8 text-center text-zinc-400">
                     Nenhum agrupamento no periodo. Selecione lancamentos na aba Lancamentos e clique em Agrupar.
                   </TD>
                 </TRow>

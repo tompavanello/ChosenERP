@@ -1314,6 +1314,54 @@ func (a *App) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 
 // ---- Anexos de lancamentos ----
 
+func (a *App) saveFinanceUpload(w http.ResponseWriter, r *http.Request) (fileName, diskPath, contentType string, size int64, ok bool) {
+	// Limite 50 MB em uploads multipart. MaxBytesReader corta a leitura no limite
+	// antes de bufferizar (ParseMultipartForm so limita a parte em memoria).
+	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
+	if err := r.ParseMultipartForm(50 << 20); err != nil {
+		writeErr(w, http.StatusBadRequest, "upload muito grande (max 50MB)")
+		return "", "", "", 0, false
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "arquivo nao enviado")
+		return "", "", "", 0, false
+	}
+	defer file.Close()
+
+	// Cria diretorio de uploads se nao existir.
+	if err := os.MkdirAll(a.Config.UploadDir, 0o755); err != nil {
+		writeErr(w, http.StatusInternalServerError, "nao foi possivel criar diretorio de uploads")
+		return "", "", "", 0, false
+	}
+
+	fileName = sanitizeFilename(header.Filename)
+	randBytes := make([]byte, 12)
+	_, _ = rand.Read(randBytes)
+	diskName := hex.EncodeToString(randBytes) + "_" + fileName
+	diskPath = filepath.Join(a.Config.UploadDir, diskName)
+
+	dst, err := os.Create(diskPath)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "nao foi possivel salvar arquivo")
+		return "", "", "", 0, false
+	}
+	n, err := io.Copy(dst, file)
+	dst.Close()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "erro ao salvar arquivo")
+		return "", "", "", 0, false
+	}
+
+	size = int64(n)
+	contentType = header.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = mime.TypeByExtension(filepath.Ext(fileName))
+	}
+	return fileName, diskPath, contentType, size, true
+}
+
 func (a *App) handleUploadAttachment(w http.ResponseWriter, r *http.Request) {
 	claims, ok := claimsFrom(r.Context())
 	if !ok {
@@ -1323,60 +1371,21 @@ func (a *App) handleUploadAttachment(w http.ResponseWriter, r *http.Request) {
 	transactionID := r.PathValue("id")
 	b := boundsFromClaims(claims)
 
-	// Limite 50 MB em uploads multipart. MaxBytesReader corta a leitura no limite
-	// antes de bufferizar (ParseMultipartForm so limita a parte em memoria).
-	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
-	if err := r.ParseMultipartForm(50 << 20); err != nil {
-		writeErr(w, http.StatusBadRequest, "upload muito grande (max 50MB)")
+	fileName, diskPath, contentType, size, ok := a.saveFinanceUpload(w, r)
+	if !ok {
 		return
 	}
-
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, "arquivo nao enviado")
-		return
-	}
-	defer file.Close()
-
-	// Cria diretorio de uploads se nao existir.
-	if err := os.MkdirAll(a.Config.UploadDir, 0o755); err != nil {
-		writeErr(w, http.StatusInternalServerError, "nao foi possivel criar diretorio de uploads")
-		return
-	}
-
-	filename := sanitizeFilename(header.Filename)
-	randBytes := make([]byte, 12)
-	_, _ = rand.Read(randBytes)
-	diskName := hex.EncodeToString(randBytes) + "_" + filename
-	diskPath := filepath.Join(a.Config.UploadDir, diskName)
-
-	dst, err := os.Create(diskPath)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "nao foi possivel salvar arquivo")
-		return
-	}
-	n, err := io.Copy(dst, file)
-	dst.Close()
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "erro ao salvar arquivo")
-		return
-	}
-
-	size := int64(n)
-	contentType := header.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = mime.TypeByExtension(filepath.Ext(filename))
-	}
+	diskName := filepath.Base(diskPath)
 
 	in := finance.CreateAttachmentInput{
-		FileName:    filename,
+		FileName:    fileName,
 		FileURL:     "/api/v1/attachments/" + diskName,
 		ContentType: &contentType,
 		FileSize:    size,
 	}
 
 	var att *finance.Attachment
-	err = a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
+	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
 		if e := a.enforceQuota(r.Context(), tx, claims.TenantID, "storage", size); e != nil {
 			_ = os.Remove(diskPath) // nao deixa arquivo orfao quando o plano bloqueia
 			return e
@@ -1405,6 +1414,7 @@ func (a *App) handleUploadAttachment(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if err != nil {
+		_ = os.Remove(diskPath)
 		if writeQuotaErr(w, err) {
 			return
 		}

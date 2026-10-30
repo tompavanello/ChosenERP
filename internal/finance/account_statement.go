@@ -286,6 +286,12 @@ func (r *Repo) buildBankStatement(ctx context.Context, tx pgx.Tx, st *AccountSta
 		           t.created_at,
 		           t.entry_seq AS member_entry_seq,
 		           g.entry_seq AS group_entry_seq,
+		           (SELECT count(*)::int FROM financial_attachments fa
+		             WHERE fa.transaction_id = t.id) AS tx_attachment_count,
+		           (SELECT count(*)::int FROM financial_attachments fa
+		             WHERE fa.group_id = t.group_id) AS group_attachment_count,
+		           (SELECT fa.file_url FROM financial_attachments fa
+		             WHERE fa.transaction_id = t.id ORDER BY fa.created_at LIMIT 1) AS attachment_url,
 		           t.category_id::text, c.name AS category_name,
 		           COALESCE(t.donor_name, dm.full_name, bf.name) AS donor_name,
 		           t.payment_method, t.branch_id::text,
@@ -316,6 +322,9 @@ func (r *Repo) buildBankStatement(ctx context.Context, tx pgx.Tx, st *AccountSta
 		           CASE WHEN BOOL_OR(is_group) THEN NULL ELSE MAX(payment_method) END AS payment_method,
 		           MAX(branch_id) AS branch_id,
 		           BOOL_OR(is_group) AS is_group,
+		           SUM(tx_attachment_count)::int AS attachment_count,
+		           MAX(group_attachment_count)::int AS group_attachment_count,
+		           MAX(attachment_url) AS attachment_url,
 		           COUNT(*)::int AS member_count
 		    FROM base
 		    GROUP BY line_key
@@ -330,7 +339,8 @@ func (r *Repo) buildBankStatement(ctx context.Context, tx pgx.Tx, st *AccountSta
 		       '' AS hash, line_date, created_at, entry_seq,
 		       NULL::text AS receipt_id, NULL::text AS receipt_ref, NULL::text AS receipt_token,
 		       NULL::timestamptz AS voided_at, NULL::text AS void_reason,
-		       0 AS attachment_count, NULL::text AS attachment_url,
+		       (attachment_count + COALESCE(group_attachment_count,0))::int AS attachment_count,
+		       attachment_url,
 		       NULL::text AS due_date, NULL::timestamptz AS paid_at, NULL::text AS cost_center,
 		       group_id, NULLIF(group_status, '') AS group_status,
 		       is_group, member_count,

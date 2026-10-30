@@ -44,23 +44,25 @@ func (e ErrPendingReconciliation) Error() string {
 // ReconciliationItem e um lancamento do periodo da conciliacao (data efetiva
 // devolvida como YYYY-MM-DD, sem deslocamento de fuso).
 type ReconciliationItem struct {
-	ID               string  `json:"id"`
-	OccurredAt       string  `json:"occurred_at"`
-	CreatedAt        string  `json:"created_at"`
-	EntrySeq         *int    `json:"entry_seq,omitempty"`
-	Type             string  `json:"type"`
-	Amount           float64 `json:"amount"`
-	Description      *string `json:"description,omitempty"`
-	CategoryName     *string `json:"category_name,omitempty"`
-	AccountName      *string `json:"account_name,omitempty"`
-	AccountID        *string `json:"account_id,omitempty"`
-	Reconciled       bool    `json:"reconciled"`
-	ReconciledAt     *string `json:"reconciled_at,omitempty"`
-	GroupID          *string `json:"group_id,omitempty"`
-	GroupStatus      *string `json:"group_status,omitempty"`
-	GroupDescription *string `json:"group_description,omitempty"`
-	GroupMemberCount int     `json:"group_member_count,omitempty"`
-	GroupEntrySeq    *int    `json:"group_entry_seq,omitempty"`
+	ID                   string  `json:"id"`
+	OccurredAt           string  `json:"occurred_at"`
+	CreatedAt            string  `json:"created_at"`
+	EntrySeq             *int    `json:"entry_seq,omitempty"`
+	Type                 string  `json:"type"`
+	Amount               float64 `json:"amount"`
+	Description          *string `json:"description,omitempty"`
+	CategoryName         *string `json:"category_name,omitempty"`
+	AccountName          *string `json:"account_name,omitempty"`
+	AccountID            *string `json:"account_id,omitempty"`
+	Reconciled           bool    `json:"reconciled"`
+	ReconciledAt         *string `json:"reconciled_at,omitempty"`
+	GroupID              *string `json:"group_id,omitempty"`
+	GroupStatus          *string `json:"group_status,omitempty"`
+	GroupDescription     *string `json:"group_description,omitempty"`
+	GroupMemberCount     int     `json:"group_member_count,omitempty"`
+	GroupEntrySeq        *int    `json:"group_entry_seq,omitempty"`
+	AttachmentCount      int     `json:"attachment_count"`
+	GroupAttachmentCount int     `json:"group_attachment_count,omitempty"`
 }
 
 type CreateReconciliationInput struct {
@@ -179,7 +181,13 @@ func (r *Repo) ListReconciliationItems(ctx context.Context, tx pgx.Tx, id string
 		       to_char(t.reconciled_at,'YYYY-MM-DD"T"HH24:MI:SSOF'),
 		       t.group_id::text, g.status, g.description, g.entry_seq,
 		       (SELECT count(*)::int FROM financial_transactions mt
-		         WHERE mt.group_id = t.group_id AND mt.voided_at IS NULL)
+		         WHERE mt.group_id = t.group_id AND mt.voided_at IS NULL),
+		       (SELECT count(*) FROM financial_attachments fa
+		         WHERE fa.transaction_id = t.id)::int,
+		       (SELECT count(*)::int FROM financial_attachments fa
+		         LEFT JOIN financial_transactions mt ON mt.id = fa.transaction_id
+		         WHERE fa.group_id = t.group_id
+		            OR (mt.group_id = t.group_id AND mt.voided_at IS NULL))
 		FROM financial_reconciliations fr
 		JOIN financial_transactions t
 		  ON t.tenant_id = fr.tenant_id
@@ -201,7 +209,8 @@ func (r *Repo) ListReconciliationItems(ctx context.Context, tx pgx.Tx, id string
 		if err := rows.Scan(&it.ID, &it.OccurredAt, &it.CreatedAt, &it.EntrySeq,
 			&it.Type, &it.Amount, &it.Description, &it.CategoryName, &it.AccountName, &it.AccountID,
 			&it.Reconciled, &it.ReconciledAt, &it.GroupID, &it.GroupStatus,
-			&it.GroupDescription, &it.GroupEntrySeq, &it.GroupMemberCount); err != nil {
+			&it.GroupDescription, &it.GroupEntrySeq, &it.GroupMemberCount,
+			&it.AttachmentCount, &it.GroupAttachmentCount); err != nil {
 			return nil, err
 		}
 		out = append(out, it)

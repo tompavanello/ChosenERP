@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle, ArrowLeft, ArrowRightLeft, CheckCircle2, ChevronDown, ChevronUp,
-  Landmark, Layers, Link2, Plus, RefreshCw, Trash2, Upload, X,
+  Landmark, Layers, Link2, Paperclip, Plus, RefreshCw, Trash2, Upload, X,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import {
 } from "@/lib/api";
 import { currency, datePt } from "@/lib/format";
 import { ACCOUNT_TYPES, PAYMENT_METHODS } from "@/lib/constants";
+import { AttachmentDrawer, type AttachmentOwner } from "@/components/finance/attachments";
 
 const ENTRY_STATUS: Record<
   BankEntry["status"],
@@ -127,6 +128,7 @@ export function BankReconciliationPanel() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [selected, setSelected] = useState<BankImport | null>(null);
+  const [attachOwner, setAttachOwner] = useState<AttachmentOwner | null>(null);
   const [entries, setEntries] = useState<BankEntry[]>([]);
   const [divergences, setDivergences] = useState<BankDivergence[]>([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -771,7 +773,23 @@ export function BankReconciliationPanel() {
       width: "w-80",
       render: (e) => {
         if (e.status !== "pendente") {
-          return <span className="text-xs text-zinc-400">{e.transaction_description ?? e.group_description ?? ""}</span>;
+          return (
+            <div className="flex items-center justify-end gap-2">
+              <span className="text-xs text-zinc-400">{e.transaction_description ?? e.group_description ?? ""}</span>
+              {(e.transaction_id || e.group_id) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setAttachOwner(e.group_id ? { groupId: e.group_id } : { transactionId: e.transaction_id })}
+                  title={e.attachment_count > 0 ? `Ver ${e.attachment_count} anexo(s)` : "Ver anexos"}
+                  aria-label={e.attachment_count > 0 ? `Ver ${e.attachment_count} anexo(s)` : "Ver anexos"}
+                >
+                  <Paperclip className="h-3.5 w-3.5" />
+                  {e.attachment_count > 0 && <span className="text-[10px] font-medium">{e.attachment_count}</span>}
+                </Button>
+              )}
+            </div>
+          );
         }
         return (
           <div className="flex justify-end gap-1">
@@ -1568,6 +1586,14 @@ export function BankReconciliationPanel() {
           </div>
         </form>
       </Drawer>
+
+      <AttachmentDrawer
+        open={!!attachOwner}
+        onClose={() => setAttachOwner(null)}
+        owner={attachOwner ?? {}}
+        canUpload={canWrite}
+        onUploaded={refreshDetail}
+      />
     </div>
   );
 }

@@ -23,22 +23,25 @@ var (
 // TransactionGroup e uma movimentacao bancaria que reune varios lancamentos.
 // O total e o numero de membros sao calculados a partir dos lancamentos.
 type TransactionGroup struct {
-	ID           string        `json:"id"`
-	BranchID     string        `json:"branch_id"`
-	AccountID    string        `json:"account_id"`
-	AccountName  *string       `json:"account_name,omitempty"`
-	Type         string        `json:"type"`
-	OccurredAt   string        `json:"occurred_at"`
-	Description  *string       `json:"description,omitempty"`
-	Status       string        `json:"status"`
-	Reconciled   bool          `json:"reconciled"`
-	ReconciledAt *time.Time    `json:"reconciled_at,omitempty"`
-	BankEntryID  *string       `json:"bank_entry_id,omitempty"`
-	EntrySeq     *int          `json:"entry_seq,omitempty"`
-	TotalAmount  float64       `json:"total_amount"`
-	MemberCount  int           `json:"member_count"`
-	CreatedAt    time.Time     `json:"created_at"`
-	Members      []GroupMember `json:"members,omitempty"`
+	ID           string     `json:"id"`
+	BranchID     string     `json:"branch_id"`
+	AccountID    string     `json:"account_id"`
+	AccountName  *string    `json:"account_name,omitempty"`
+	Type         string     `json:"type"`
+	OccurredAt   string     `json:"occurred_at"`
+	Description  *string    `json:"description,omitempty"`
+	Status       string     `json:"status"`
+	Reconciled   bool       `json:"reconciled"`
+	ReconciledAt *time.Time `json:"reconciled_at,omitempty"`
+	BankEntryID  *string    `json:"bank_entry_id,omitempty"`
+	EntrySeq     *int       `json:"entry_seq,omitempty"`
+	TotalAmount  float64    `json:"total_amount"`
+	MemberCount  int        `json:"member_count"`
+	// AttachmentCount inclui os anexos do proprio grupo e os anexos dos
+	// lancamentos membros.
+	AttachmentCount int           `json:"attachment_count"`
+	CreatedAt       time.Time     `json:"created_at"`
+	Members         []GroupMember `json:"members,omitempty"`
 }
 
 // GroupMember e o detalhe contabil de um lancamento que compoe o grupo.
@@ -56,6 +59,8 @@ type GroupMember struct {
 	EntrySeq     *int       `json:"entry_seq,omitempty"`
 	ReceiptID    *string    `json:"receipt_id,omitempty"`
 	VoidedAt     *time.Time `json:"voided_at,omitempty"`
+	// AttachmentCount e a quantidade de comprovantes do lancamento membro.
+	AttachmentCount int `json:"attachment_count"`
 }
 
 type CreateGroupInput struct {
@@ -211,7 +216,8 @@ func (r *Repo) ListGroups(ctx context.Context, tx pgx.Tx, from, to, status strin
 		SELECT g.id::text, g.branch_id::text, g.account_id::text, a.name,
 		       g.type, to_char(g.occurred_at,'YYYY-MM-DD'), g.description,
 		       g.status, g.reconciled_at, g.bank_entry_id::text, g.created_at, g.entry_seq,
-		       COALESCE(agg.total,0)::float8, COALESCE(agg.n,0)::int
+		       COALESCE(agg.total,0)::float8, COALESCE(agg.n,0)::int,
+		       COALESCE(att.n,0)::int
 		FROM financial_transaction_groups g
 		LEFT JOIN financial_accounts a ON a.id = g.account_id
 		LEFT JOIN LATERAL (
@@ -219,6 +225,13 @@ func (r *Repo) ListGroups(ctx context.Context, tx pgx.Tx, from, to, status strin
 		    FROM financial_transactions t
 		    WHERE t.group_id = g.id AND t.voided_at IS NULL
 		) agg ON true
+		LEFT JOIN LATERAL (
+		    SELECT count(*) AS n
+		    FROM financial_attachments fa
+		    LEFT JOIN financial_transactions mt ON mt.id = fa.transaction_id
+		    WHERE fa.group_id = g.id
+		       OR (mt.group_id = g.id AND mt.voided_at IS NULL)
+		) att ON true
 		WHERE ($1 = '' OR g.occurred_at >= $1::date)
 		  AND ($2 = '' OR g.occurred_at <= $2::date)
 		  AND ($3 = '' OR g.status = $3)
@@ -232,7 +245,8 @@ func (r *Repo) ListGroups(ctx context.Context, tx pgx.Tx, from, to, status strin
 		var g TransactionGroup
 		if err := rows.Scan(&g.ID, &g.BranchID, &g.AccountID, &g.AccountName,
 			&g.Type, &g.OccurredAt, &g.Description, &g.Status, &g.ReconciledAt,
-			&g.BankEntryID, &g.CreatedAt, &g.EntrySeq, &g.TotalAmount, &g.MemberCount); err != nil {
+			&g.BankEntryID, &g.CreatedAt, &g.EntrySeq, &g.TotalAmount, &g.MemberCount,
+			&g.AttachmentCount); err != nil {
 			return nil, err
 		}
 		g.Reconciled = g.Status == "conciliado"
@@ -248,7 +262,8 @@ func (r *Repo) GetGroup(ctx context.Context, tx pgx.Tx, id string) (*Transaction
 		SELECT g.id::text, g.branch_id::text, g.account_id::text, a.name,
 		       g.type, to_char(g.occurred_at,'YYYY-MM-DD'), g.description,
 		       g.status, g.reconciled_at, g.bank_entry_id::text, g.created_at, g.entry_seq,
-		       COALESCE(agg.total,0)::float8, COALESCE(agg.n,0)::int
+		       COALESCE(agg.total,0)::float8, COALESCE(agg.n,0)::int,
+		       COALESCE(att.n,0)::int
 		FROM financial_transaction_groups g
 		LEFT JOIN financial_accounts a ON a.id = g.account_id
 		LEFT JOIN LATERAL (
@@ -256,10 +271,18 @@ func (r *Repo) GetGroup(ctx context.Context, tx pgx.Tx, id string) (*Transaction
 		    FROM financial_transactions t
 		    WHERE t.group_id = g.id AND t.voided_at IS NULL
 		) agg ON true
+		LEFT JOIN LATERAL (
+		    SELECT count(*) AS n
+		    FROM financial_attachments fa
+		    LEFT JOIN financial_transactions mt ON mt.id = fa.transaction_id
+		    WHERE fa.group_id = g.id
+		       OR (mt.group_id = g.id AND mt.voided_at IS NULL)
+		) att ON true
 		WHERE g.id = $1::uuid`, id).
 		Scan(&g.ID, &g.BranchID, &g.AccountID, &g.AccountName, &g.Type,
 			&g.OccurredAt, &g.Description, &g.Status, &g.ReconciledAt,
-			&g.BankEntryID, &g.CreatedAt, &g.EntrySeq, &g.TotalAmount, &g.MemberCount)
+			&g.BankEntryID, &g.CreatedAt, &g.EntrySeq, &g.TotalAmount, &g.MemberCount,
+			&g.AttachmentCount)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrGroupNotFound
@@ -277,7 +300,8 @@ func (r *Repo) GetGroup(ctx context.Context, tx pgx.Tx, id string) (*Transaction
 		       (SELECT d.id::text FROM documents d
 		         WHERE d.kind = 'receipt' AND d.content->>'tx_id' = t.id::text
 		         ORDER BY d.created_at DESC LIMIT 1),
-		       t.voided_at
+		       t.voided_at,
+		       (SELECT count(*) FROM financial_attachments fa WHERE fa.transaction_id = t.id)::int
 		FROM financial_transactions t
 		LEFT JOIN financial_categories c ON c.id = t.category_id
 		LEFT JOIN members dm ON dm.id = t.donor_member_id
@@ -293,7 +317,8 @@ func (r *Repo) GetGroup(ctx context.Context, tx pgx.Tx, id string) (*Transaction
 		var m GroupMember
 		if err := rows.Scan(&m.ID, &m.CategoryID, &m.CategoryName, &m.Type,
 			&m.Amount, &m.Description, &m.DonorName, &m.OccurredAt,
-			&m.ReconciledAt, &m.EntrySeq, &m.ReceiptID, &m.VoidedAt); err != nil {
+			&m.ReconciledAt, &m.EntrySeq, &m.ReceiptID, &m.VoidedAt,
+			&m.AttachmentCount); err != nil {
 			return nil, err
 		}
 		m.Reconciled = m.ReconciledAt != nil
@@ -401,6 +426,24 @@ func (r *Repo) DeleteGroup(ctx context.Context, tx pgx.Tx, id string) error {
 	}
 	if status == "conciliado" {
 		return ErrGroupReconciled
+	}
+	// Preserva os comprovantes anexados diretamente ao grupo: ao desagrupar,
+	// eles passam para o primeiro lancamento membro em vez de serem perdidos.
+	var firstTxID string
+	if err := tx.QueryRow(ctx, `
+		SELECT id::text FROM financial_transactions
+		WHERE group_id = $1::uuid
+		ORDER BY occurred_at, entry_seq NULLS LAST, created_at, id
+		LIMIT 1`, id).Scan(&firstTxID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if firstTxID != "" {
+		if _, err := tx.Exec(ctx, `
+			UPDATE financial_attachments
+			SET group_id = NULL, transaction_id = $2::uuid
+			WHERE group_id = $1::uuid`, id, firstTxID); err != nil {
+			return err
+		}
 	}
 	rows, err := tx.Query(ctx, `SELECT id::text FROM financial_transactions WHERE group_id = $1::uuid`, id)
 	if err != nil {

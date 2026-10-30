@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Circle, Layers, Lock, Search } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Circle, Layers, Lock, Paperclip, Search } from "lucide-react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ import {
 } from "@/lib/api";
 import { currency, datePt, todayISO } from "@/lib/format";
 import { GroupMembersInline } from "@/components/finance/group-members-inline";
+import { AttachmentDrawer, type AttachmentOwner } from "@/components/finance/attachments";
 
 type ReconRow = {
   id: string;
@@ -35,6 +36,7 @@ type ReconRow = {
   amount: number;
   reconciled: boolean;
   member_count?: number;
+  attachment_count?: number;
   tx?: Transaction;
   group?: TransactionGroup;
 };
@@ -69,6 +71,7 @@ export function ReconciliationEntries() {
   const [sortColumn, setSortColumn] = useState("occurred_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [attachOwner, setAttachOwner] = useState<AttachmentOwner | null>(null);
 
   const [showClose, setShowClose] = useState(false);
   const [closeForm, setCloseForm] = useState({ title: "Conciliacao financeira", period_start: from, period_end: to });
@@ -192,6 +195,7 @@ export function ReconciliationEntries() {
         amount: g.total_amount,
         reconciled: g.reconciled,
         member_count: g.member_count,
+        attachment_count: g.attachment_count,
         group: g,
       });
     }
@@ -223,6 +227,7 @@ export function ReconciliationEntries() {
             amount: members.reduce((sum, m) => sum + m.amount, 0),
             reconciled: members.every((m) => m.reconciled),
             member_count: members.length,
+            attachment_count: members.reduce((sum, m) => sum + (m.attachment_count ?? 0), 0),
           });
         }
         continue;
@@ -241,6 +246,7 @@ export function ReconciliationEntries() {
         account_name: t.account_name,
         amount: t.amount,
         reconciled: !!t.reconciled,
+        attachment_count: t.attachment_count,
         tx: t,
       });
     }
@@ -477,6 +483,43 @@ export function ReconciliationEntries() {
     },
     { key: "account_name", label: "Conta", sortable: true, render: (t) => <span className="text-zinc-500">{t.account_name ?? "-"}</span> },
     {
+      key: "attachment_count",
+      label: "Anexos",
+      align: "center",
+      width: "w-20",
+      render: (t) => {
+        if (t.kind === "group" && t.group_id) {
+          return (
+            <button
+              type="button"
+              onClick={() => setAttachOwner({ groupId: t.group_id })}
+              className="inline-flex items-center gap-0.5 text-sky-600 hover:text-sky-700"
+              title={t.attachment_count ? `Ver ${t.attachment_count} anexo(s)` : "Anexar comprovante ao agrupamento"}
+              aria-label={t.attachment_count ? `Ver ${t.attachment_count} anexo(s)` : "Anexar comprovante ao agrupamento"}
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+              {!!t.attachment_count && <span className="text-[10px] font-medium">{t.attachment_count}</span>}
+            </button>
+          );
+        }
+        if (t.tx && t.attachment_count) {
+          return (
+            <button
+              type="button"
+              onClick={() => setAttachOwner({ transactionId: t.tx!.id })}
+              className="inline-flex items-center gap-0.5 text-sky-600 hover:text-sky-700"
+              title={`Ver ${t.attachment_count} anexo(s)`}
+              aria-label={`Ver ${t.attachment_count} anexo(s)`}
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+              <span className="text-[10px] font-medium">{t.attachment_count}</span>
+            </button>
+          );
+        }
+        return <span className="text-zinc-300">-</span>;
+      },
+    },
+    {
       key: "amount",
       label: "Valor",
       sortable: true,
@@ -607,7 +650,7 @@ export function ReconciliationEntries() {
           expandedKeys: expandedRows,
           onToggleExpand: toggleExpanded,
           isExpandable: (t) => t.kind === "group",
-          renderExpanded: (t) => (t.group_id ? <GroupMembersInline groupId={t.group_id} from={from} to={to} /> : null),
+          renderExpanded: (t) => (t.group_id ? <GroupMembersInline groupId={t.group_id} from={from} to={to} onOpenTransaction={(m) => setAttachOwner({ transactionId: m.id })} /> : null),
         }}
         emptyMessage="Nenhum lancamento no filtro"
         emptyDescription="Ajuste o periodo, o status ou a busca."
@@ -644,6 +687,14 @@ export function ReconciliationEntries() {
           </div>
         </form>
       </Modal>
+
+      <AttachmentDrawer
+        open={!!attachOwner}
+        onClose={() => setAttachOwner(null)}
+        owner={attachOwner ?? {}}
+        canUpload={canWrite}
+        onUploaded={load}
+      />
     </div>
   );
 }

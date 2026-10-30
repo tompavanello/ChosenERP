@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Eye, Layers, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Eye, Layers, Paperclip, Pencil, Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
@@ -22,6 +22,7 @@ import { ExportButtons } from "@/components/reports/export-buttons";
 import { TransactionForm, type TransactionFormState } from "@/components/finance/transaction-form";
 import { GroupDetailDrawer } from "@/components/finance/transaction-group";
 import { GroupMembersInline } from "@/components/finance/group-members-inline";
+import { AttachmentDrawer, type AttachmentOwner } from "@/components/finance/attachments";
 
 const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -56,6 +57,7 @@ export default function AccountStatementPage() {
   const [loading, setLoading] = useState(false);
   const [groupDetailId, setGroupDetailId] = useState<string | undefined>(undefined);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [attachOwner, setAttachOwner] = useState<AttachmentOwner | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
@@ -366,6 +368,7 @@ export default function AccountStatementPage() {
                   <TH>Descricao</TH>
                   <TH>Categoria</TH>
                   <TH>Tipo</TH>
+                  <TH className="w-20 text-center">Anexos</TH>
                   <TH className="text-right">Valor</TH>
                   <TH className="text-right">Saldo apos</TH>
                   {canWrite && <TH className="w-24 text-right">Acoes</TH>}
@@ -374,7 +377,7 @@ export default function AccountStatementPage() {
               <TBody>
                 {st.days.length === 0 && (
                   <TRow>
-                    <TD colSpan={canWrite ? 8 : 7} className="py-8 text-center text-zinc-400">
+                    <TD colSpan={canWrite ? 9 : 8} className="py-8 text-center text-zinc-400">
                       Nenhum lancamento no periodo.
                     </TD>
                   </TRow>
@@ -415,7 +418,14 @@ export default function AccountStatementPage() {
                                 <>
                                   {l.description || l.donor_name || l.category_name || "-"}
                                   {l.group_id && (
-                                    <Badge tone="indigo" className="ml-2 text-[10px]">Agrupado</Badge>
+                                    <button
+                                      type="button"
+                                      onClick={() => setGroupDetailId(l.group_id)}
+                                      className="ml-2 inline-flex"
+                                      title="Ver agrupamento e anexos"
+                                    >
+                                      <Badge tone="indigo" className="text-[10px]">Agrupado</Badge>
+                                    </button>
                                   )}
                                   {l.donor_name && l.description ? (
                                     <span className="block text-xs text-zinc-400">{l.donor_name}</span>
@@ -430,6 +440,22 @@ export default function AccountStatementPage() {
                               <Badge tone={l.type === "income" ? "green" : "red"}>
                                 {TYPE_LABEL[l.type] ?? l.type}
                               </Badge>
+                            </TD>
+                            <TD className="text-center">
+                              {(l.attachment_count ?? 0) > 0 || isGroupLine ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setAttachOwner(isGroupLine ? { groupId: l.group_id ?? l.id } : { transactionId: l.id })}
+                                  className="inline-flex items-center gap-0.5 text-sky-600 hover:text-sky-700"
+                                  title={(l.attachment_count ?? 0) > 0 ? `Ver ${l.attachment_count} anexo(s)` : "Anexar comprovante ao agrupamento"}
+                                  aria-label={(l.attachment_count ?? 0) > 0 ? `Ver ${l.attachment_count} anexo(s)` : "Anexar comprovante ao agrupamento"}
+                                >
+                                  <Paperclip className="h-3.5 w-3.5" />
+                                  {(l.attachment_count ?? 0) > 0 && <span className="text-[10px] font-medium">{l.attachment_count}</span>}
+                                </button>
+                              ) : (
+                                <span className="text-zinc-300">-</span>
+                              )}
                             </TD>
                             <TD className={`text-right font-semibold tabular-nums ${l.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
                               {l.type === "income" ? "+" : "-"} {currency(l.amount)}
@@ -470,12 +496,13 @@ export default function AccountStatementPage() {
                           </TRow>
                           {isGroupLine && expandedGroups.has(l.id) && (
                             <TRow>
-                              <TD colSpan={canWrite ? 8 : 7} className="p-3">
+                              <TD colSpan={canWrite ? 9 : 8} className="p-3">
                                 <GroupMembersInline
                                   groupId={l.group_id ?? l.id}
                                   from={from}
                                   to={to}
                                   onOpenGroup={(id) => setGroupDetailId(id)}
+                                  onOpenTransaction={(m) => setAttachOwner({ transactionId: m.id })}
                                 />
                               </TD>
                             </TRow>
@@ -484,7 +511,7 @@ export default function AccountStatementPage() {
                         );
                       })}
                       <TRow className="border-y border-sky-100 bg-sky-50/70 dark:border-sky-900/40 dark:bg-sky-950/20">
-                        <TD colSpan={canWrite ? 8 : 7} className="py-2">
+                        <TD colSpan={canWrite ? 9 : 8} className="py-2">
                           <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 text-xs">
                             <div className="font-semibold text-sky-800 dark:text-sky-300">
                               Total do dia
@@ -561,6 +588,14 @@ export default function AccountStatementPage() {
         onChanged={load}
         canWrite={canWrite}
         canReconcile={hasPerm("finance.reconcile")}
+      />
+
+      <AttachmentDrawer
+        open={!!attachOwner}
+        onClose={() => setAttachOwner(null)}
+        owner={attachOwner ?? {}}
+        canUpload={canWrite}
+        onUploaded={load}
       />
     </div>
   );

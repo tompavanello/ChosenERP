@@ -352,6 +352,8 @@ export interface TransactionGroupMember {
   entry_seq?: number;
   receipt_id?: string;
   voided_at?: string;
+  /** Quantidade de anexos do lancamento membro. */
+  attachment_count: number;
 }
 
 export interface TransactionGroup {
@@ -370,13 +372,16 @@ export interface TransactionGroup {
   entry_seq?: number;
   total_amount: number;
   member_count: number;
+  /** Anexos do grupo + anexos dos lancamentos membros. */
+  attachment_count: number;
   created_at: string;
   members?: TransactionGroupMember[];
 }
 
 export interface FinancialAttachment {
   id: string;
-  transaction_id: string;
+  transaction_id?: string;
+  group_id?: string;
   file_name: string;
   file_url: string;
   content_type?: string;
@@ -1180,6 +1185,7 @@ export interface AuditItem {
   group_description?: string;
   group_member_count?: number;
   group_entry_seq?: number;
+  group_attachment_count?: number;
 }
 export const listAudits = () => api<{ audits: FinancialAudit[] }>("/api/v1/finance/audits");
 export const createAudit = (data: Record<string, unknown>) =>
@@ -1228,6 +1234,8 @@ export interface ReconciliationItem {
   group_description?: string;
   group_member_count?: number;
   group_entry_seq?: number;
+  attachment_count: number;
+  group_attachment_count?: number;
 }
 export const listReconciliations = () =>
   api<{ reconciliations: FinancialReconciliation[] }>("/api/v1/finance/reconciliations");
@@ -1271,6 +1279,7 @@ export interface BankEntry {
   transaction_description?: string;
   group_id?: string;
   group_description?: string;
+  attachment_count: number;
 }
 export interface BankDivergence {
   id: string;
@@ -1562,6 +1571,18 @@ export async function uploadAttachment(transactionId: string, file: File): Promi
 }
 export const listAttachments = (transactionId: string) =>
   api<{ attachments: FinancialAttachment[] }>(`/api/v1/finance/transactions/${transactionId}/attachments`);
+export const listGroupAttachments = (groupId: string) =>
+  api<{ attachments: FinancialAttachment[] }>(`/api/v1/finance/groups/${groupId}/attachments`);
+export async function uploadGroupAttachment(groupId: string, file: File): Promise<FinancialAttachment> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await apiRaw(`/api/v1/finance/groups/${groupId}/attachments`, {
+    method: "POST",
+    body: form,
+  });
+  const text = await res.text();
+  return text ? (JSON.parse(text) as FinancialAttachment) : ({} as FinancialAttachment);
+}
 
 /**
  * Baixa/abre um anexo do financeiro. O arquivo em si NAO e publico (so fotos de

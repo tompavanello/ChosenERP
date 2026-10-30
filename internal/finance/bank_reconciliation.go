@@ -46,6 +46,7 @@ type BankEntry struct {
 	TransactionDescription *string `json:"transaction_description,omitempty"`
 	GroupID                *string `json:"group_id,omitempty"`
 	GroupDescription       *string `json:"group_description,omitempty"`
+	AttachmentCount        int     `json:"attachment_count"`
 }
 
 // BankDivergence e um lancamento do ERP que nao aparece no extrato.
@@ -497,7 +498,10 @@ func (r *Repo) ListBankEntries(ctx context.Context, tx pgx.Tx, importID string) 
 	rows, err := tx.Query(ctx, `
 		SELECT e.id::text, e.line_no, e.sequence_no, to_char(e.posted_at,'YYYY-MM-DD'), e.amount::float8, e.direction,
 		       e.memo, e.fitid, e.status, e.transaction_id::text, t.description,
-		       e.group_id::text, g.description
+		       e.group_id::text, g.description,
+		       (SELECT count(*)::int FROM financial_attachments fa
+		         WHERE fa.transaction_id = e.transaction_id
+		            OR fa.group_id = COALESCE(e.group_id, t.group_id))
 		FROM bank_statement_entries e
 		LEFT JOIN financial_transactions t ON t.id = e.transaction_id
 		LEFT JOIN financial_transaction_groups g ON g.id = e.group_id
@@ -512,7 +516,7 @@ func (r *Repo) ListBankEntries(ctx context.Context, tx pgx.Tx, importID string) 
 		var e BankEntry
 		if err := rows.Scan(&e.ID, &e.LineNo, &e.SequenceNo, &e.PostedAt, &e.Amount, &e.Direction,
 			&e.Memo, &e.FitID, &e.Status, &e.TransactionID, &e.TransactionDescription,
-			&e.GroupID, &e.GroupDescription); err != nil {
+			&e.GroupID, &e.GroupDescription, &e.AttachmentCount); err != nil {
 			return nil, err
 		}
 		out = append(out, e)

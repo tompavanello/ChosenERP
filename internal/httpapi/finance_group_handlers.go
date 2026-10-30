@@ -3,6 +3,8 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -53,6 +55,80 @@ func (a *App) handleGetFinanceGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, g)
+}
+
+func (a *App) handleListGroupAttachments(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	groupID := r.PathValue("id")
+	var out []finance.Attachment
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		if _, err := a.Finance.GetGroup(r.Context(), tx, groupID); err != nil {
+			return err
+		}
+		var err error
+		out, err = a.Finance.ListGroupAttachments(r.Context(), tx, groupID)
+		return err
+	})
+	if err != nil {
+		if errors.Is(err, finance.ErrGroupNotFound) || store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "grupo nao encontrado")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"attachments": out})
+}
+
+func (a *App) handleUploadGroupAttachment(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFrom(r.Context())
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	groupID := r.PathValue("id")
+
+	fileName, diskPath, contentType, size, ok := a.saveFinanceUpload(w, r)
+	if !ok {
+		return
+	}
+	in := finance.CreateAttachmentInput{
+		FileName:    fileName,
+		FileURL:     "/api/v1/attachments/" + filepath.Base(diskPath),
+		ContentType: &contentType,
+		FileSize:    size,
+	}
+
+	var att *finance.Attachment
+	err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+		g, err := a.Finance.GetGroup(r.Context(), tx, groupID)
+		if err != nil {
+			return err
+		}
+		if e := a.enforceQuota(r.Context(), tx, claims.TenantID, "storage", size); e != nil {
+			_ = os.Remove(diskPath)
+			return e
+		}
+		att, err = a.Finance.CreateGroupAttachment(r.Context(), tx, claims.TenantID, g.BranchID, groupID, in)
+		return err
+	})
+	if err != nil {
+		_ = os.Remove(diskPath)
+		if writeQuotaErr(w, err) {
+			return
+		}
+		if errors.Is(err, finance.ErrGroupNotFound) || store.IsNotFound(err) {
+			writeErr(w, http.StatusNotFound, "grupo nao encontrado")
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, att)
 }
 
 func (a *App) handleCreateFinanceGroup(w http.ResponseWriter, r *http.Request) {

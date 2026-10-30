@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { ExternalLink, Loader2, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { getTransactionGroup, type TransactionGroup, type TransactionGroupMember } from "@/lib/api";
@@ -78,6 +78,7 @@ export function GroupMembersInline({ groupId, onOpenGroup, onOpenTransaction, fr
               <TH>Conta contabil</TH>
               <TH>Doador</TH>
               <TH>Descricao</TH>
+              <TH className="text-center">Anexos</TH>
               <TH className="text-right">Valor</TH>
               {onOpenTransaction && <TH></TH>}
             </TRow>
@@ -94,6 +95,29 @@ export function GroupMembersInline({ groupId, onOpenGroup, onOpenTransaction, fr
                 <TD>{m.category_name ?? "-"}</TD>
                 <TD className="text-zinc-500">{m.donor_name ?? "-"}</TD>
                 <TD className="text-zinc-500">{m.description ?? "-"}</TD>
+                <TD className="text-center">
+                  {m.attachment_count > 0 ? (
+                    onOpenTransaction ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenTransaction(m)}
+                        className="inline-flex items-center gap-0.5 text-sky-600 hover:text-sky-700"
+                        title={`Ver ${m.attachment_count} anexo(s)`}
+                        aria-label={`Ver ${m.attachment_count} anexo(s)`}
+                      >
+                        <Paperclip className="h-3.5 w-3.5" />
+                        <span className="text-[10px] font-medium">{m.attachment_count}</span>
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-0.5 text-zinc-500">
+                        <Paperclip className="h-3.5 w-3.5" />
+                        <span className="text-[10px]">{m.attachment_count}</span>
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-zinc-300">-</span>
+                  )}
+                </TD>
                 <TD className="text-right font-medium">{currency(m.amount)}</TD>
                 {onOpenTransaction && (
                   <TD className="text-right">

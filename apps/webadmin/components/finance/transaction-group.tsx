@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Layers, Link2, Lock, RotateCcw, Trash2, Unlink } from "lucide-react";
+import { Layers, Link2, Lock, Paperclip, RotateCcw, Trash2, Unlink } from "lucide-react";
 import { Drawer, Section } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input } from "@/components/ui/input";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
+import { AttachmentList } from "@/components/finance/attachments";
 import { useToast } from "@/components/ui/toast";
 import {
   createTransactionGroup,
@@ -341,6 +342,15 @@ export function GroupDetailDrawer({
             )}
           </Section>
 
+          <Section title="Anexos" hint="Comprovantes do agrupamento e dos lancamentos que o compoem.">
+            <AttachmentList
+              groupId={group.id}
+              canUpload={!readOnly && canWrite}
+              onUploaded={() => { load(); onChanged(); }}
+              showSource
+            />
+          </Section>
+
           <div className="max-h-80 overflow-y-auto rounded-lg border border-zinc-200">
             <Table>
               <THead>
@@ -349,6 +359,7 @@ export function GroupDetailDrawer({
                   <TH>Conta contabil</TH>
                   <TH>Doador</TH>
                   <TH>Descricao</TH>
+                  <TH className="text-center">Anexos</TH>
                   <TH className="text-right">Valor</TH>
                   <TH></TH>
                 </TRow>
@@ -360,6 +371,16 @@ export function GroupDetailDrawer({
                     <TD>{m.category_name ?? "-"}</TD>
                     <TD className="text-zinc-500">{m.donor_name ?? "-"}</TD>
                     <TD className="text-zinc-500">{m.description ?? "-"}</TD>
+                    <TD className="text-center">
+                      {m.attachment_count > 0 ? (
+                        <span className="inline-flex items-center gap-0.5 text-zinc-500" title={`${m.attachment_count} anexo(s)`}>
+                          <Paperclip className="h-3.5 w-3.5" />
+                          <span className="text-[10px]">{m.attachment_count}</span>
+                        </span>
+                      ) : (
+                        <span className="text-zinc-300">-</span>
+                      )}
+                    </TD>
                     <TD className="text-right font-medium">{currency(m.amount)}</TD>
                     <TD className="text-right">
                       {!readOnly && canWrite && !group.reconciled && (
