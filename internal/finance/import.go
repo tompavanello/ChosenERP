@@ -63,8 +63,9 @@ func parseCSV(body string) ([][]string, error) {
 
 // ImportCSV importa lancamentos a partir de um CSV com cabecalho padrao:
 //
-//	data;tipo;conta;valor;forma_pagamento;descricao;anonimo;conta_bancaria
+//	data;tipo;conta;valor;forma_pagamento;descricao;anonimo;estorno;conta_bancaria
 //
+// A coluna `estorno` e opcional (sim/nao) e inverte o sinal do lancamento.
 // Linhas invalidas sao ignoradas e devolvidas em `errors`.
 func (r *Repo) ImportCSV(ctx context.Context, tx pgx.Tx, tenantID, branchID, actorID, defaultAccountID, body string) (ImportResult, error) {
 	empty := ImportResult{Errors: []ImportError{}}
@@ -153,6 +154,11 @@ func (r *Repo) ImportRecords(ctx context.Context, tx pgx.Tx, tenantID, branchID,
 			addErr(line, "%v", err)
 			continue
 		}
+		// A coluna opcional `estorno` (sim/nao) inverte o sinal do lancamento.
+		sign := 1
+		if parseBool(get(rec, "estorno")) {
+			sign = -1
+		}
 
 		acctID := defaultAccountID
 		if name := get(rec, "conta_bancaria"); name != "" {
@@ -171,12 +177,12 @@ func (r *Repo) ImportRecords(ctx context.Context, tx pgx.Tx, tenantID, branchID,
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO financial_transactions
 				(tenant_id, branch_id, category_id, type, amount, currency,
-				 payment_method, description, occurred_at, is_anonymous, account_id)
+				 payment_method, description, occurred_at, is_anonymous, account_id, sign)
 			VALUES ($1, NULLIF($2,'')::uuid, $3::uuid, $4, $5, 'BRL',
-			        NULLIF($6,''), NULLIF($7,''), $8, $9, NULLIF($10,'')::uuid)`,
+			        NULLIF($6,''), NULLIF($7,''), $8, $9, NULLIF($10,'')::uuid, $11)`,
 			tenantID, branchID, cat.ID, typ, amount,
 			normalizePayment(get(rec, "forma_pagamento")), get(rec, "descricao"), when,
-			parseBool(get(rec, "anonimo")), acctID); err != nil {
+			parseBool(get(rec, "anonimo")), acctID, sign); err != nil {
 			return res, err
 		}
 		res.Imported++
@@ -219,6 +225,8 @@ func headerIndex(header []string) map[string]int {
 			idx["descricao"] = i
 		case "anonimo", "anonima":
 			idx["anonimo"] = i
+		case "estorno", "estornado", "reversal":
+			idx["estorno"] = i
 		case "conta_bancaria", "banco":
 			idx["conta_bancaria"] = i
 		}

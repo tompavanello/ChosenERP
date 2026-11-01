@@ -25,6 +25,8 @@ import { currency, todayISO } from "@/lib/format";
 interface BulkRow {
   key: number;
   type: "income" | "expense";
+  /** Estorno: inverte o sinal do lancamento (entrada reduz receita, saida reduz despesa). */
+  reversal: boolean;
   occurred_at: string;
   amount: string;
   category_id: string;
@@ -49,6 +51,7 @@ function emptyRow(): BulkRow {
   return {
     key: seq,
     type: "income",
+    reversal: false,
     occurred_at: "",
     amount: "",
     category_id: "",
@@ -169,12 +172,19 @@ export function BulkEntry({
   const totals = useMemo(() => {
     let income = 0;
     let expense = 0;
+    let reversalCount = 0;
+    let reversalTotal = 0;
     for (const r of ready) {
       const v = Number(r.amount);
-      if (r.type === "income") income += v;
-      else expense += v;
+      const signed = r.reversal ? -v : v;
+      if (r.type === "income") income += signed;
+      else expense += signed;
+      if (r.reversal) {
+        reversalCount++;
+        reversalTotal += v;
+      }
     }
-    return { income, expense };
+    return { income, expense, reversalCount, reversalTotal };
   }, [ready]);
 
   function complementCount(r: BulkRow): number {
@@ -196,6 +206,7 @@ export function BulkEntry({
     }
     const payloads = touched.map((r) => ({
       type: r.type,
+      sign: r.reversal ? -1 : 1,
       amount: Number(r.amount),
       category_id: r.category_id || undefined,
       account_id: r.account_id || defaultAccountId,
@@ -266,7 +277,8 @@ export function BulkEntry({
       {!embedded && (
         <p className="text-sm text-zinc-500">
           Cada linha e um lancamento. O tipo (entrada/saida) vem da conta contabil. Conta corrente e
-          data padrao valem para o lote inteiro; use o complemento para ajustar a linha.
+          data padrao valem para o lote inteiro; use o complemento para ajustar a linha. Marque
+          <strong> Estorno</strong> para inverter o sinal da linha.
         </p>
       )}
 
@@ -305,11 +317,12 @@ export function BulkEntry({
       )}
 
       <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-        <table className="w-full min-w-[1000px] text-[13px]">
+        <table className="w-full min-w-[1080px] text-[13px]">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-[10px] uppercase tracking-wider text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
             <tr>
               <th className="w-8 px-2 py-2 text-left">#</th>
               <th className="w-32 px-2 py-2 text-left">Valor</th>
+              <th className="w-20 px-2 py-2 text-center" title="Inverter o sinal do lancamento">Estorno</th>
               <th className="w-64 px-2 py-2 text-left">Conta contabil</th>
               <th className="px-2 py-2 text-left">Descricao</th>
               <th className="w-64 px-2 py-2 text-left">Identificado</th>
@@ -320,10 +333,12 @@ export function BulkEntry({
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/70">
             {rows.map((r, i) => {
               const eff = catType(r.category_id) || r.type;
-              const tone = eff === "income" ? "text-emerald-600" : "text-red-600";
+              // O estorno inverte a direcao efetiva (entrada vira saida e vice-versa).
+              const bankIncome = r.reversal ? eff === "expense" : eff === "income";
+              const tone = bankIncome ? "text-emerald-600" : "text-red-600";
               return (
                 <Fragment key={r.key}>
-                  <tr className={r.expanded ? "bg-sky-50/40 dark:bg-sky-950/10" : undefined}>
+                  <tr className={r.expanded ? "bg-sky-50/40 dark:bg-sky-950/10" : r.reversal ? "bg-amber-50/40 dark:bg-amber-950/10" : undefined}>
                     <td className="px-2 py-1 text-right text-zinc-400">{i + 1}</td>
                     <td className="px-2 py-1">
                       <CurrencyInput
@@ -331,6 +346,20 @@ export function BulkEntry({
                         value={r.amount}
                         onChange={(v) => update(r.key, { amount: v })}
                       />
+                    </td>
+                    <td className="px-2 py-1 text-center">
+                      <label
+                        className="inline-flex cursor-pointer items-center gap-1"
+                        title="Inverter o sinal (estorno)"
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-500"
+                          checked={r.reversal}
+                          onChange={(e) => update(r.key, { reversal: e.target.checked })}
+                        />
+                        {r.reversal && <span className="text-[10px] font-medium text-amber-600">estorno</span>}
+                      </label>
                     </td>
                     <td className="px-2 py-1">
                       <Select
@@ -467,7 +496,7 @@ export function BulkEntry({
 
                   {r.expanded && (
                     <tr key={`${r.key}-comp`} className="bg-zinc-50/70 dark:bg-zinc-900/40">
-                      <td colSpan={7} className="px-3 py-3">
+                      <td colSpan={8} className="px-3 py-3">
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                           <SubField label="Data efetiva">
                             <Input
@@ -614,8 +643,11 @@ export function BulkEntry({
         </button>
         <div className="ml-auto flex items-center gap-3 text-xs text-zinc-500">
           <span>{ready.length} linha(s) pronta(s)</span>
-          <Badge tone="green">Entradas {currency(totals.income)}</Badge>
-          <Badge tone="red">Saidas {currency(totals.expense)}</Badge>
+          <Badge tone="green" title="Total liquido (estornos abatidos)">Entradas {currency(totals.income)}</Badge>
+          <Badge tone="red" title="Total liquido (estornos abatidos)">Saidas {currency(totals.expense)}</Badge>
+          {totals.reversalCount > 0 && (
+            <Badge tone="amber">{totals.reversalCount} estorno(s) {currency(totals.reversalTotal)}</Badge>
+          )}
         </div>
       </div>
 

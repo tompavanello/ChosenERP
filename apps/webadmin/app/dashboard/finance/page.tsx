@@ -39,9 +39,9 @@ import { GroupMembersInline } from "@/components/finance/group-members-inline";
 
 // Modelo de importacao de lancamentos (colunas iguais aos aliases do mapeamento).
 const TX_TEMPLATE: string[][] = [
-  ["data", "tipo", "conta", "valor", "forma_pagamento", "descricao", "anonimo", "conta_bancaria"],
-  ["2026-01-05", "entrada", "Dizimo", "150,00", "pix", "Dizimo do mes", "nao", ""],
-  ["2026-01-06", "saida", "Utilidades", "89,90", "boleto", "Conta de luz", "nao", "Conta Corrente Principal"],
+  ["data", "tipo", "conta", "valor", "forma_pagamento", "descricao", "anonimo", "estorno", "conta_bancaria"],
+  ["2026-01-05", "entrada", "Dizimo", "150,00", "pix", "Dizimo do mes", "nao", "nao", ""],
+  ["2026-01-06", "saida", "Utilidades", "89,90", "boleto", "Conta de luz", "nao", "nao", "Conta Corrente Principal"],
 ];
 
 const PER_PAGE = 12;
@@ -54,6 +54,7 @@ const IMPORT_FIELDS: { key: string; label: string; required?: boolean }[] = [
   { key: "forma_pagamento", label: "Forma de pagamento" },
   { key: "descricao", label: "Descricao" },
   { key: "anonimo", label: "Anonimo" },
+  { key: "estorno", label: "Estorno (sim/nao)" },
   { key: "conta_bancaria", label: "Conta bancaria" },
 ];
 
@@ -108,6 +109,7 @@ function guessMapping(rows: string[][]): Record<string, number> {
   set("forma_pagamento", find(["forma", "pagamento"]));
   set("descricao", find(["descri", "histor", "observa"]));
   set("anonimo", find(["anonim"]));
+  set("estorno", find(["estorno", "reversal"]));
   set("conta_bancaria", find(["banco", "bancar"]));
   return m;
 }
