@@ -19,7 +19,7 @@ import { currency, datePt, todayISO } from "@/lib/format";
 
 export interface TransactionFormState {
   type: "income" | "expense";
-  /** Devolucao/estorno avulso: reduz a conta de receita (sign=-1). */
+  /** Estorno: inverte o sinal do lancamento (entrada reduz receita, saida reduz despesa). */
   reversal: boolean;
   amount: string;
   category_id: string;
@@ -193,7 +193,7 @@ export function TransactionForm({
 
     const payload: Record<string, unknown> = {
       type: form.type,
-      sign: form.reversal && form.type === "income" ? -1 : 1,
+      sign: form.reversal ? -1 : 1,
       amount,
       category_id: form.category_id,
       account_id: form.account_id,
@@ -236,7 +236,11 @@ export function TransactionForm({
           }
         }
       }
-      toast("Lancamento registrado com recibo.");
+      toast(
+        form.reversal && form.type === "expense"
+          ? "Estorno registrado."
+          : "Lancamento registrado com recibo.",
+      );
       onSaved?.(payload);
       onClose();
       setForm({ ...EMPTY, ...initialState });
@@ -278,15 +282,14 @@ export function TransactionForm({
             value={form.type}
             onChange={(e) => {
               set("type", e.target.value as "income" | "expense");
-              if (e.target.value !== "income") set("reversal", false);
             }}
           >
             <option value="income">Entrada</option>
             <option value="expense">Saida</option>
           </Select>
         </Field>
-        {form.type === "income" && (
-          <Field label="Devolucao / estorno" className="sm:col-span-2">
+        {!entrySeqReadOnly && (
+          <Field label="Estorno" className="sm:col-span-2">
             <label className="flex items-start gap-2 pt-1 text-sm text-zinc-600 dark:text-zinc-300">
               <input
                 type="checkbox"
@@ -296,9 +299,11 @@ export function TransactionForm({
                 disabled={saving}
               />
               <span>
-                <span className="font-medium">Reduzir a receita (contra-receita)</span>
+                <span className="font-medium">Inverter o sinal (estorno)</span>
                 <span className="block text-xs text-zinc-400">
-                  Use para devolucao de cheque, estorno de dizimo/oferta ou chargeback. O valor continua positivo e e abatido da conta de receita selecionada.
+                  O valor continua positivo, mas o lancamento passa a abater a conta selecionada.
+                  Use em uma Entrada para reduzir a receita (devolucao de cheque, estorno de dizimo/oferta, chargeback)
+                  ou em uma Saida para reduzir a despesa.
                 </span>
               </span>
             </label>

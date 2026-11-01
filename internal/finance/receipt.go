@@ -175,9 +175,9 @@ func (r *Repo) GetMembershipCard(ctx context.Context, tx pgx.Tx, memberID string
 	return ref, token, nil
 }
 
-// issueReversalReceipt gera o recibo de estorno (documento proprio, vinculado
-// ao recibo original). Nao substitui nem invalida o recibo original.
-func (r *Repo) issueReversalReceipt(ctx context.Context, tx pgx.Tx, tenantID, branchID string, reversal Transaction, original *reversalOriginal, reason string) (string, string, string, error) {
+// issueReversalReceipt gera o recibo de estorno de uma entrada marcada com a
+// flag de estorno (valor abatido da receita).
+func (r *Repo) issueReversalReceipt(ctx context.Context, tx pgx.Tx, tenantID, branchID string, reversal Transaction) (string, string, string, error) {
 	token := randomToken(12)
 	ref := "REC-EST-" + hex.EncodeToString([]byte(reversal.Hash))[:8]
 
@@ -202,12 +202,6 @@ func (r *Repo) issueReversalReceipt(ctx context.Context, tx pgx.Tx, tenantID, br
 		desc = *reversal.Description
 	}
 
-	var originalRef string
-	_ = tx.QueryRow(ctx, `
-		SELECT COALESCE(document_ref,'') FROM documents
-		WHERE kind = 'receipt' AND content->>'tx_id' = $1
-		ORDER BY created_at DESC LIMIT 1`, original.ID).Scan(&originalRef)
-
 	content, _ := json.Marshal(map[string]any{
 		"kind":              "reversal_receipt",
 		"ref":               ref,
@@ -215,14 +209,14 @@ func (r *Repo) issueReversalReceipt(ctx context.Context, tx pgx.Tx, tenantID, br
 		"branch_id":         branchID,
 		"type":              reversal.Type,
 		"amount":            reversal.Amount,
-		"original_amount":   original.Amount,
+		"original_amount":   reversal.Amount,
 		"reversed_amount":   reversal.Amount,
 		"currency":          reversal.Currency,
 		"occurred_at":       reversal.OccurredAt.UTC().Format(dateLayout),
 		"href":              "/api/v1/documents/by-token/" + token,
-		"reversal_of_tx_id": original.ID,
-		"reversal_of_ref":   originalRef,
-		"reversal_reason":   strings.TrimSpace(reason),
+		"reversal_of_tx_id": "",
+		"reversal_of_ref":   "",
+		"reversal_reason":   "",
 		"donor_name":        donorName,
 		"donor_doc":         donorDoc,
 		"is_anonymous":      reversal.IsAnonymous,

@@ -316,8 +316,6 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/finance/transactions/reorder", authed(app.perm("finance.write", app.handleReorderTxns)))
 	mux.Handle("POST /api/v1/finance/lines/reorder", authed(app.perm("finance.write", app.handleReorderFinanceLines)))
 	mux.Handle("POST /api/v1/finance/transactions/{id}/void", authed(app.perm("finance.write", app.handleVoidTxn)))
-	mux.Handle("POST /api/v1/finance/transactions/{id}/reverse", authed(app.perm("finance.write", app.handleReverseTxn)))
-	mux.Handle("GET /api/v1/finance/transactions/{id}/reversals", authed(app.perm("finance.read", app.handleListReversals)))
 	mux.Handle("POST /api/v1/finance/transactions/{id}/settle", authed(app.perm("finance.write", app.handleSettleTxn)))
 	mux.Handle("POST /api/v1/finance/transactions/{id}/reconcile", authed(app.perm("finance.reconcile", app.handleReconcileTxn)))
 	mux.Handle("POST /api/v1/finance/transactions/reconcile-batch", authed(app.perm("finance.reconcile", app.handleReconcileTxnBatch)))

@@ -10,7 +10,7 @@ import { Drawer, Modal } from "@/components/ui/modal";
 import { Tabs } from "@/components/ui/tabs";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Input, Field, Select, Textarea } from "@/components/ui/input";
+import { Input, Field, Select } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { DataTable, Column } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
@@ -23,7 +23,7 @@ import {
    uploadAttachment, listAttachments, listDeliveries, updateTransaction, deleteTransaction, settleTransaction,
    reconcileTransaction, downloadFinancialAttachment, reconcileTransactionGroup,
    listTransactionEvents, previewTransactions, importTransactionsFile, reorderFinanceLines,
-   listTransactionGroups, reverseTransaction,
+   listTransactionGroups,
    type Category, type CategoryGroup, type Transaction, type Balance, type BankAccount,
    type FinancialAttachment, type Delivery, type ImportResult, type EventAllocation,
    type TransactionGroup, type AccountBalances,
@@ -158,17 +158,7 @@ export default function FinancePage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [sendDrawer, setSendDrawer] = useState<{ open: boolean; txn: Transaction | null; channel: "email" | "whatsapp" }>({ open: false, txn: null, channel: "email" });
-  // Devolucao/estorno (contra-lancamento referenciado ao original).
-  const [reverseTarget, setReverseTarget] = useState<Transaction | null>(null);
-  const [reverseForm, setReverseForm] = useState({
-    amount: "",
-    occurred_at: todayISO(),
-    reason: "",
-    mode: "same" as "same" | "expense",
-    expense_category_id: "",
-    issue_receipt: true,
-  });
-  const [reversing, setReversing] = useState(false);
+
   const [catForm, setCatForm] = useState({ type: "income", code: "", name: "", group_id: "" });
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [groupForm, setGroupForm] = useState({ name: "", sort_order: "" });
@@ -428,13 +418,9 @@ export default function FinancePage() {
             <span className={t.voided_at ? "text-zinc-400 line-through" : ""}>{t.description ?? "-"}</span>
             {t.voided_at && <Badge tone="red" className="text-[10px]">Estornado</Badge>}
             {(t.sign ?? 1) < 0 && (
-              <Badge tone="amber" className="gap-1 text-[10px]"><Undo2 className="h-3 w-3" /> Devolucao/estorno</Badge>
+              <Badge tone="amber" className="gap-1 text-[10px]"><Undo2 className="h-3 w-3" /> Estorno</Badge>
             )}
-            {t._kind !== "group" && (t.reversed_total ?? 0) > 0 && (
-              <Badge tone="zinc" variant="soft" className="text-[10px]">
-                Estornado {currency(t.reversed_total)}
-              </Badge>
-            )}
+
             {isGroup && (
               <button
                 type="button"
@@ -638,17 +624,6 @@ export default function FinancePage() {
                 {t.reconciled ? <RotateCcw className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
               </Button>
             )}
-            {(t.sign ?? 1) >= 0 && !t.voided_at && !t.account_transfer_id && hasPerm("finance.write") && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => openReverse(t)}
-                aria-label="Devolucao/estorno"
-                title="Devolucao/estorno (reduz a receita/despesa)"
-              >
-                <Undo2 className="h-3.5 w-3.5 text-amber-600" />
-              </Button>
-            )}
             {!t.voided_at && !t.reconciled && !t.account_transfer_id && hasPerm("finance.write") && (
               <>
                 {t.type === "expense" && (t.sign ?? 1) >= 0 && (
@@ -778,64 +753,6 @@ export default function FinancePage() {
     toast("Lancamento corrigido.");
     setEditing(null);
     await handleTxnSaved();
-  }
-
-  // Abre o modal de devolucao/estorno com o saldo restante pre-preenchido.
-  function openReverse(t: Transaction) {
-    if (t.sign < 0) {
-      toast("Um estorno/devolucao nao pode ser estornado novamente.", "error");
-      return;
-    }
-    if (t.account_transfer_id) {
-      toast("Use a tela de transferencias entre contas.", "error");
-      return;
-    }
-    const remaining = Math.max((t.amount ?? 0) - (t.reversed_total ?? 0), 0);
-    if (remaining <= 0) {
-      toast("Este lancamento ja foi totalmente estornado.", "error");
-      return;
-    }
-    setReverseTarget(t);
-    setReverseForm({
-      amount: remaining.toFixed(2),
-      occurred_at: todayISO(),
-      reason: "",
-      mode: "same",
-      expense_category_id: "",
-      issue_receipt: t.receipt_issued && t.type === "income",
-    });
-  }
-
-  async function submitReverse() {
-    const t = reverseTarget;
-    if (!t || reversing) return;
-    const amount = Number(reverseForm.amount);
-    if (!amount || amount <= 0) {
-      toast("Informe o valor da devolucao/estorno.", "error");
-      return;
-    }
-    if (reverseForm.mode === "expense" && !reverseForm.expense_category_id) {
-      toast("Selecione a conta de despesa da devolucao.", "error");
-      return;
-    }
-    setReversing(true);
-    try {
-      const res = await reverseTransaction(t.id, {
-        amount,
-        occurred_at: reverseForm.occurred_at || undefined,
-        reason: reverseForm.reason || undefined,
-        mode: reverseForm.mode,
-        expense_category_id: reverseForm.mode === "expense" ? reverseForm.expense_category_id : undefined,
-        issue_receipt: reverseForm.issue_receipt,
-      });
-      toast(res.receipt_id ? "Devolucao/estorno registrado com recibo de estorno." : "Devolucao/estorno registrado.");
-      setReverseTarget(null);
-      await handleTxnSaved();
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Erro ao registrar devolucao/estorno", "error");
-    } finally {
-      setReversing(false);
-    }
   }
 
   async function removeTxn(t: Transaction) {
@@ -1594,14 +1511,8 @@ export default function FinancePage() {
             {(detail.sign ?? 1) < 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-zinc-500">Tipo</span>
-                <Badge tone="amber" className="gap-1"><Undo2 className="h-3 w-3" /> Devolucao/estorno</Badge>
+                <Badge tone="amber" className="gap-1"><Undo2 className="h-3 w-3" /> Estorno</Badge>
               </div>
-            )}
-            {detail.reversal_reason && (
-              <div className="flex items-center justify-between gap-4"><span className="text-zinc-500">Motivo do estorno</span><span className="text-right">{detail.reversal_reason}</span></div>
-            )}
-            {(detail.reversed_total ?? 0) > 0 && (
-              <div className="flex items-center justify-between"><span className="text-zinc-500">Total estornado</span><span className="font-medium">{currency(detail.reversed_total)}</span></div>
             )}
             <div className="flex items-center justify-between"><span className="text-zinc-500">Conta contabil</span><span>{detail.category_name ?? "-"}</span></div>
             {detail.account_name && <div className="flex items-center justify-between"><span className="text-zinc-500"> Conta</span><span>{detail.account_name}</span></div>}
@@ -1823,98 +1734,6 @@ export default function FinancePage() {
             <Button size="sm" onClick={() => submitSend(recipient)} disabled={sending || !recipient.trim()}>{sending ? "Enviando..." : "Enviar"}</Button>
           </div>
         </div>
-      </Modal>
-
-      <Modal
-        open={!!reverseTarget}
-        onClose={() => setReverseTarget(null)}
-        title="Devolucao / estorno"
-      >
-        {reverseTarget && (
-          <div className="space-y-3 text-sm">
-            <div className="rounded border border-zinc-200 p-3 dark:border-zinc-700">
-              <p className="font-medium">{reverseTarget.description ?? "Lancamento"}</p>
-              <p className="text-xs text-zinc-500">
-                Original: {currency(reverseTarget.amount)} - ja estornado {currency(reverseTarget.reversed_total ?? 0)}
-              </p>
-              <p className="text-xs text-zinc-500">
-                Saldo disponivel: {currency(Math.max(reverseTarget.amount - (reverseTarget.reversed_total ?? 0), 0))}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Valor *" hint="Aceita parcial.">
-                <CurrencyInput
-                  value={reverseForm.amount}
-                  onChange={(v) => setReverseForm((f) => ({ ...f, amount: v }))}
-                  disabled={reversing}
-                />
-              </Field>
-              <Field label="Data">
-                <Input
-                  type="date"
-                  value={reverseForm.occurred_at}
-                  onChange={(e) => setReverseForm((f) => ({ ...f, occurred_at: e.target.value }))}
-                  disabled={reversing}
-                />
-              </Field>
-            </div>
-            <Field label="Como lancar">
-              <Select
-                value={reverseForm.mode}
-                onChange={(e) => setReverseForm((f) => ({ ...f, mode: e.target.value as "same" | "expense", expense_category_id: "" }))}
-                disabled={reversing || reverseTarget.type !== "income"}
-              >
-                <option value="same">Abater na mesma conta contabil (contra-receita/contra-despesa)</option>
-                {reverseTarget.type === "income" && (
-                  <option value="expense">Lancar como despesa em Devolucoes/Estornos</option>
-                )}
-              </Select>
-            </Field>
-            {reverseForm.mode === "expense" && (
-              <Field label="Conta de despesa *">
-                <Select
-                  value={reverseForm.expense_category_id}
-                  onChange={(e) => setReverseForm((f) => ({ ...f, expense_category_id: e.target.value }))}
-                  disabled={reversing}
-                >
-                  <option value="">Selecione...</option>
-                  {categories
-                    .filter((c) => c.type === "expense" && c.is_active)
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>{c.code} - {c.name}</option>
-                    ))}
-                </Select>
-              </Field>
-            )}
-            <Field label="Motivo">
-              <Textarea
-                rows={2}
-                value={reverseForm.reason}
-                onChange={(e) => setReverseForm((f) => ({ ...f, reason: e.target.value }))}
-                placeholder="Ex.: cheque devolvido, chargeback, estorno de contribuicao"
-                disabled={reversing}
-              />
-            </Field>
-            {reverseTarget.receipt_issued && reverseTarget.type === "income" && (
-              <label className="flex items-center gap-2 text-sm text-zinc-600">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-zinc-300 text-sky-600"
-                  checked={reverseForm.issue_receipt}
-                  onChange={(e) => setReverseForm((f) => ({ ...f, issue_receipt: e.target.checked }))}
-                  disabled={reversing}
-                />
-                Emitir recibo de estorno
-              </label>
-            )}
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="ghost" onClick={() => setReverseTarget(null)} disabled={reversing}>Cancelar</Button>
-              <Button onClick={submitReverse} disabled={reversing}>
-                <Undo2 className="h-4 w-4" /> {reversing ? "Registrando..." : "Registrar estorno"}
-              </Button>
-            </div>
-          </div>
-        )}
       </Modal>
 
       <Modal

@@ -980,7 +980,7 @@ export function BankReconciliationPanel() {
                 {genEntry.direction === "income" ? "Credito" : "Debito"} de <strong>{currency(genEntry.amount)}</strong> em {datePt(genEntry.posted_at)}
                 {genEntry.memo ? ` - ${genEntry.memo}` : ""}
               </p>
-              <Field label="Devolucao / estorno" className="sm:col-span-2">
+              <Field label="Estorno" className="sm:col-span-2">
                 <label className="flex items-start gap-2 pt-1 text-sm text-zinc-600 dark:text-zinc-300">
                   <input
                     type="checkbox"
@@ -989,7 +989,7 @@ export function BankReconciliationPanel() {
                     onChange={(e) => setGenForm({ ...genForm, reversal: e.target.checked, category_id: "" })}
                   />
                   <span>
-                    <span className="font-medium">Esta linha e devolucao/estorno</span>
+                    <span className="font-medium">Esta linha e estorno</span>
                     <span className="block text-xs text-zinc-400">
                       O banco debitou uma receita (ou creditou uma despesa). O lancamento nasce com sinal negativo e abate a conta do tipo oposto.
                     </span>

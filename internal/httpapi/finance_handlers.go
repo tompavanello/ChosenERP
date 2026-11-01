@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"io"
 	"mime"
@@ -266,9 +265,7 @@ func writeFinanceErr(w http.ResponseWriter, err error) {
 		writeErr(w, http.StatusConflict, err.Error())
 	case errors.Is(err, finance.ErrGroupDateMismatch):
 		writeErr(w, http.StatusConflict, err.Error())
-	case errors.Is(err, finance.ErrTransactionIsReversal),
-		errors.Is(err, finance.ErrOriginalHasReversals),
-		errors.Is(err, finance.ErrReversalExceedsOriginal):
+	case errors.Is(err, finance.ErrTransactionIsReversal):
 		writeErr(w, http.StatusConflict, err.Error())
 	case errors.Is(err, finance.ErrAccountTransferReconciled),
 		errors.Is(err, finance.ErrAccountTransferGrouped),
@@ -749,82 +746,6 @@ func (a *App) handleVoidTxn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-}
-
-// handleReverseTxn cria a devolucao/estorno (contra-lancamento) de um
-// lancamento. Aceita total ou parcial e emite o recibo de estorno.
-func (a *App) handleReverseTxn(w http.ResponseWriter, r *http.Request) {
-	claims, ok := claimsFrom(r.Context())
-	if !ok {
-		writeErr(w, http.StatusUnauthorized, "unauthenticated")
-		return
-	}
-	id := r.PathValue("id")
-	var in finance.ReverseTxnInput
-	if err := readJSON(r, &in); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid body")
-		return
-	}
-	in.ActorID = claims.UserID
-	b := boundsFromClaims(claims)
-	var created *finance.Transaction
-	var docID, ref, token string
-	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
-		var err error
-		created, docID, ref, token, err = a.Finance.Reverse(r.Context(), tx, claims.TenantID, id, in)
-		if err != nil {
-			return err
-		}
-		payload, _ := json.Marshal(map[string]any{
-			"reversal_transaction_id": created.ID,
-			"amount":                  created.Amount,
-			"sign":                    created.Sign,
-			"mode":                    in.Mode,
-			"reason":                  in.Reason,
-		})
-		_, err = tx.Exec(r.Context(), `
-			INSERT INTO audit_log (tenant_id, actor_id, action, entity, entity_id, payload)
-			SELECT $1, $2::uuid, 'finance.tx.reversed', 'financial_transactions', $3::uuid, $4
-			FROM users WHERE id = $2`, claims.TenantID, claims.UserID, id, payload)
-		return err
-	})
-	if err != nil {
-		if store.IsNotFound(err) || errors.Is(err, pgx.ErrNoRows) {
-			writeErr(w, http.StatusNotFound, "lancamento original nao encontrado")
-			return
-		}
-		writeFinanceErr(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"transaction":   created,
-		"receipt_id":    docID,
-		"receipt_ref":   ref,
-		"receipt_token": token,
-	})
-}
-
-// handleListReversals lista as devolucoes/estornos de um lancamento original.
-func (a *App) handleListReversals(w http.ResponseWriter, r *http.Request) {
-	claims, ok := claimsFrom(r.Context())
-	if !ok {
-		writeErr(w, http.StatusUnauthorized, "unauthenticated")
-		return
-	}
-	id := r.PathValue("id")
-	b := boundsFromClaims(claims)
-	var out []finance.Transaction
-	var total float64
-	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
-		var err error
-		out, total, err = a.Finance.ListReversals(r.Context(), tx, id)
-		return err
-	})
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"reversals": out, "total": total})
 }
 
 // handleSettleTxn marca/desmarca a quitacao de um lancamento (contas a pagar).
