@@ -453,12 +453,12 @@ func (r *Repo) Consolidated(ctx context.Context, tx pgx.Tx, from, to string) ([]
 		SELECT b.id::text, b.name, b.kind, b.parent_id::text,
 			(SELECT count(*) FROM members m WHERE m.branch_id = b.id)::int,
 			(SELECT count(*) FROM visitors v WHERE v.branch_id = b.id)::int,
-			COALESCE((SELECT sum(t.amount) FROM financial_transactions t
+			COALESCE((SELECT sum(t.amount * t.sign) FROM financial_transactions t
 				WHERE t.branch_id = b.id AND t.type = 'income' AND t.voided_at IS NULL
 				  AND t.account_transfer_id IS NULL
 				  AND ($1 = '' OR t.occurred_at::date >= $1::date)
 				  AND ($2 = '' OR t.occurred_at::date <= $2::date)), 0)::float8,
-			COALESCE((SELECT sum(t.amount) FROM financial_transactions t
+			COALESCE((SELECT sum(t.amount * t.sign) FROM financial_transactions t
 				WHERE t.branch_id = b.id AND t.type = 'expense' AND t.voided_at IS NULL
 				  AND t.account_transfer_id IS NULL
 				  AND ($1 = '' OR t.occurred_at::date >= $1::date)

@@ -69,8 +69,8 @@ func (r *Repo) MonthlySeries(ctx context.Context, tx pgx.Tx, from, to string) ([
 	from, to = resolvePeriod(from, to)
 	rows, err := tx.Query(ctx, `
 		SELECT to_char(date_trunc('month', occurred_at), 'YYYY-MM') AS m,
-		       COALESCE(SUM(amount) FILTER (WHERE type='income'),0),
-		       COALESCE(SUM(amount) FILTER (WHERE type='expense'),0)
+		       COALESCE(SUM(amount * sign) FILTER (WHERE type='income'),0),
+		       COALESCE(SUM(amount * sign) FILTER (WHERE type='expense'),0)
 		FROM financial_transactions
 		WHERE occurred_at >= NULLIF($1,'')::date
 		  AND occurred_at < (NULLIF($2,'')::date + 1)
@@ -101,8 +101,8 @@ func (r *Repo) BuildDRE(ctx context.Context, tx pgx.Tx, from, to string) (DRE, e
 	dre.To = to
 
 	err := tx.QueryRow(ctx, `
-		SELECT COALESCE(SUM(amount) FILTER (WHERE type='income'),0),
-		       COALESCE(SUM(amount) FILTER (WHERE type='expense'),0)
+		SELECT COALESCE(SUM(amount * sign) FILTER (WHERE type='income'),0),
+		       COALESCE(SUM(amount * sign) FILTER (WHERE type='expense'),0)
 		FROM financial_transactions
 		WHERE occurred_at >= NULLIF($1,'')::date
 		  AND occurred_at < (NULLIF($2,'')::date + 1)
@@ -116,7 +116,7 @@ func (r *Repo) BuildDRE(ctx context.Context, tx pgx.Tx, from, to string) (DRE, e
 
 	rows, err := tx.Query(ctx, `
 		SELECT COALESCE(t.category_id::text,''), COALESCE(c.code,''),
-		       COALESCE(c.name,'Sem categoria'), t.type, SUM(t.amount)::float8
+		       COALESCE(c.name,'Sem categoria'), t.type, SUM(t.amount * t.sign)::float8
 		FROM financial_transactions t
 		LEFT JOIN financial_categories c ON c.id = t.category_id
 		WHERE t.occurred_at >= NULLIF($1,'')::date
@@ -146,8 +146,8 @@ func (r *Repo) BuildDRE(ctx context.Context, tx pgx.Tx, from, to string) (DRE, e
 	// Periodo anterior de igual duracao
 	var prevIncome, prevExpense float64
 	err = tx.QueryRow(ctx, `
-		SELECT COALESCE(SUM(amount) FILTER (WHERE type='income'),0),
-		       COALESCE(SUM(amount) FILTER (WHERE type='expense'),0)
+		SELECT COALESCE(SUM(amount * sign) FILTER (WHERE type='income'),0),
+		       COALESCE(SUM(amount * sign) FILTER (WHERE type='expense'),0)
 		FROM financial_transactions
 		WHERE occurred_at >= (NULLIF($1,'')::date - (NULLIF($2,'')::date - NULLIF($1,'')::date + 1))
 		  AND occurred_at < NULLIF($1,'')::date

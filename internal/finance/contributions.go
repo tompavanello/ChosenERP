@@ -28,6 +28,7 @@ func (r *Repo) ListContributions(ctx context.Context, tx pgx.Tx, memberID string
 		LEFT JOIN financial_categories c ON c.id = t.category_id
 		WHERE t.donor_member_id = $1::uuid
 		  AND t.type = 'income'
+		  AND t.sign = 1
 		  AND t.voided_at IS NULL
 		  AND EXTRACT(YEAR FROM t.occurred_at) = $2
 		ORDER BY t.occurred_at DESC, t.created_at DESC`, memberID, year)

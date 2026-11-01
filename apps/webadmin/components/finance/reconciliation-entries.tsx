@@ -30,6 +30,8 @@ type ReconRow = {
   created_at: string;
   entry_seq?: number;
   type: "income" | "expense";
+  sign?: number;
+  bank_direction?: "income" | "expense";
   category_name?: string;
   description?: string;
   account_name?: string;
@@ -40,6 +42,13 @@ type ReconRow = {
   tx?: Transaction;
   group?: TransactionGroup;
 };
+
+// Direcao bancaria efetiva: devolucao/estorno (sign=-1) inverte o tipo contabil.
+function reconIsIncome(row: Pick<ReconRow, "type" | "sign" | "bank_direction">): boolean {
+  if (row.bank_direction) return row.bank_direction === "income";
+  if ((row.sign ?? 1) < 0) return row.type === "expense";
+  return row.type === "income";
+}
 
 function reconScopeKey(row: ReconRow): string {
   return `${row.branch_id}|${row.account_id ?? ""}|${row.occurred_at.slice(0, 10)}`;
@@ -189,6 +198,8 @@ export function ReconciliationEntries() {
         created_at: g.created_at,
         entry_seq: g.entry_seq,
         type: g.type,
+        sign: 1,
+        bank_direction: g.type,
         category_name: undefined,
         description: g.description,
         account_name: g.account_name,
@@ -222,6 +233,8 @@ export function ReconciliationEntries() {
             created_at: t.created_at ?? "",
             entry_seq: seqs.length ? Math.min(...seqs) : undefined,
             type: t.type,
+            sign: 1,
+            bank_direction: t.type,
             description: t.description,
             account_name: t.account_name,
             amount: members.reduce((sum, m) => sum + m.amount, 0),
@@ -241,6 +254,8 @@ export function ReconciliationEntries() {
         created_at: t.created_at ?? "",
         entry_seq: t.entry_seq,
         type: t.type,
+        sign: t.sign ?? 1,
+        bank_direction: t.bank_direction,
         category_name: t.category_name,
         description: t.description,
         account_name: t.account_name,
@@ -283,13 +298,13 @@ export function ReconciliationEntries() {
     let expense = 0;
     for (const r of accountRows) {
       const d = r.occurred_at.slice(0, 10);
-      const signed = r.type === "income" ? r.amount : -r.amount;
+      const signed = reconIsIncome(r) ? r.amount : -r.amount;
       if (from && d < from) {
         opening += signed;
         continue;
       }
       if (to && d > to) continue;
-      if (r.type === "income") income += r.amount;
+      if (reconIsIncome(r)) income += r.amount;
       else expense += r.amount;
     }
     return { opening, income, expense, closing: opening + income - expense };
@@ -310,7 +325,7 @@ export function ReconciliationEntries() {
     for (const r of ordered) {
       const key = r.account_id ?? "";
       const prev = current.get(key) ?? initial.get(key) ?? 0;
-      const next = prev + (r.type === "income" ? r.amount : -r.amount);
+      const next = prev + (reconIsIncome(r) ? r.amount : -r.amount);
       current.set(key, next);
       out.set(r.id, next);
     }
@@ -445,7 +460,11 @@ export function ReconciliationEntries() {
       label: "Tipo",
       sortable: true,
       width: "w-24",
-      render: (t) => <Badge tone={t.type === "income" ? "green" : "red"}>{t.type === "income" ? "Entrada" : "Saida"}</Badge>,
+      render: (t) => (
+        <Badge tone={reconIsIncome(t) ? "green" : "red"}>
+          {(t.sign ?? 1) < 0 ? "Estorno" : reconIsIncome(t) ? "Entrada" : "Saida"}
+        </Badge>
+      ),
     },
     {
       key: "category_name",
@@ -524,7 +543,7 @@ export function ReconciliationEntries() {
       label: "Valor",
       sortable: true,
       align: "right",
-      render: (t) => <span className={`font-medium ${t.type === "income" ? "text-emerald-600" : "text-red-600"}`}>{currency(t.amount)}</span>,
+      render: (t) => <span className={`font-medium ${reconIsIncome(t) ? "text-emerald-600" : "text-red-600"}`}>{currency(t.amount)}</span>,
     },
     {
       key: "balance_after",

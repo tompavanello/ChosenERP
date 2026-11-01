@@ -32,6 +32,8 @@ type AuditRow = {
   created_at: string;
   entry_seq?: number;
   type: "income" | "expense";
+  sign?: number;
+  bank_direction?: "income" | "expense";
   category_name?: string;
   description?: string;
   account_name?: string;
@@ -43,6 +45,12 @@ type AuditRow = {
   tx?: AuditItem;
   members?: AuditItem[];
 };
+
+function auditIsIncome(row: Pick<AuditRow, "type" | "sign" | "bank_direction">): boolean {
+  if (row.bank_direction) return row.bank_direction === "income";
+  if ((row.sign ?? 1) < 0) return row.type === "expense";
+  return row.type === "income";
+}
 
 function auditScopeKey(row: AuditRow): string {
   return `${row.branch_id}|${row.account_id ?? ""}|${row.occurred_at.slice(0, 10)}`;
@@ -290,6 +298,8 @@ export default function AuditReportPage() {
         created_at: it.created_at,
         entry_seq: it.entry_seq,
         type: it.type,
+        sign: it.sign ?? 1,
+        bank_direction: it.bank_direction,
         category_name: it.category_name,
         description: it.description,
         account_name: it.account_name,
@@ -316,6 +326,8 @@ export default function AuditReportPage() {
         created_at: first.created_at,
         entry_seq: first.group_entry_seq ?? (seqs.length ? Math.min(...seqs) : undefined),
         type: first.type,
+        sign: 1,
+        bank_direction: first.type,
         description: first.group_description ?? first.description,
         account_name: first.account_name,
         amount: members.reduce((sum, m) => sum + m.amount, 0),
@@ -458,8 +470,8 @@ export default function AuditReportPage() {
       sortable: true,
       width: "w-24",
       render: (row) => (
-        <Badge tone={row.type === "income" ? "green" : "red"}>
-          {row.type === "income" ? "Entrada" : "Saida"}
+        <Badge tone={auditIsIncome(row) ? "green" : "red"}>
+          {(row.sign ?? 1) < 0 ? "Estorno" : auditIsIncome(row) ? "Entrada" : "Saida"}
         </Badge>
       ),
     },
@@ -507,7 +519,7 @@ export default function AuditReportPage() {
       sortable: true,
       align: "right",
       render: (row) => (
-        <span className={`font-medium ${row.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
+        <span className={`font-medium ${auditIsIncome(row) ? "text-emerald-600" : "text-red-600"}`}>
           {currency(row.amount)}
         </span>
       ),
@@ -713,11 +725,11 @@ export default function AuditReportPage() {
             <div className="space-y-3 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-zinc-500">Valor</span>
-                <span className={`text-xl font-semibold ${detailItem.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
-                  {detailItem.type === "income" ? "+" : "-"}{currency(detailItem.amount)}
+                <span className={`text-xl font-semibold ${auditIsIncome(detailItem) ? "text-emerald-600" : "text-red-600"}`}>
+                  {auditIsIncome(detailItem) ? "+" : "-"}{currency(detailItem.amount)}
                 </span>
               </div>
-              <DetRow label="Tipo" value={detailItem.type === "income" ? "Entrada" : "Saida"} />
+              <DetRow label="Tipo" value={(detailItem.sign ?? 1) < 0 ? "Estorno/devolucao" : auditIsIncome(detailItem) ? "Entrada" : "Saida"} />
               <DetRow label="Data" value={datePt(detailItem.occurred_at)} />
               <DetRow label="Conta contabil" value={detailItem.category_name ?? "-"} />
               <DetRow label="Conta bancaria" value={detailItem.account_name ?? "-"} />

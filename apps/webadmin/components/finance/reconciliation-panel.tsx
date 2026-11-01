@@ -31,6 +31,8 @@ type PeriodRow = {
   created_at: string;
   entry_seq?: number;
   type: "income" | "expense";
+  sign?: number;
+  bank_direction?: "income" | "expense";
   category_name?: string;
   description?: string;
   account_name?: string;
@@ -41,6 +43,13 @@ type PeriodRow = {
   attachment_count: number;
   tx?: ReconciliationItem;
 };
+
+// Direcao bancaria efetiva: devolucao/estorno (sign=-1) inverte o tipo contabil.
+function periodIsIncome(row: Pick<PeriodRow, "type" | "sign" | "bank_direction">): boolean {
+  if (row.bank_direction) return row.bank_direction === "income";
+  if ((row.sign ?? 1) < 0) return row.type === "expense";
+  return row.type === "income";
+}
 
 function periodScopeKey(row: PeriodRow): string {
   return `${row.branch_id}|${row.account_id ?? ""}|${row.occurred_at.slice(0, 10)}`;
@@ -367,6 +376,8 @@ export function ReconciliationPanel() {
         created_at: it.created_at,
         entry_seq: it.entry_seq,
         type: it.type,
+        sign: it.sign ?? 1,
+        bank_direction: it.bank_direction,
         category_name: it.category_name,
         description: it.description,
         account_name: it.account_name,
@@ -393,6 +404,8 @@ export function ReconciliationPanel() {
         created_at: first.created_at,
         entry_seq: first.group_entry_seq ?? (seqs.length ? Math.min(...seqs) : undefined),
         type: first.type,
+        sign: 1,
+        bank_direction: first.type,
         description: first.group_description ?? first.description,
         account_name: first.account_name,
         amount: members.reduce((sum, m) => sum + m.amount, 0),
@@ -414,7 +427,7 @@ export function ReconciliationPanel() {
     const out = new Map<string, number>();
     let running = 0;
     for (const row of ordered) {
-      running += row.type === "income" ? row.amount : -row.amount;
+      running += periodIsIncome(row) ? row.amount : -row.amount;
       out.set(row.id, running);
     }
     return out;
@@ -468,7 +481,11 @@ export function ReconciliationPanel() {
       label: "Tipo",
       sortable: true,
       width: "w-24",
-      render: (row) => <Badge tone={row.type === "income" ? "green" : "red"}>{row.type === "income" ? "Entrada" : "Saida"}</Badge>,
+      render: (row) => (
+        <Badge tone={periodIsIncome(row) ? "green" : "red"}>
+          {(row.sign ?? 1) < 0 ? "Estorno" : periodIsIncome(row) ? "Entrada" : "Saida"}
+        </Badge>
+      ),
     },
     {
       key: "category_name",
@@ -550,7 +567,7 @@ export function ReconciliationPanel() {
       label: "Valor",
       sortable: true,
       align: "right",
-      render: (row) => <span className={`font-medium ${row.type === "income" ? "text-emerald-600" : "text-red-600"}`}>{currency(row.amount)}</span>,
+      render: (row) => <span className={`font-medium ${periodIsIncome(row) ? "text-emerald-600" : "text-red-600"}`}>{currency(row.amount)}</span>,
     },
     {
       key: "balance_after",

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"time"
 
 	"chosenerp/internal/ai"
 	"chosenerp/internal/announcements"
@@ -78,6 +79,13 @@ type App struct {
 	AI      *ai.Client
 	// Limitador protege as rotas /api/v1/public/* (sem auth).
 	Limitador *limitadorPublico
+
+	// Cache curto de entitlements (plano) e permissoes por papel. Evita abrir
+	// uma transacao so para ler dados que mudam raramente.
+	Entitlements *ttlCache[*org.Entitlements]
+	Permissions  *ttlCache[bool]
+	// Metricas HTTP/pool expostas em /metrics.
+	Metrics *httpMetrics
 }
 
 // NewRouter monta o gateway HTTP e suas rotas.
@@ -118,11 +126,15 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 		Bible:         bible.NewService(st, cfg.APIBibleKey, cfg.APIBibleBaseURL),
 		AI:            ai.NewClient(cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel),
 		Limitador:     newLimitadorPublico(),
+		Entitlements:  newTTLCache[*org.Entitlements](60 * time.Second),
+		Permissions:   newTTLCache[bool](60 * time.Second),
+		Metrics:       newHTTPMetrics(),
 	}
 	mux := http.NewServeMux()
 
 	// Publico
 	mux.HandleFunc("GET /healthz", app.handleHealth)
+	mux.HandleFunc("GET /readyz", app.handleReady)
 	mux.HandleFunc("GET /metrics", app.handleMetrics)
 	// Login/refresh/selecao de igreja ficam atras do limite por IP (anti forca bruta).
 	mux.Handle("POST /api/v1/auth/login", app.publico(app.handleLogin))
@@ -304,6 +316,8 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("POST /api/v1/finance/transactions/reorder", authed(app.perm("finance.write", app.handleReorderTxns)))
 	mux.Handle("POST /api/v1/finance/lines/reorder", authed(app.perm("finance.write", app.handleReorderFinanceLines)))
 	mux.Handle("POST /api/v1/finance/transactions/{id}/void", authed(app.perm("finance.write", app.handleVoidTxn)))
+	mux.Handle("POST /api/v1/finance/transactions/{id}/reverse", authed(app.perm("finance.write", app.handleReverseTxn)))
+	mux.Handle("GET /api/v1/finance/transactions/{id}/reversals", authed(app.perm("finance.read", app.handleListReversals)))
 	mux.Handle("POST /api/v1/finance/transactions/{id}/settle", authed(app.perm("finance.write", app.handleSettleTxn)))
 	mux.Handle("POST /api/v1/finance/transactions/{id}/reconcile", authed(app.perm("finance.reconcile", app.handleReconcileTxn)))
 	mux.Handle("POST /api/v1/finance/transactions/reconcile-batch", authed(app.perm("finance.reconcile", app.handleReconcileTxnBatch)))
@@ -662,7 +676,7 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/public/card/{token}/print", app.publico(app.handleMemberCardHTML))
 	mux.Handle("GET /api/v1/public/card/{token}/photo", app.publico(app.handlePublicCardPhoto))
 
-	return withCORS(mux)
+	return withCORS(app.withMetrics(mux))
 }
 
 func withCORS(next http.Handler) http.Handler {

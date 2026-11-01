@@ -19,6 +19,8 @@ import { currency, datePt, todayISO } from "@/lib/format";
 
 export interface TransactionFormState {
   type: "income" | "expense";
+  /** Devolucao/estorno avulso: reduz a conta de receita (sign=-1). */
+  reversal: boolean;
   amount: string;
   category_id: string;
   account_id: string;
@@ -45,6 +47,7 @@ export interface TransactionFormState {
 
 const EMPTY: TransactionFormState = {
   type: "income",
+  reversal: false,
   amount: "",
   category_id: "",
   account_id: "",
@@ -190,6 +193,7 @@ export function TransactionForm({
 
     const payload: Record<string, unknown> = {
       type: form.type,
+      sign: form.reversal && form.type === "income" ? -1 : 1,
       amount,
       category_id: form.category_id,
       account_id: form.account_id,
@@ -272,12 +276,34 @@ export function TransactionForm({
         <Field label="Tipo" required>
           <Select
             value={form.type}
-            onChange={(e) => set("type", e.target.value as "income" | "expense")}
+            onChange={(e) => {
+              set("type", e.target.value as "income" | "expense");
+              if (e.target.value !== "income") set("reversal", false);
+            }}
           >
             <option value="income">Entrada</option>
             <option value="expense">Saida</option>
           </Select>
         </Field>
+        {form.type === "income" && (
+          <Field label="Devolucao / estorno" className="sm:col-span-2">
+            <label className="flex items-start gap-2 pt-1 text-sm text-zinc-600 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
+                checked={form.reversal}
+                onChange={(e) => set("reversal", e.target.checked)}
+                disabled={saving}
+              />
+              <span>
+                <span className="font-medium">Reduzir a receita (contra-receita)</span>
+                <span className="block text-xs text-zinc-400">
+                  Use para devolucao de cheque, estorno de dizimo/oferta ou chargeback. O valor continua positivo e e abatido da conta de receita selecionada.
+                </span>
+              </span>
+            </label>
+          </Field>
+        )}
         <Field label="Valor (R$)*">
           <CurrencyInput
             required

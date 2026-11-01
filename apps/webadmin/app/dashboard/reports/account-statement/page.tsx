@@ -42,6 +42,13 @@ const ALL_TIME = { from: "1900-01-01", to: "2100-12-31" };
 
 const TYPE_LABEL: Record<string, string> = { income: "Entrada", expense: "Saida" };
 
+// Direcao bancaria efetiva: devolucao/estorno (sign=-1) inverte o tipo contabil.
+function statementLineIsIncome(l: { type: string; sign?: number; bank_direction?: string }): boolean {
+  if (l.bank_direction) return l.bank_direction === "income";
+  if ((l.sign ?? 1) < 0) return l.type === "expense";
+  return l.type === "income";
+}
+
 export default function AccountStatementPage() {
   const { toast } = useToast();
   const { hasPerm } = useAuth();
@@ -437,8 +444,8 @@ export default function AccountStatementPage() {
                               {isGroupLine ? <span className="text-xs">Linha bancaria</span> : (l.category_name ?? "-")}
                             </TD>
                             <TD>
-                              <Badge tone={l.type === "income" ? "green" : "red"}>
-                                {TYPE_LABEL[l.type] ?? l.type}
+                              <Badge tone={statementLineIsIncome(l) ? "green" : "red"}>
+                                {(l.sign ?? 1) < 0 ? "Estorno" : TYPE_LABEL[l.type] ?? l.type}
                               </Badge>
                             </TD>
                             <TD className="text-center">
@@ -457,8 +464,8 @@ export default function AccountStatementPage() {
                                 <span className="text-zinc-300">-</span>
                               )}
                             </TD>
-                            <TD className={`text-right font-semibold tabular-nums ${l.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
-                              {l.type === "income" ? "+" : "-"} {currency(l.amount)}
+                            <TD className={`text-right font-semibold tabular-nums ${statementLineIsIncome(l) ? "text-emerald-600" : "text-red-600"}`}>
+                              {statementLineIsIncome(l) ? "+" : "-"} {currency(l.amount)}
                             </TD>
                             <TD className="text-right font-medium tabular-nums">{currency(l.balance_after)}</TD>
                             {canWrite && (

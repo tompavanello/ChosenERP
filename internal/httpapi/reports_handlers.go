@@ -164,6 +164,9 @@ func (a *App) handleExportDRE(w http.ResponseWriter, r *http.Request) {
 		if l.Type == "expense" {
 			tipo = "Saida"
 		}
+		if l.Total < 0 {
+			tipo = "Estorno"
+		}
 		conta := l.Category
 		if l.Code != "" {
 			conta = l.Code + " - " + conta
@@ -566,8 +569,15 @@ func (a *App) handleExportAccountStatement(w http.ResponseWriter, r *http.Reques
 			seq = strconv.Itoa(*l.EntrySeq)
 		}
 		kind := "Entrada"
-		if l.Type != "income" {
+		if l.BankDirection != "" {
+			if l.BankDirection != "income" {
+				kind = "Saida"
+			}
+		} else if l.Type != "income" {
 			kind = "Saida"
+		}
+		if l.Sign < 0 {
+			kind = "Estorno"
 		}
 		category := ""
 		if l.IsGroup {

@@ -69,6 +69,8 @@ type PendingDetail = {
 type GenForm = PendingDetail & {
   category_id: string;
   description: string;
+  /** Devolucao/estorno: a conta e do tipo oposto ao movimento do banco. */
+  reversal: boolean;
 };
 
 const EMPTY_DETAIL: PendingDetail = {
@@ -134,7 +136,7 @@ export function BankReconciliationPanel() {
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   const [genEntry, setGenEntry] = useState<BankEntry | null>(null);
-  const [genForm, setGenForm] = useState<GenForm>({ ...EMPTY_DETAIL, category_id: "", description: "" });
+  const [genForm, setGenForm] = useState<GenForm>({ ...EMPTY_DETAIL, category_id: "", description: "", reversal: false });
   const [generating, setGenerating] = useState(false);
 
   const [groupEntry, setGroupEntry] = useState<BankEntry | null>(null);
@@ -259,7 +261,7 @@ export function BankReconciliationPanel() {
 
   function openGenerate(entry: BankEntry) {
     setGenEntry(entry);
-    setGenForm({ ...EMPTY_DETAIL, category_id: "", description: entry.memo ?? "" });
+    setGenForm({ ...EMPTY_DETAIL, category_id: "", description: entry.memo ?? "", reversal: false });
     ensurePendingRefs();
   }
 
@@ -275,12 +277,13 @@ export function BankReconciliationPanel() {
       await generateBankEntry(selected.id, genEntry.id, {
         category_id: genForm.category_id,
         description: genForm.description || undefined,
-        donor_member_id: genForm.donor_member_id || undefined,
-        benefactor_id: genForm.benefactor_id || undefined,
-        donor_name: genForm.donor_name.trim() || undefined,
-        supplier_id: genForm.supplier_id || undefined,
+        donor_member_id: genForm.reversal ? (genEntry.direction === "expense" ? genForm.donor_member_id || undefined : undefined) : genForm.donor_member_id || undefined,
+        benefactor_id: genForm.reversal ? (genEntry.direction === "expense" ? genForm.benefactor_id || undefined : undefined) : genForm.benefactor_id || undefined,
+        donor_name: genForm.reversal ? (genEntry.direction === "expense" ? genForm.donor_name.trim() || undefined : undefined) : genForm.donor_name.trim() || undefined,
+        supplier_id: genForm.reversal ? (genEntry.direction === "income" ? genForm.supplier_id || undefined : undefined) : genForm.supplier_id || undefined,
         payment_method: genForm.payment_method || undefined,
         is_anonymous: genForm.is_anonymous,
+        reversal: genForm.reversal || undefined,
       });
       toast("Lancamento gerado e vinculado ao extrato.");
       setGenEntry(null);
@@ -585,8 +588,12 @@ export function BankReconciliationPanel() {
 
   const catsFor = useMemo(() => {
     if (!genEntry) return [] as Category[];
-    return categories.filter((c) => c.type === genEntry.direction);
-  }, [categories, genEntry]);
+    // Devolucao/estorno usa a conta do tipo OPOSTO ao movimento do banco.
+    const target = genForm.reversal
+      ? (genEntry.direction === "income" ? "expense" : "income")
+      : genEntry.direction;
+    return categories.filter((c) => c.type === target);
+  }, [categories, genEntry, genForm.reversal]);
 
   const groupCats = useMemo(() => {
     if (!groupEntry) return [] as Category[];
@@ -973,6 +980,22 @@ export function BankReconciliationPanel() {
                 {genEntry.direction === "income" ? "Credito" : "Debito"} de <strong>{currency(genEntry.amount)}</strong> em {datePt(genEntry.posted_at)}
                 {genEntry.memo ? ` - ${genEntry.memo}` : ""}
               </p>
+              <Field label="Devolucao / estorno" className="sm:col-span-2">
+                <label className="flex items-start gap-2 pt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-sky-600"
+                    checked={genForm.reversal}
+                    onChange={(e) => setGenForm({ ...genForm, reversal: e.target.checked, category_id: "" })}
+                  />
+                  <span>
+                    <span className="font-medium">Esta linha e devolucao/estorno</span>
+                    <span className="block text-xs text-zinc-400">
+                      O banco debitou uma receita (ou creditou uma despesa). O lancamento nasce com sinal negativo e abate a conta do tipo oposto.
+                    </span>
+                  </span>
+                </label>
+              </Field>
               <Field label="Conta contabil *">
                 <Select value={genForm.category_id} onChange={(e) => setGenForm({ ...genForm, category_id: e.target.value })}>
                   <option value="">Selecione...</option>
@@ -989,7 +1012,7 @@ export function BankReconciliationPanel() {
                   ))}
                 </Select>
               </Field>
-              {genEntry.direction === "income" ? (
+              {(genForm.reversal ? genEntry.direction === "expense" : genEntry.direction === "income") ? (
                 <>
                   <Field label="Membro doador">
                     <Combobox

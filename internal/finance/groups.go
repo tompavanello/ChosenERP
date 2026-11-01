@@ -109,7 +109,7 @@ func (r *Repo) CreateGroup(ctx context.Context, tx pgx.Tx, tenantID, actorID str
 	rows, err := tx.Query(ctx, `
 		SELECT id::text, tenant_id::text, branch_id::text, COALESCE(account_id::text,''),
 		       type, amount::float8, voided_at, reconciled_at, group_id::text,
-		       account_transfer_id::text,
+		       account_transfer_id::text, sign, reversal_of_id::text,
 		       (occurred_at AT TIME ZONE 'UTC')::date::text
 		FROM financial_transactions
 		WHERE id = ANY($1::uuid[])
@@ -123,16 +123,21 @@ func (r *Repo) CreateGroup(ctx context.Context, tx pgx.Tx, tenantID, actorID str
 	for rows.Next() {
 		var id, tTenant, tBranch, tAccount, tType, tDate string
 		var amount float64
+		var sign int
 		var voidedAt, reconciledAt *time.Time
-		var groupID, transferID *string
+		var groupID, transferID, reversalOf *string
 		if err := rows.Scan(&id, &tTenant, &tBranch, &tAccount, &tType, &amount,
-			&voidedAt, &reconciledAt, &groupID, &transferID, &tDate); err != nil {
+			&voidedAt, &reconciledAt, &groupID, &transferID, &sign, &reversalOf, &tDate); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		if transferID != nil {
 			rows.Close()
 			return nil, ErrTransactionIsTransfer
+		}
+		if sign < 0 || reversalOf != nil {
+			rows.Close()
+			return nil, errors.New("devolucao/estorno nao pode ser agrupado")
 		}
 		if found == 0 {
 			rowTenant, branch, account, kind, memberDate = tTenant, tBranch, tAccount, tType, tDate

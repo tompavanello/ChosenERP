@@ -47,8 +47,8 @@ export default function IncomeExpensePage() {
     load(from, to);
   }, [load, from, to]);
 
-  const incomePie = (dre?.lines ?? []).filter((l) => l.type === "income").map((l) => ({ name: l.category, value: l.total }));
-  const expensePie = (dre?.lines ?? []).filter((l) => l.type === "expense").map((l) => ({ name: l.category, value: l.total }));
+  const incomePie = (dre?.lines ?? []).filter((l) => l.type === "income" && l.total > 0).map((l) => ({ name: l.category, value: l.total }));
+  const expensePie = (dre?.lines ?? []).filter((l) => l.type === "expense" && l.total > 0).map((l) => ({ name: l.category, value: l.total }));
   const monthly = series.map((p) => ({ name: monthLabel(p.month), Entradas: p.income, Saidas: p.expense }));
   const cmp = dre?.comparison;
 

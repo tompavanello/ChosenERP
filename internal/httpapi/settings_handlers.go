@@ -174,6 +174,7 @@ func (a *App) handleUpdateTenant(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	a.invalidateTenant(claims.TenantID)
 	writeJSON(w, http.StatusOK, t)
 }
 

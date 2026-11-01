@@ -246,8 +246,8 @@ export default function MonthlyStatementPage() {
                                 {t.description && t.donor_name && <span className="block text-xs text-zinc-400">{t.donor_name}</span>}
                                 {t.account_name && <span className="block text-xs text-zinc-400">{t.account_name}</span>}
                               </TD>
-                              <TD><Badge tone={t.type === "income" ? "green" : "red"}>{t.type === "income" ? "Entrada" : "Saida"}</Badge></TD>
-                              <TD className={`text-right font-medium ${t.type === "income" ? "text-emerald-600" : "text-red-600"}`}>{currency(t.amount)}</TD>
+                              <TD><Badge tone={((t.sign ?? 1) < 0 ? t.type === "expense" : t.type === "income") ? "green" : "red"}>{(t.sign ?? 1) < 0 ? "Estorno" : t.type === "income" ? "Entrada" : "Saida"}</Badge></TD>
+                              <TD className={`text-right font-medium ${((t.sign ?? 1) < 0 ? t.type === "expense" : t.type === "income") ? "text-emerald-600" : "text-red-600"}`}>{currency(t.amount)}</TD>
                             </TRow>
                           ))}
                           {detailTxns.length === 0 && (

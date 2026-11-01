@@ -49,6 +49,8 @@ type ReconciliationItem struct {
 	CreatedAt            string  `json:"created_at"`
 	EntrySeq             *int    `json:"entry_seq,omitempty"`
 	Type                 string  `json:"type"`
+	Sign                 int     `json:"sign"`
+	BankDirection        string  `json:"bank_direction,omitempty"`
 	Amount               float64 `json:"amount"`
 	Description          *string `json:"description,omitempty"`
 	CategoryName         *string `json:"category_name,omitempty"`
@@ -83,8 +85,8 @@ const reconciliationJoin = `
 	FROM financial_reconciliations fr
 	LEFT JOIN LATERAL (
 	    SELECT count(*) AS n,
-	           SUM(t.amount) FILTER (WHERE t.type='income')  AS income,
-	           SUM(t.amount) FILTER (WHERE t.type='expense') AS expense,
+	           SUM(t.amount * t.sign) FILTER (WHERE t.type='income')  AS income,
+	           SUM(t.amount * t.sign) FILTER (WHERE t.type='expense') AS expense,
 	           count(*) FILTER (WHERE t.reconciled_at IS NOT NULL) AS reconciled,
 	           count(*) FILTER (WHERE t.reconciled_at IS NULL) AS pending
 	    FROM financial_transactions t
@@ -176,7 +178,7 @@ func (r *Repo) ListReconciliationItems(ctx context.Context, tx pgx.Tx, id string
 	rows, err := tx.Query(ctx, `
 		SELECT t.id::text, to_char(t.occurred_at,'YYYY-MM-DD'),
 		       to_char(t.created_at,'YYYY-MM-DD"T"HH24:MI:SSOF'), t.entry_seq,
-		       t.type, t.amount::float8, t.description, c.name, a.name, t.account_id::text,
+		       t.type, t.sign, t.bank_direction, t.amount::float8, t.description, c.name, a.name, t.account_id::text,
 		       t.reconciled_at IS NOT NULL,
 		       to_char(t.reconciled_at,'YYYY-MM-DD"T"HH24:MI:SSOF'),
 		       t.group_id::text, g.status, g.description, g.entry_seq,
@@ -207,7 +209,7 @@ func (r *Repo) ListReconciliationItems(ctx context.Context, tx pgx.Tx, id string
 	for rows.Next() {
 		var it ReconciliationItem
 		if err := rows.Scan(&it.ID, &it.OccurredAt, &it.CreatedAt, &it.EntrySeq,
-			&it.Type, &it.Amount, &it.Description, &it.CategoryName, &it.AccountName, &it.AccountID,
+			&it.Type, &it.Sign, &it.BankDirection, &it.Amount, &it.Description, &it.CategoryName, &it.AccountName, &it.AccountID,
 			&it.Reconciled, &it.ReconciledAt, &it.GroupID, &it.GroupStatus,
 			&it.GroupDescription, &it.GroupEntrySeq, &it.GroupMemberCount,
 			&it.AttachmentCount, &it.GroupAttachmentCount); err != nil {

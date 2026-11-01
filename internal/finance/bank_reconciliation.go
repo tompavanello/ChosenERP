@@ -74,6 +74,11 @@ type GenerateBankEntryInput struct {
 	SupplierID    string `json:"supplier_id"`
 	PaymentMethod string `json:"payment_method"`
 	IsAnonymous   bool   `json:"is_anonymous"`
+	// Reversal marca a linha como devolucao/estorno: a categoria informada
+	// precisa ser do tipo oposto ao movimento do banco e o lancamento nasce com
+	// sign=-1 (reduz a receita/despesa). ReversalOfID vincula ao original.
+	Reversal     bool   `json:"reversal"`
+	ReversalOfID string `json:"reversal_of_id"`
 }
 
 type parsedEntry struct {
@@ -424,7 +429,7 @@ func (r *Repo) matchBankEntries(ctx context.Context, tx pgx.Tx, importID string)
 			SELECT t.id::text
 			FROM financial_transactions t
 			WHERE t.tenant_id = $1::uuid AND t.branch_id = $2::uuid AND t.account_id = $3::uuid
-			  AND t.type = $4 AND t.voided_at IS NULL AND t.group_id IS NULL
+			  AND t.bank_direction = $4 AND t.voided_at IS NULL AND t.group_id IS NULL
 			  AND abs(t.amount - $5) < 0.005
 			  AND t.occurred_at::date BETWEEN $6::date - 3 AND $6::date + 3
 			  AND NOT EXISTS (
@@ -599,21 +604,39 @@ func (r *Repo) GenerateFromBankEntry(ctx context.Context, tx pgx.Tx, tenantID, b
 		desc = "Lancamento gerado da conciliacao bancaria"
 	}
 	catID := in.CategoryID
+	var catType string
+	if err := tx.QueryRow(ctx, `SELECT type FROM financial_categories WHERE id = $1::uuid`, catID).Scan(&catType); err != nil {
+		return nil, err
+	}
+	// Lancamento normal: a categoria acompanha a direcao do banco.
+	// Devolucao/estorno: a categoria e do tipo OPOSTO (ex.: debito do banco em
+	// conta de receita) e o lancamento nasce com sign=-1.
+	typ := direction
+	sign := 1
+	if in.Reversal {
+		if catType == direction {
+			return nil, errors.New("para devolucao/estorno selecione uma conta do tipo oposto ao movimento do banco")
+		}
+		typ = catType
+		sign = -1
+	} else if catType != direction {
+		return nil, fmt.Errorf("a conta selecionada e de %s, mas o movimento do banco e %s (marque devolucao/estorno se for o caso)", catType, direction)
+	}
 	var acct *string
 	if accountID != "" {
 		acct = &accountID
 	}
-	// Vinculos permitidos por tipo: entrada aceita membro/benfeitor/doador
-	// avulso; saida aceita fornecedor. Membro/benfeitor tem precedencia sobre o
-	// nome avulso, como no formulario de lancamento.
+	// Vinculos permitidos por tipo contabil: entrada aceita membro/benfeitor/
+	// doador avulso; saida aceita fornecedor. Membro/benfeitor tem precedencia
+	// sobre o nome avulso, como no formulario de lancamento.
 	donorMemberID := optString(in.DonorMemberID)
 	benefactorID := optString(in.BenefactorID)
 	donorName := optString(in.DonorName)
 	supplierID := optString(in.SupplierID)
-	if direction != "income" {
+	if typ != "income" {
 		donorMemberID, benefactorID, donorName = nil, nil, nil
 	}
-	if direction != "expense" {
+	if typ != "expense" {
 		supplierID = nil
 	}
 	if donorMemberID != nil {
@@ -623,18 +646,21 @@ func (r *Repo) GenerateFromBankEntry(ctx context.Context, tx pgx.Tx, tenantID, b
 	}
 	isAnonymous := in.IsAnonymous && donorMemberID == nil && benefactorID == nil && donorName == nil
 	created, _, _, _, err := r.Create(ctx, tx, tenantID, branchID, CreateTxnInput{
-		Type:          direction,
-		Amount:        amount,
-		CategoryID:    &catID,
-		AccountID:     acct,
-		Description:   &desc,
-		OccurredAt:    &posted,
-		DonorMemberID: donorMemberID,
-		BenefactorID:  benefactorID,
-		DonorName:     donorName,
-		SupplierID:    supplierID,
-		PaymentMethod: optString(in.PaymentMethod),
-		IsAnonymous:   isAnonymous,
+		Type:           typ,
+		Amount:         amount,
+		CategoryID:     &catID,
+		AccountID:      acct,
+		Description:    &desc,
+		OccurredAt:     &posted,
+		DonorMemberID:  donorMemberID,
+		BenefactorID:   benefactorID,
+		DonorName:      donorName,
+		SupplierID:     supplierID,
+		PaymentMethod:  optString(in.PaymentMethod),
+		IsAnonymous:    isAnonymous,
+		Sign:           sign,
+		ReversalOfID:   optString(in.ReversalOfID),
+		ReversalReason: optString(in.Description),
 	})
 	if err != nil {
 		return nil, err
@@ -674,6 +700,8 @@ type GeneratePendingItem struct {
 	SupplierID    string `json:"supplier_id"`
 	PaymentMethod string `json:"payment_method"`
 	IsAnonymous   bool   `json:"is_anonymous"`
+	Reversal      bool   `json:"reversal"`
+	ReversalOfID  string `json:"reversal_of_id"`
 }
 
 // GeneratePendingFromBank gera os lancamentos das linhas pendentes informadas,
@@ -730,6 +758,8 @@ func (r *Repo) GeneratePendingFromBank(ctx context.Context, tx pgx.Tx, tenantID,
 			SupplierID:    it.SupplierID,
 			PaymentMethod: it.PaymentMethod,
 			IsAnonymous:   it.IsAnonymous,
+			Reversal:      it.Reversal,
+			ReversalOfID:  it.ReversalOfID,
 		}); err != nil {
 			return generated, err
 		}

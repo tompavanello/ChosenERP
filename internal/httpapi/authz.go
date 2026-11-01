@@ -79,20 +79,20 @@ func (a *App) featureHandler(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		allowed := false
-		err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
-			ent, e := a.Org.EffectiveForTenant(r.Context(), tx, claims.TenantID)
-			if e != nil {
+		ent, ok := a.Entitlements.Get(claims.TenantID)
+		if !ok {
+			err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
+				var e error
+				ent, e = a.Org.EffectiveForTenant(r.Context(), tx, claims.TenantID)
 				return e
+			})
+			if err != nil {
+				writeServerError(w, err)
+				return
 			}
-			allowed = ent.Has(key)
-			return nil
-		})
-		if err != nil {
-			writeServerError(w, err)
-			return
+			a.Entitlements.Set(claims.TenantID, ent)
 		}
-		if !allowed {
+		if !ent.Has(key) {
 			writeErr(w, http.StatusForbidden, "plan_feature_disabled")
 			return
 		}
@@ -286,20 +286,7 @@ func (a *App) permAny(permissions ...string) func(http.HandlerFunc) http.Handler
 				writeErr(w, http.StatusUnauthorized, "unauthenticated")
 				return
 			}
-			allowed := false
-			err := a.Store.WithTenant(r.Context(), boundsFromClaims(claims), func(tx pgx.Tx) error {
-				for _, p := range permissions {
-					okp, e := a.hasPerm(r.Context(), tx, claims, p)
-					if e != nil {
-						return e
-					}
-					if okp {
-						allowed = true
-						return nil
-					}
-				}
-				return nil
-			})
+			allowed, err := a.checkPermAny(r.Context(), claims, permissions)
 			if err != nil {
 				writeServerError(w, err)
 				return
@@ -311,6 +298,57 @@ func (a *App) permAny(permissions ...string) func(http.HandlerFunc) http.Handler
 			next(w, r)
 		})
 	}
+}
+
+func permCacheKey(claims *auth.Claims, perm string) string {
+	return claims.TenantID + "|" + claims.Role + "|" + perm
+}
+
+// checkPermAny resolve as permissoes com cache. Quando todas ja estao em cache
+// nao abre transacao (economiza uma ida ao banco por request). Na primeira vez,
+// consulta apenas as permissoes ausentes e guarda o resultado.
+func (a *App) checkPermAny(ctx context.Context, claims *auth.Claims, permissions []string) (bool, error) {
+	if auth.IsHQRole(claims.Role) {
+		return true, nil
+	}
+	missing := make([]string, 0, len(permissions))
+	for _, p := range permissions {
+		if v, ok := a.Permissions.Get(permCacheKey(claims, p)); ok {
+			if v {
+				return true, nil
+			}
+			continue
+		}
+		missing = append(missing, p)
+	}
+	if len(missing) == 0 {
+		return false, nil
+	}
+
+	allowed := false
+	err := a.Store.WithTenant(ctx, boundsFromClaims(claims), func(tx pgx.Tx) error {
+		for _, p := range missing {
+			okp, e := a.hasPerm(ctx, tx, claims, p)
+			if e != nil {
+				return e
+			}
+			a.Permissions.Set(permCacheKey(claims, p), okp)
+			if okp {
+				allowed = true
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return allowed, nil
+}
+
+// invalidateTenant limpa os caches do tenant (mudanca de plano/papeis).
+func (a *App) invalidateTenant(tenantID string) {
+	a.Entitlements.DeletePrefix(tenantID)
+	a.Permissions.DeletePrefix(tenantID + "|")
 }
 
 // memberIDForClaims resolve o registro em `members` vinculado a identidade na

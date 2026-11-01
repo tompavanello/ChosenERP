@@ -160,14 +160,15 @@ func scanMember(row pgx.Row) (*Member, error) {
 	return &m, nil
 }
 
-// List retorna membros do escopo definido pela transacao (RLS).
+// List retorna membros do escopo definido pela transacao (RLS), paginado.
 // Se q for informado, filtra por full_name ILIKE (case-insensitive).
-func (r *Repo) List(ctx context.Context, tx pgx.Tx, q string) ([]Member, error) {
+func (r *Repo) List(ctx context.Context, tx pgx.Tx, q string, limit, offset int) ([]Member, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT `+memberCols+`
 		FROM members m
 		WHERE ($1 = '' OR m.full_name ILIKE '%' || $1 || '%')
-		ORDER BY m.full_name`, q)
+		ORDER BY m.full_name
+		LIMIT $2 OFFSET $3`, q, limit, offset)
 	if err != nil {
 		return nil, err
 	}

@@ -45,6 +45,7 @@ type Item struct {
 	CreatedAt            time.Time    `json:"created_at"`
 	EntrySeq             *int         `json:"entry_seq,omitempty"`
 	Type                 string       `json:"type"`
+	Sign                 int          `json:"sign"`
 	Amount               float64      `json:"amount"`
 	Currency             string       `json:"currency"`
 	Description          *string      `json:"description,omitempty"`
@@ -114,8 +115,8 @@ const auditCols = `a.id::text, a.branch_id::text, a.title, a.period_start::text,
 	a.status, a.notes, a.closed_at, a.signer_name, a.signer_role, a.signature_hash, a.created_at,
 	COALESCE(count(i.transaction_id),0)::int,
 	COALESCE(count(i.transaction_id) FILTER (WHERE i.audited),0)::int,
-	COALESCE(sum(t.amount),0)::float8,
-	COALESCE(sum(t.amount) FILTER (WHERE i.audited),0)::float8`
+	COALESCE(sum(t.amount * t.sign),0)::float8,
+	COALESCE(sum(t.amount * t.sign) FILTER (WHERE i.audited),0)::float8`
 
 func scanAudit(row pgx.Row) (*Audit, error) {
 	var a Audit
@@ -166,7 +167,7 @@ func (r *Repo) ListItems(ctx context.Context, tx pgx.Tx, id string) ([]Item, err
 	}
 	rows, err := tx.Query(ctx, `
 		SELECT i.transaction_id::text, t.occurred_at, t.created_at, t.entry_seq,
-		       t.type, t.amount::float8, t.currency, t.description,
+		       t.type, t.sign, t.amount::float8, t.currency, t.description,
 		       c.name, ac.name, t.account_id::text, s.name, t.payment_method, t.is_anonymous,
 		       COALESCE(dm.full_name, db.name) AS donor_name, doc.id::text, doc.document_ref,
 		       i.audited, i.audited_at, i.notes,
@@ -189,7 +190,7 @@ func (r *Repo) ListItems(ctx context.Context, tx pgx.Tx, id string) ([]Item, err
 		LEFT JOIN LATERAL (
 		    SELECT d.id, d.document_ref
 		    FROM documents d
-		    WHERE d.kind = 'receipt' AND d.content->>'tx_id' = t.id::text
+		    WHERE d.kind IN ('receipt','reversal_receipt') AND d.content->>'tx_id' = t.id::text
 		    ORDER BY d.created_at DESC
 		    LIMIT 1
 		) doc ON true
@@ -204,7 +205,7 @@ func (r *Repo) ListItems(ctx context.Context, tx pgx.Tx, id string) ([]Item, err
 	for rows.Next() {
 		var it Item
 		if err := rows.Scan(&it.TransactionID, &it.OccurredAt, &it.CreatedAt, &it.EntrySeq,
-			&it.Type, &it.Amount, &it.Currency, &it.Description,
+			&it.Type, &it.Sign, &it.Amount, &it.Currency, &it.Description,
 			&it.CategoryName, &it.AccountName, &it.AccountID, &it.SupplierName, &it.PaymentMethod, &it.IsAnonymous,
 			&it.DonorName, &it.ReceiptID, &it.ReceiptRef, &it.Audited, &it.AuditedAt, &it.Notes,
 			&it.AttachmentCount, &it.GroupID, &it.GroupStatus, &it.GroupDescription,

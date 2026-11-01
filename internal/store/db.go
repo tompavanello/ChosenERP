@@ -4,10 +4,31 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// PoolConfig define os limites do pool da aplicacao. Valores zero mantem o
+// default do pgxpool (max(4, NumCPU)) ou nao aplicam o respectivo timeout.
+type PoolConfig struct {
+	MaxConns          int32
+	MinConns          int32
+	MaxConnLifetime   time.Duration
+	MaxConnIdleTime   time.Duration
+	HealthCheckPeriod time.Duration
+	StatementTimeout  time.Duration
+	IdleInTxTimeout   time.Duration
+	ApplicationName   string
+}
+
+// DefaultPoolConfig mantem o comportamento anterior (usado pelos testes e por
+// chamadas que nao informam configuracao).
+func DefaultPoolConfig() PoolConfig {
+	return PoolConfig{ApplicationName: "chosenerp-api"}
+}
 
 // Bounds define o contexto de seguranca do tenant/filial para uma operacao.
 type Bounds struct {
@@ -28,7 +49,50 @@ type Store struct {
 }
 
 func New(ctx context.Context, dsn, migrateDSN string) (*Store, error) {
-	pool, err := pgxpool.New(ctx, dsn)
+	return NewWithConfig(ctx, dsn, migrateDSN, DefaultPoolConfig())
+}
+
+// NewWithConfig cria o pool com limites explicitos. Em producao a API usa
+// DB_MAX_CONNS/DB_MIN_CONNS para nao ficar presa no default de 4 conexoes.
+func NewWithConfig(ctx context.Context, dsn, migrateDSN string, pc PoolConfig) (*Store, error) {
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("parse pool config: %w", err)
+	}
+	if pc.MaxConns > 0 {
+		cfg.MaxConns = pc.MaxConns
+	}
+	if pc.MinConns > 0 {
+		cfg.MinConns = pc.MinConns
+	}
+	if pc.MaxConnLifetime > 0 {
+		cfg.MaxConnLifetime = pc.MaxConnLifetime
+	}
+	if pc.MaxConnIdleTime > 0 {
+		cfg.MaxConnIdleTime = pc.MaxConnIdleTime
+	}
+	if pc.HealthCheckPeriod > 0 {
+		cfg.HealthCheckPeriod = pc.HealthCheckPeriod
+	}
+	if cfg.ConnConfig.RuntimeParams == nil {
+		cfg.ConnConfig.RuntimeParams = map[string]string{}
+	}
+	if pc.ApplicationName != "" {
+		cfg.ConnConfig.RuntimeParams["application_name"] = pc.ApplicationName
+	}
+	// timeouts no proprio connection string evitam transacao presa segurando
+	// uma conexao do pool. Aplicam-se apenas as conexoes da aplicacao (o
+	// migrador usa outra conexao e continua sem limite).
+	if pc.StatementTimeout > 0 {
+		// O Postgres espera milissegundos (ou unidade explicita). O formato
+		// time.Duration.String() ("1m0s") NAO e aceito pelo GUC.
+		cfg.ConnConfig.RuntimeParams["statement_timeout"] = strconv.FormatInt(pc.StatementTimeout.Milliseconds(), 10)
+	}
+	if pc.IdleInTxTimeout > 0 {
+		cfg.ConnConfig.RuntimeParams["idle_in_transaction_session_timeout"] = strconv.FormatInt(pc.IdleInTxTimeout.Milliseconds(), 10)
+	}
+
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("create pool: %w", err)
 	}
@@ -50,30 +114,22 @@ func (s *Store) WithTenant(ctx context.Context, b Bounds, fn func(tx pgx.Tx) err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if _, err := tx.Exec(ctx, "SELECT set_config('app.tenant_id', $1, true)", b.TenantID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, "SELECT set_config('app.branch_id', $1, true)", b.BranchID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, "SELECT set_config('app.role', $1, true)", b.Role); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, "SELECT set_config('app.user_id', $1, true)", b.UserID); err != nil {
-		return err
-	}
-	// app.branch_scope = filial do contexto + descendentes (sub-congregacoes),
-	// usada pela leitura hierarquica (rls_read_scope). Sem branch (Sede), fica
-	// vazio e o is_headquarters() cobre o tenant inteiro.
+	// Um unico round-trip: os 4 GUCs de contexto + app.branch_scope (filial do
+	// contexto + descendentes, usada por rls_read_scope). Sem branch (Sede), o
+	// scope fica vazio e is_headquarters() cobre o tenant inteiro.
 	if _, err := tx.Exec(ctx, `
-		SELECT set_config('app.branch_scope', COALESCE((
-			WITH RECURSIVE tree AS (
-				SELECT id FROM branches WHERE id = NULLIF($1,'')::uuid
-				UNION ALL
-				SELECT b.id FROM branches b JOIN tree t ON b.parent_id = t.id
-			)
-			SELECT string_agg(id::text, ',') FROM tree
-		), ''), true)`, b.BranchID); err != nil {
+		WITH RECURSIVE tree AS (
+			SELECT id FROM branches WHERE id = NULLIF($2,'')::uuid
+			UNION ALL
+			SELECT b.id FROM branches b JOIN tree t ON b.parent_id = t.id
+		)
+		SELECT set_config('app.tenant_id', $1, true),
+		       set_config('app.branch_id', $2, true),
+		       set_config('app.role', $3, true),
+		       set_config('app.user_id', $4, true),
+		       set_config('app.branch_scope',
+		                  COALESCE((SELECT string_agg(id::text, ',') FROM tree), ''), true)`,
+		b.TenantID, b.BranchID, b.Role, b.UserID); err != nil {
 		return err
 	}
 	if err := fn(tx); err != nil {

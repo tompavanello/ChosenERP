@@ -336,6 +336,15 @@ export interface Transaction {
   account_transfer_id?: string;
   transfer_kind?: "deposit" | "redeem" | "transfer";
   counterpart_account_name?: string;
+  /** Devolucao/estorno: sign=-1 reduz o total da propria categoria. */
+  sign: number;
+  /** Direcao efetiva no extrato bancario (derivada de type + sign). */
+  bank_direction?: "income" | "expense";
+  /** Lancamento original deste estorno (quando vinculado). */
+  reversal_of_id?: string;
+  reversal_reason?: string;
+  /** Total ja estornado deste lancamento (quando e o original). */
+  reversed_total: number;
 }
 
 export interface TransactionGroupMember {
@@ -1163,6 +1172,8 @@ export interface AuditItem {
   created_at: string;
   entry_seq?: number;
   type: "income" | "expense";
+  sign?: number;
+  bank_direction?: "income" | "expense";
   amount: number;
   currency: string;
   description?: string;
@@ -1222,6 +1233,8 @@ export interface ReconciliationItem {
   created_at: string;
   entry_seq?: number;
   type: "income" | "expense";
+  sign: number;
+  bank_direction?: "income" | "expense";
   amount: number;
   description?: string;
   category_name?: string;
@@ -1333,6 +1346,9 @@ export interface GeneratePendingBankItem {
   supplier_id?: string;
   payment_method?: string;
   is_anonymous?: boolean;
+  /** Devolucao/estorno: conta do tipo oposto e sign=-1. */
+  reversal?: boolean;
+  reversal_of_id?: string;
 }
 export const generatePendingBankEntries = (importId: string, items: GeneratePendingBankItem[]) =>
   api<{ generated: number }>(`/api/v1/finance/bank-imports/${importId}/generate-pending`, {
@@ -1469,6 +1485,37 @@ export const voidTransaction = (id: string, reason = "") =>
     method: "POST",
     body: JSON.stringify({ reason }),
   });
+
+export interface ReverseTransactionInput {
+  /** Vazio/0 estorna o saldo restante (suporta parcial). */
+  amount?: number;
+  occurred_at?: string;
+  reason?: string;
+  /** same = contra-receita/contra-despesa na mesma conta; expense = despesa. */
+  mode?: "same" | "expense";
+  expense_category_id?: string;
+  account_id?: string;
+  payment_method?: string;
+  issue_receipt?: boolean;
+}
+
+/** Cria a devolucao/estorno (contra-lancamento) referenciado ao original. */
+export const reverseTransaction = (id: string, body: ReverseTransactionInput) =>
+  api<{
+    transaction: Transaction;
+    receipt_id?: string;
+    receipt_ref?: string;
+    receipt_token?: string;
+  }>(`/api/v1/finance/transactions/${id}/reverse`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+/** Lista as devolucoes/estornos de um lancamento original. */
+export const listTransactionReversals = (id: string) =>
+  api<{ reversals: Transaction[]; total: number }>(
+    `/api/v1/finance/transactions/${id}/reversals`,
+  );
 /** Marca/desmarca a quitacao (contas a pagar). */
 export const settleTransaction = (id: string, paid: boolean) =>
   api<{ ok: boolean }>(`/api/v1/finance/transactions/${id}/settle`, {
@@ -1776,6 +1823,7 @@ export interface StatementTransaction {
   occurred_at: string;
   entry_seq?: number;
   type: "income" | "expense";
+  sign?: number;
   amount: number;
   description?: string;
   donor_name?: string;

@@ -175,6 +175,76 @@ func (r *Repo) GetMembershipCard(ctx context.Context, tx pgx.Tx, memberID string
 	return ref, token, nil
 }
 
+// issueReversalReceipt gera o recibo de estorno (documento proprio, vinculado
+// ao recibo original). Nao substitui nem invalida o recibo original.
+func (r *Repo) issueReversalReceipt(ctx context.Context, tx pgx.Tx, tenantID, branchID string, reversal Transaction, original *reversalOriginal, reason string) (string, string, string, error) {
+	token := randomToken(12)
+	ref := "REC-EST-" + hex.EncodeToString([]byte(reversal.Hash))[:8]
+
+	var churchName, churchLegal, churchDoc string
+	_ = tx.QueryRow(ctx, `
+		SELECT name, COALESCE(legal_name,''), COALESCE(cnpj,'')
+		FROM tenants WHERE id = $1::uuid`, tenantID).Scan(&churchName, &churchLegal, &churchDoc)
+
+	donorName, donorDoc := "", ""
+	switch {
+	case reversal.DonorMemberID != nil && *reversal.DonorMemberID != "":
+		_ = tx.QueryRow(ctx, `SELECT full_name, COALESCE(cpf,'') FROM members WHERE id = $1::uuid`,
+			*reversal.DonorMemberID).Scan(&donorName, &donorDoc)
+	case reversal.BenefactorID != nil && *reversal.BenefactorID != "":
+		_ = tx.QueryRow(ctx, `SELECT name, COALESCE(cpf,'') FROM benefactors WHERE id = $1::uuid`,
+			*reversal.BenefactorID).Scan(&donorName, &donorDoc)
+	case reversal.DonorName != nil:
+		donorName = *reversal.DonorName
+	}
+	desc := ""
+	if reversal.Description != nil {
+		desc = *reversal.Description
+	}
+
+	var originalRef string
+	_ = tx.QueryRow(ctx, `
+		SELECT COALESCE(document_ref,'') FROM documents
+		WHERE kind = 'receipt' AND content->>'tx_id' = $1
+		ORDER BY created_at DESC LIMIT 1`, original.ID).Scan(&originalRef)
+
+	content, _ := json.Marshal(map[string]any{
+		"kind":              "reversal_receipt",
+		"ref":               ref,
+		"tx_id":             reversal.ID,
+		"branch_id":         branchID,
+		"type":              reversal.Type,
+		"amount":            reversal.Amount,
+		"original_amount":   original.Amount,
+		"reversed_amount":   reversal.Amount,
+		"currency":          reversal.Currency,
+		"occurred_at":       reversal.OccurredAt.UTC().Format(dateLayout),
+		"href":              "/api/v1/documents/by-token/" + token,
+		"reversal_of_tx_id": original.ID,
+		"reversal_of_ref":   originalRef,
+		"reversal_reason":   strings.TrimSpace(reason),
+		"donor_name":        donorName,
+		"donor_doc":         donorDoc,
+		"is_anonymous":      reversal.IsAnonymous,
+		"description":       desc,
+		"church_name":       churchName,
+		"church_legal_name": churchLegal,
+		"church_doc":        churchDoc,
+	})
+
+	var docID string
+	err := tx.QueryRow(ctx, `
+		INSERT INTO documents (tenant_id, branch_id, kind, title, document_ref, qr_token, content)
+		VALUES ($1, NULLIF($2,'')::uuid, 'reversal_receipt', $3, $4, $5, $6)
+		RETURNING id::text`,
+		tenantID, branchID, "Recibo de Estorno "+ref, ref, token, content).
+		Scan(&docID)
+	if err != nil {
+		return "", "", "", err
+	}
+	return docID, ref, token, nil
+}
+
 func randomToken(n int) string {
 	b := make([]byte, n)
 	_, _ = rand.Read(b)

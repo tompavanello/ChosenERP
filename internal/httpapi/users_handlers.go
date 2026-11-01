@@ -130,6 +130,8 @@ func (a *App) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Papel/filial podem ter mudado: descarta permissoes em cache do tenant.
+	a.invalidateTenant(claims.TenantID)
 	writeJSON(w, http.StatusOK, updated)
 }
 

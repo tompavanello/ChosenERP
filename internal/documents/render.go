@@ -29,7 +29,15 @@ type receiptContent struct {
 	ChurchName  string `json:"church_name"`
 	ChurchLegal string `json:"church_legal_name"`
 	ChurchDoc   string `json:"church_doc"`
+	// Recibo de estorno (contra-lancamento).
+	OriginalAmount float64 `json:"original_amount"`
+	ReversedAmount float64 `json:"reversed_amount"`
+	ReversalOfTXID string  `json:"reversal_of_tx_id"`
+	ReversalOfRef  string  `json:"reversal_of_ref"`
+	ReversalReason string  `json:"reversal_reason"`
 }
+
+const KindReversalReceipt = "reversal_receipt"
 
 var typeLabel = map[string]string{
 	"income":  "Entrada",
@@ -98,6 +106,33 @@ func RenderReceiptHTML(doc *Document, tenantName string) (string, error) {
 	if c.Description != "" {
 		desc = html.EscapeString(c.Description)
 	}
+
+	// Recibo de estorno: reduz a contribuicao original e referencia o recibo
+	// anterior. O valor sai negativo para deixar claro o sentido.
+	if c.Kind == KindReversalReceipt {
+		ref := html.EscapeString(doc.DocumentRef)
+		if c.ReversalOfRef != "" {
+			ref += " (estorno de " + html.EscapeString(c.ReversalOfRef) + ")"
+		}
+		if c.ReversalReason != "" {
+			desc += " - " + html.EscapeString(c.ReversalReason)
+		}
+		return fmt.Sprintf(receiptTemplate,
+			html.EscapeString(tenantName),
+			html.EscapeString(doc.Title),
+			"Estorno",
+			desc,
+			ref,
+			when,
+			"- "+brl(c.Amount),
+			emitente,
+			doador,
+			strings.Repeat("-", 24),
+			html.EscapeString(doc.QRToken),
+			"Recibo de estorno de contribuicao. O recibo original permanece emitido; este documento comprova a devolucao/estorno. Documento nao fiscal.",
+		), nil
+	}
+
 	return fmt.Sprintf(receiptTemplate,
 		html.EscapeString(tenantName),
 		html.EscapeString(doc.Title),

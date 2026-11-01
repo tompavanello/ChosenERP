@@ -182,7 +182,7 @@ func (r *Repo) BuildAccountStatement(ctx context.Context, tx pgx.Tx, accountID, 
 func (r *Repo) buildDetailStatement(ctx context.Context, tx pgx.Tx, st *AccountStatement, fromT, toExclusive time.Time) error {
 	var netBefore float64
 	if err := tx.QueryRow(ctx, `
-		SELECT COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END), 0)::float8
+		SELECT COALESCE(SUM(CASE WHEN bank_direction = 'income' THEN amount ELSE -amount END), 0)::float8
 		FROM financial_transactions
 		WHERE account_id = $1::uuid AND voided_at IS NULL AND occurred_at < $2::date`,
 		st.AccountID, fromT).Scan(&netBefore); err != nil {
@@ -199,21 +199,22 @@ func (r *Repo) buildDetailStatement(ctx context.Context, tx pgx.Tx, st *AccountS
 		       t.type, t.amount::float8, t.currency, t.payment_method,
 		       t.is_anonymous, t.description, t.receipt_issued, t.hash,
 		       t.occurred_at, t.created_at, t.entry_seq,
+		       t.sign, t.bank_direction,
 		       (SELECT d.id::text FROM documents d
-		         WHERE d.kind = 'receipt' AND d.content->>'tx_id' = t.id::text
+		         WHERE d.kind IN ('receipt','reversal_receipt') AND d.content->>'tx_id' = t.id::text
 		         ORDER BY d.created_at DESC LIMIT 1),
 		       (SELECT d.document_ref FROM documents d
-		         WHERE d.kind = 'receipt' AND d.content->>'tx_id' = t.id::text
+		         WHERE d.kind IN ('receipt','reversal_receipt') AND d.content->>'tx_id' = t.id::text
 		         ORDER BY d.created_at DESC LIMIT 1),
 		       (SELECT d.qr_token FROM documents d
-		         WHERE d.kind = 'receipt' AND d.content->>'tx_id' = t.id::text
+		         WHERE d.kind IN ('receipt','reversal_receipt') AND d.content->>'tx_id' = t.id::text
 		         ORDER BY d.created_at DESC LIMIT 1),
 		       t.voided_at, t.void_reason,
 		       (SELECT COUNT(*) FROM financial_attachments fa WHERE fa.transaction_id = t.id)::int,
 		       (SELECT fa.file_url FROM financial_attachments fa
 		         WHERE fa.transaction_id = t.id ORDER BY fa.created_at LIMIT 1),
 		       t.due_date::text, t.paid_at, t.cost_center, t.group_id::text, g.status,
-		       ($2::numeric + SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE -t.amount END)
+		       ($2::numeric + SUM(CASE WHEN t.bank_direction = 'income' THEN t.amount ELSE -t.amount END)
 		          OVER (ORDER BY t.occurred_at, t.entry_seq NULLS LAST, t.created_at, t.id
 		                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW))::float8
 		FROM financial_transactions t
@@ -240,6 +241,7 @@ func (r *Repo) buildDetailStatement(ctx context.Context, tx pgx.Tx, st *AccountS
 			&l.Type, &l.Amount, &l.Currency, &l.PaymentMethod,
 			&l.IsAnonymous, &l.Description, &l.ReceiptIssued, &l.Hash,
 			&l.OccurredAt, &l.CreatedAt, &l.EntrySeq,
+			&l.Sign, &l.BankDirection,
 			&l.ReceiptID, &l.ReceiptRef, &l.ReceiptToken,
 			&l.VoidedAt, &l.VoidReason, &l.AttachmentCount, &l.AttachmentURL,
 			&l.DueDate, &l.PaidAt, &l.CostCenter, &l.GroupID, &l.GroupStatus,
@@ -250,7 +252,7 @@ func (r *Repo) buildDetailStatement(ctx context.Context, tx pgx.Tx, st *AccountS
 			l.IsGroup = false
 			l.GroupMemberCount = 0
 		}
-		if l.Type == "income" {
+		if lineIsIncome(l.BankDirection, l.Type, l.Sign) {
 			st.TotalIncome += l.Amount
 		} else {
 			st.TotalExpense += l.Amount
@@ -265,7 +267,7 @@ func (r *Repo) buildDetailStatement(ctx context.Context, tx pgx.Tx, st *AccountS
 func (r *Repo) buildBankStatement(ctx context.Context, tx pgx.Tx, st *AccountStatement, fromT, toExclusive time.Time) error {
 	var netBefore float64
 	if err := tx.QueryRow(ctx, `
-		SELECT COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE -t.amount END), 0)::float8
+		SELECT COALESCE(SUM(CASE WHEN t.bank_direction = 'income' THEN t.amount ELSE -t.amount END), 0)::float8
 		FROM financial_transactions t
 		LEFT JOIN financial_transaction_groups g ON g.id = t.group_id
 		WHERE t.account_id = $1::uuid AND t.voided_at IS NULL
@@ -282,7 +284,7 @@ func (r *Repo) buildBankStatement(ctx context.Context, tx pgx.Tx, st *AccountSta
 		           COALESCE(g.description, t.description) AS line_description,
 		           COALESCE(g.status, '') AS group_status,
 		           t.group_id::text AS group_id,
-		           t.type, t.amount::float8 AS amount, t.currency,
+		           t.type, t.bank_direction, t.sign, t.amount::float8 AS amount, t.currency,
 		           t.created_at,
 		           t.entry_seq AS member_entry_seq,
 		           g.entry_seq AS group_entry_seq,
@@ -311,6 +313,8 @@ func (r *Repo) buildBankStatement(ctx context.Context, tx pgx.Tx, st *AccountSta
 		           MAX(group_status) AS group_status,
 		           MAX(group_id) AS group_id,
 		           MAX(type) AS type,
+		           MAX(bank_direction) AS bank_direction,
+		           MAX(sign) AS sign,
 		           SUM(amount) AS amount,
 		           MAX(currency) AS currency,
 		           MIN(created_at) AS created_at,
@@ -330,13 +334,13 @@ func (r *Repo) buildBankStatement(ctx context.Context, tx pgx.Tx, st *AccountSta
 		    GROUP BY line_key
 		), ordered AS (
 		    SELECT *,
-		           SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END)
+		           SUM(CASE WHEN bank_direction = 'income' THEN amount ELSE -amount END)
 		               OVER (ORDER BY line_date, entry_seq NULLS LAST, created_at, line_key) AS running
 		    FROM lines
 		)
 		SELECT line_key, branch_id, category_id, category_name, type, amount, currency,
 		       payment_method, false AS is_anonymous, line_description, false AS receipt_issued,
-		       '' AS hash, line_date, created_at, entry_seq,
+		       '' AS hash, line_date, created_at, entry_seq, sign, bank_direction,
 		       NULL::text AS receipt_id, NULL::text AS receipt_ref, NULL::text AS receipt_token,
 		       NULL::timestamptz AS voided_at, NULL::text AS void_reason,
 		       (attachment_count + COALESCE(group_attachment_count,0))::int AS attachment_count,
@@ -358,6 +362,7 @@ func (r *Repo) buildBankStatement(ctx context.Context, tx pgx.Tx, st *AccountSta
 			&l.Type, &l.Amount, &l.Currency, &l.PaymentMethod, &l.IsAnonymous,
 			&l.Description, &l.ReceiptIssued, &l.Hash,
 			&l.OccurredAt, &l.CreatedAt, &l.EntrySeq,
+			&l.Sign, &l.BankDirection,
 			&l.ReceiptID, &l.ReceiptRef, &l.ReceiptToken,
 			&l.VoidedAt, &l.VoidReason, &l.AttachmentCount, &l.AttachmentURL,
 			&l.DueDate, &l.PaidAt, &l.CostCenter,
@@ -365,7 +370,7 @@ func (r *Repo) buildBankStatement(ctx context.Context, tx pgx.Tx, st *AccountSta
 			&l.BalanceAfter); err != nil {
 			return err
 		}
-		if l.Type == "income" {
+		if lineIsIncome(l.BankDirection, l.Type, l.Sign) {
 			st.TotalIncome += l.Amount
 		} else {
 			st.TotalExpense += l.Amount
@@ -373,6 +378,19 @@ func (r *Repo) buildBankStatement(ctx context.Context, tx pgx.Tx, st *AccountSta
 		st.Lines = append(st.Lines, l)
 	}
 	return rows.Err()
+}
+
+// lineIsIncome diz se a linha entrou como credito no banco. O sinal inverte a
+// direcao quando o lancamento e uma devolucao/estorno (ex.: receita com sign=-1
+// sai como debito).
+func lineIsIncome(bankDirection, typ string, sign int) bool {
+	if bankDirection != "" {
+		return bankDirection == "income"
+	}
+	if sign < 0 {
+		return typ == "expense"
+	}
+	return typ == "income"
 }
 
 func groupStatementDays(lines []AccountStatementLine) []AccountStatementDay {
@@ -387,7 +405,7 @@ func groupStatementDays(lines []AccountStatementLine) []AccountStatementDay {
 			days = append(days, AccountStatementDay{Date: day})
 		}
 		d := &days[i]
-		if l.Type == "income" {
+		if lineIsIncome(l.BankDirection, l.Type, l.Sign) {
 			d.Income += l.Amount
 		} else {
 			d.Expense += l.Amount

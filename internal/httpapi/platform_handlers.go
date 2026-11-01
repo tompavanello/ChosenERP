@@ -67,6 +67,7 @@ func (a *App) handleAdminUpdateTenant(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	a.invalidateTenant(id)
 	writeJSON(w, http.StatusOK, t)
 }
 
@@ -215,5 +216,7 @@ func (a *App) handleUpdatePlan(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err)
 		return
 	}
+	// O plano afeta todas as igrejas que o usam.
+	a.Entitlements.Clear()
 	writeJSON(w, http.StatusOK, p)
 }

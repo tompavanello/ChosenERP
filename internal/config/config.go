@@ -29,6 +29,17 @@ type Config struct {
 	JWTAccessExpiry  time.Duration
 	JWTRefreshExpiry time.Duration
 
+	// ---- Pool de conexoes da aplicacao ----
+	// Sem estes limites o pgxpool usa max(4, NumCPU), o que estrangula a API
+	// em servidores pequenos. Ver store.NewWithConfig.
+	DBMaxConns          int32
+	DBMinConns          int32
+	DBMaxConnLifetime   time.Duration
+	DBMaxConnIdleTime   time.Duration
+	DBHealthCheckPeriod time.Duration
+	DBStatementTimeout  time.Duration
+	DBIdleTxTimeout     time.Duration
+
 	// Notificacao de documentos (recibos/carteirinhas) - envio real
 	AppBaseURL string
 	UploadDir  string
@@ -50,9 +61,9 @@ type Config struct {
 	EvolutionAPIKey     string
 	EvolutionInstance   string
 	// PublicBaseDomain: dominio base do white-label (subdominio por igreja).
-	PublicBaseDomain string
-	DeliveryInterval    time.Duration
-	RecurringInterval   time.Duration
+	PublicBaseDomain  string
+	DeliveryInterval  time.Duration
+	RecurringInterval time.Duration
 	// NotificationInterval e o intervalo da varredura das automacoes de
 	// WhatsApp (aniversarios, escalas, visitantes). O padrao e horario.
 	NotificationInterval time.Duration
@@ -126,6 +137,15 @@ func getenvBool(key string, fallback bool) bool {
 	return fallback
 }
 
+func getenvDuration(key string, fallback time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
+	}
+	return fallback
+}
+
 func Load() Config {
 	return Config{
 		HTTPPort:         getenv("API_HTTP_PORT", "38080"),
@@ -134,6 +154,14 @@ func Load() Config {
 		JWTSecret:        getenv("JWT_SECRET", "dev-insecure-secret-change-me"),
 		JWTAccessExpiry:  time.Duration(getenvInt("JWT_EXPIRATION_MINUTES", 15)) * time.Minute,
 		JWTRefreshExpiry: time.Duration(getenvInt("REFRESH_EXPIRATION_HOURS", 168)) * time.Hour,
+
+		DBMaxConns:          int32(getenvInt("DB_MAX_CONNS", 25)),
+		DBMinConns:          int32(getenvInt("DB_MIN_CONNS", 5)),
+		DBMaxConnLifetime:   getenvDuration("DB_MAX_CONN_LIFETIME", 1*time.Hour),
+		DBMaxConnIdleTime:   getenvDuration("DB_MAX_CONN_IDLE", 30*time.Minute),
+		DBHealthCheckPeriod: getenvDuration("DB_HEALTH_CHECK_PERIOD", 30*time.Second),
+		DBStatementTimeout:  getenvDuration("DB_STATEMENT_TIMEOUT", 30*time.Second),
+		DBIdleTxTimeout:     getenvDuration("DB_IDLE_TX_TIMEOUT", 60*time.Second),
 
 		UploadDir:            getenv("UPLOAD_DIR", "/tmp/chosenerp/uploads"),
 		AppBaseURL:           getenv("APP_BASE_URL", "http://localhost:38080"),

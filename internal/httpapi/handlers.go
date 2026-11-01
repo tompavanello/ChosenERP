@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -13,6 +14,22 @@ import (
 	"chosenerp/internal/members"
 	"chosenerp/internal/store"
 )
+
+// pageParams le limit/offset da query com teto para nao devolver listas
+// ilimitadas. Default: 100 registros, maximo: 500.
+func pageParams(r *http.Request) (limit, offset int) {
+	limit = 100
+	if v, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && v > 0 {
+		limit = v
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	if v, err := strconv.Atoi(r.URL.Query().Get("offset")); err == nil && v > 0 {
+		offset = v
+	}
+	return limit, offset
+}
 
 // Config e a fatia da config global usada pelos handlers HTTP.
 type Config struct {
@@ -250,11 +267,12 @@ func (a *App) handleListMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query().Get("q")
+	limit, offset := pageParams(r)
 	b := boundsFromClaims(claims)
 	var out []members.Member
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
 		var err error
-		out, err = a.Members.List(r.Context(), tx, q)
+		out, err = a.Members.List(r.Context(), tx, q, limit, offset)
 		return err
 	})
 	if err != nil {

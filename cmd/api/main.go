@@ -46,6 +46,14 @@ import (
 )
 
 func main() {
+	// Healthcheck do container. A imagem final e `scratch` (sem shell/curl),
+	// entao o proprio binario faz a sondagem de /readyz e sai 0/1.
+	for _, arg := range os.Args[1:] {
+		if arg == "-healthcheck" || arg == "--healthcheck" {
+			os.Exit(runHealthcheck())
+		}
+	}
+
 	ctx := context.Background()
 	cfg := config.Load()
 	if err := cfg.Validate(); err != nil {
@@ -55,7 +63,16 @@ func main() {
 		log.Println("AVISO: JWT_SECRET esta no valor default de desenvolvimento. Defina um segredo forte em producao.")
 	}
 
-	st, err := store.New(ctx, cfg.DatabaseURL, cfg.MigrateURL)
+	st, err := store.NewWithConfig(ctx, cfg.DatabaseURL, cfg.MigrateURL, store.PoolConfig{
+		MaxConns:          cfg.DBMaxConns,
+		MinConns:          cfg.DBMinConns,
+		MaxConnLifetime:   cfg.DBMaxConnLifetime,
+		MaxConnIdleTime:   cfg.DBMaxConnIdleTime,
+		HealthCheckPeriod: cfg.DBHealthCheckPeriod,
+		StatementTimeout:  cfg.DBStatementTimeout,
+		IdleInTxTimeout:   cfg.DBIdleTxTimeout,
+		ApplicationName:   "chosenerp-api",
+	})
 	if err != nil {
 		log.Fatalf("store: %v", err)
 	}
@@ -210,8 +227,10 @@ func main() {
 		// ReadTimeout cobre o corpo INTEIRO da requisicao. Com 15s, um upload de
 		// foto em rede movel lenta era cortado no meio; 60s acomoda o limite de
 		// MEMBER_PHOTO_MAX_KB sem afetar as rotas JSON.
-		ReadTimeout:  60 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	go func() {
@@ -229,4 +248,23 @@ func main() {
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
 	log.Println("servidor encerrado")
+}
+
+// runHealthcheck consulta /readyz no proprio processo e devolve o exit code do
+// healthcheck do Docker (0 = saudavel). Usado como `CMD ["/api","-healthcheck"]`.
+func runHealthcheck() int {
+	port := os.Getenv("API_HTTP_PORT")
+	if port == "" {
+		port = "8080"
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:" + port + "/readyz")
+	if err != nil {
+		return 1
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		return 0
+	}
+	return 1
 }

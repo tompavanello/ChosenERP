@@ -200,8 +200,8 @@ func (r *Repo) ListAccountBalances(ctx context.Context, tx pgx.Tx, asOf string) 
 	rows, err := tx.Query(ctx, `
 		SELECT a.id::text, COALESCE(a.branch_id::text,''), a.name, a.bank, a.account_type,
 		       a.initial_balance::float8, a.is_active,
-		       COALESCE(SUM(CASE WHEN t.type='income' THEN t.amount ELSE 0 END),0)::float8,
-		       COALESCE(SUM(CASE WHEN t.type='expense' THEN t.amount ELSE 0 END),0)::float8
+		       COALESCE(SUM(CASE WHEN t.bank_direction='income' THEN t.amount ELSE 0 END),0)::float8,
+		       COALESCE(SUM(CASE WHEN t.bank_direction='expense' THEN t.amount ELSE 0 END),0)::float8
 		FROM financial_accounts a
 		LEFT JOIN financial_transactions t
 		  ON t.account_id = a.id AND t.voided_at IS NULL

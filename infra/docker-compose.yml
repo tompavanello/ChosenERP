@@ -14,6 +14,11 @@ services:
       POSTGRES_DB: chosenerp
     ports:
       - "${POSTGRES_PORT:-35432}:5432"
+    shm_size: 256mb
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "5"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
@@ -67,15 +72,19 @@ services:
     restart: unless-stopped
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
       webadmin:
-        condition: service_started
+        condition: service_healthy
       member:
-        condition: service_started
+        condition: service_healthy
       marketing:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "${NGINX_HTTP_PORT:-80}:80"
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "5"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
@@ -97,6 +106,29 @@ services:
       - ./cloudflare/config-erpchosen.yml:/etc/cloudflared/config.yml:ro
       - ./cloudflare/erpchosen-creds.json:/etc/cloudflared/creds.json:ro
     command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  ### Segundo conector do MESMO tunel: se um cair, o Cloudflare redistribui o
+  ### trafego para o outro (elimina o SPOF do conector unico).
+  cloudflared-erpchosen-2:
+    image: cloudflare/cloudflared:latest
+    container_name: chosen-cloudflared-erpchosen-2
+    restart: unless-stopped
+    profiles: ["erpchosen"]
+    depends_on:
+      nginx:
+        condition: service_started
+    volumes:
+      - ./cloudflare/config-erpchosen.yml:/etc/cloudflared/config.yml:ro
+      - ./cloudflare/erpchosen-creds.json:/etc/cloudflared/creds.json:ro
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "5"
 
   ### Chosen ERP API (Go) - monolito modular
   api:
@@ -116,6 +148,14 @@ services:
       MIGRATE_DATABASE_URL: postgres://postgres:sinc@postgres:5432/chosenerp?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:-dev-insecure-secret-change-me}
       API_HTTP_PORT: "8080"
+      # Pool da aplicacao (o default do pgxpool e max(4, NumCPU)).
+      DB_MAX_CONNS: ${DB_MAX_CONNS:-25}
+      DB_MIN_CONNS: ${DB_MIN_CONNS:-5}
+      DB_MAX_CONN_LIFETIME: ${DB_MAX_CONN_LIFETIME:-1h}
+      DB_MAX_CONN_IDLE: ${DB_MAX_CONN_IDLE:-30m}
+      DB_HEALTH_CHECK_PERIOD: ${DB_HEALTH_CHECK_PERIOD:-30s}
+      DB_STATEMENT_TIMEOUT: ${DB_STATEMENT_TIMEOUT:-30s}
+      DB_IDLE_TX_TIMEOUT: ${DB_IDLE_TX_TIMEOUT:-60s}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:38080}
       UPLOAD_DIR: /uploads
       MEMBER_PHOTO_MAX_KB: ${MEMBER_PHOTO_MAX_KB:-5120}
@@ -155,6 +195,17 @@ services:
       # Backup por igreja: diretorio persistente dos pacotes .zip.
       BACKUP_DIR: /backups
       BACKUP_POLL_SECONDS: ${BACKUP_POLL_SECONDS:-3600}
+    # A imagem e `scratch`: o proprio binario faz a sondagem de /readyz.
+    healthcheck:
+      test: ["CMD", "/api", "-healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "5"
     ports:
       - "${API_HTTP_PORT:-38080}:8080"
     volumes:
@@ -184,6 +235,16 @@ services:
         condition: service_started
     environment:
       API_ORIGIN: http://api:8080
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:33000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "5"
     ports:
       - "${WEBADMIN_PORT:-33000}:33000"
 
@@ -209,6 +270,16 @@ services:
         condition: service_started
     environment:
       API_ORIGIN: http://api:8080
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:33000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "5"
     ports:
       - "${MARKETING_PORT:-33010}:33000"
 
@@ -229,6 +300,16 @@ services:
         condition: service_started
     environment:
       API_ORIGIN: http://api:8080
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:33000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "5"
     ports:
       - "${MEMBER_PORT:-33020}:33000"
 

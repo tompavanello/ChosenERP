@@ -81,6 +81,7 @@ type StatementTransaction struct {
 	OccurredAt  string  `json:"occurred_at"`
 	EntrySeq    *int    `json:"entry_seq,omitempty"`
 	Type        string  `json:"type"`
+	Sign        int     `json:"sign"`
 	Amount      float64 `json:"amount"`
 	Description *string `json:"description,omitempty"`
 	DonorName   *string `json:"donor_name,omitempty"`
@@ -98,7 +99,7 @@ func (r *Repo) ListStatementTransactions(ctx context.Context, tx pgx.Tx, categor
 	}
 	rows, err := tx.Query(ctx, `
 		SELECT t.id::text, to_char(t.occurred_at,'YYYY-MM-DD'), t.entry_seq,
-		       t.type, t.amount::float8, t.description,
+		       t.type, t.sign, t.amount::float8, t.description,
 		       CASE WHEN t.is_anonymous THEN NULL
 		            ELSE COALESCE(t.donor_name, dm.full_name, db.name) END,
 		       a.name
@@ -118,7 +119,7 @@ func (r *Repo) ListStatementTransactions(ctx context.Context, tx pgx.Tx, categor
 	out := []StatementTransaction{}
 	for rows.Next() {
 		var it StatementTransaction
-		if err := rows.Scan(&it.ID, &it.OccurredAt, &it.EntrySeq, &it.Type, &it.Amount,
+		if err := rows.Scan(&it.ID, &it.OccurredAt, &it.EntrySeq, &it.Type, &it.Sign, &it.Amount,
 			&it.Description, &it.DonorName, &it.AccountName); err != nil {
 			return nil, err
 		}
@@ -142,7 +143,7 @@ func (r *Repo) BuildMonthlyStatement(ctx context.Context, tx pgx.Tx, month strin
 
 	// Saldo inicial: liquido acumulado ANTES do mes (regime de caixa).
 	if err := tx.QueryRow(ctx, `
-		SELECT COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END), 0)::float8
+		SELECT COALESCE(SUM((CASE WHEN type = 'income' THEN amount ELSE -amount END) * sign), 0)::float8
 		FROM financial_transactions
 		WHERE occurred_at < $1::date AND voided_at IS NULL
 		  AND account_transfer_id IS NULL`, first).Scan(&st.OpeningBalance); err != nil {
@@ -190,7 +191,7 @@ func (r *Repo) BuildMonthlyStatement(ctx context.Context, tx pgx.Tx, month strin
 	txRows, err := tx.Query(ctx, `
 		SELECT t.category_id::text,
 		       ((t.occurred_at::date - $1::date) / 7)::int AS wk,
-		       COALESCE(SUM(t.amount), 0)::float8
+		       COALESCE(SUM(t.amount * t.sign), 0)::float8
 		FROM financial_transactions t
 		WHERE t.occurred_at >= $2::date AND t.occurred_at < $3::date
 		  AND t.voided_at IS NULL

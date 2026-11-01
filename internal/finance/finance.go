@@ -30,7 +30,113 @@ var (
 	ErrScopeReconciled = errors.New("ha lancamento conciliado nessa posicao; desconcile antes de inserir")
 	// ErrGroupedReconcile indica que a conciliacao deve ser feita pelo grupo.
 	ErrGroupedReconcile = errors.New("lancamento agrupado: concilie pelo grupo")
+	// Erros de devolucao/estorno (contra-lancamento).
+	ErrReversalInvalidOriginal = errors.New("lancamento original invalido para estorno")
+	ErrReversalExceedsOriginal = errors.New("o valor do estorno excede o saldo do lancamento original")
+	ErrOriginalHasReversals    = errors.New("lancamento possui estornos/devolucoes: remova-os antes de alterar ou excluir")
+	ErrTransactionIsReversal   = errors.New("lancamento e devolucao/estorno: nao pode ser alterado")
+	ErrReversalMode            = errors.New("modo de estorno invalido (use same ou expense)")
 )
+
+// assertTxnNotReversal impede editar/excluir pela metade um contra-lancamento.
+func assertTxnNotReversal(ctx context.Context, tx pgx.Tx, id string) error {
+	var reversalOf *string
+	if err := tx.QueryRow(ctx, `SELECT reversal_of_id::text FROM financial_transactions WHERE id = $1::uuid`, id).
+		Scan(&reversalOf); err != nil {
+		return err
+	}
+	if reversalOf != nil {
+		return ErrTransactionIsReversal
+	}
+	return nil
+}
+
+// assertTxnHasNoReversals impede alterar/excluir o original enquanto existirem
+// estornos vinculados (senao a soma estornada deixaria de fazer sentido).
+func assertTxnHasNoReversals(ctx context.Context, tx pgx.Tx, id string) error {
+	var has bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM financial_transactions
+			WHERE reversal_of_id = $1::uuid AND voided_at IS NULL)`, id).Scan(&has); err != nil {
+		return err
+	}
+	if has {
+		return ErrOriginalHasReversals
+	}
+	return nil
+}
+
+type reversalOriginal struct {
+	ID             string
+	TenantID       string
+	BranchID       string
+	CategoryID     *string
+	Type           string
+	Amount         float64
+	AccountID      *string
+	PaymentMethod  *string
+	DonorMemberID  *string
+	BenefactorID   *string
+	SupplierID     *string
+	DonorName      *string
+	IsAnonymous    bool
+	Description    *string
+	ReceiptIssued  bool
+	OccurredAt     time.Time
+	VoidedAt       *time.Time
+	ReversalOfID   *string
+	AccountTransfr *string
+	ReversedTotal  float64
+}
+
+// loadReversalOriginal carrega e trava o lancamento original (RLS escopa a
+// consulta). Devolve tambem o total ja estornado (parcial).
+func loadReversalOriginal(ctx context.Context, tx pgx.Tx, id, tenantID string) (*reversalOriginal, error) {
+	var o reversalOriginal
+	err := tx.QueryRow(ctx, `
+		SELECT id::text, tenant_id::text, branch_id::text, category_id::text,
+		       type, amount::float8, account_id::text, payment_method,
+		       donor_member_id::text, benefactor_id::text, supplier_id::text,
+		       donor_name, is_anonymous, description, receipt_issued,
+		       occurred_at, voided_at, reversal_of_id::text,
+		       account_transfer_id::text,
+		       (SELECT COALESCE(SUM(r.amount),0)::float8
+		          FROM financial_transactions r
+		         WHERE r.reversal_of_id = financial_transactions.id AND r.voided_at IS NULL)
+		FROM financial_transactions
+		WHERE id = $1::uuid
+		FOR UPDATE`, id).
+		Scan(&o.ID, &o.TenantID, &o.BranchID, &o.CategoryID,
+			&o.Type, &o.Amount, &o.AccountID, &o.PaymentMethod,
+			&o.DonorMemberID, &o.BenefactorID, &o.SupplierID,
+			&o.DonorName, &o.IsAnonymous, &o.Description, &o.ReceiptIssued,
+			&o.OccurredAt, &o.VoidedAt, &o.ReversalOfID, &o.AccountTransfr,
+			&o.ReversedTotal)
+	if err != nil {
+		return nil, err
+	}
+	if o.TenantID != tenantID || o.VoidedAt != nil || o.ReversalOfID != nil || o.AccountTransfr != nil {
+		return nil, ErrReversalInvalidOriginal
+	}
+	return &o, nil
+}
+
+// validateReversalLink valida o vinculo opcional (devolucao avulsa nao vincula)
+// e impede estourar o valor do original.
+func validateReversalLink(ctx context.Context, tx pgx.Tx, tenantID, branchID, originalID string, amount float64) error {
+	o, err := loadReversalOriginal(ctx, tx, originalID, tenantID)
+	if err != nil {
+		return err
+	}
+	if o.BranchID != branchID {
+		return ErrReversalInvalidOriginal
+	}
+	if o.ReversedTotal+amount > o.Amount+0.005 {
+		return ErrReversalExceedsOriginal
+	}
+	return nil
+}
 
 // assertTxnNotGrouped impede estornar/excluir um membro de grupo (o vinculo
 // precisa ser desfeito antes).
@@ -204,6 +310,14 @@ type Transaction struct {
 	AccountTransferID      *string `json:"account_transfer_id,omitempty"`
 	TransferKind           *string `json:"transfer_kind,omitempty"`
 	CounterpartAccountName *string `json:"counterpart_account_name,omitempty"`
+	// Devolucao/estorno: sign = -1 reduz o total da propria categoria;
+	// reversal_of_id aponta (opcionalmente) para o lancamento original e
+	// reversed_total e a soma dos estornos ativos vinculados a este lancamento.
+	Sign           int     `json:"sign"`
+	BankDirection  string  `json:"bank_direction,omitempty"`
+	ReversalOfID   *string `json:"reversal_of_id,omitempty"`
+	ReversalReason *string `json:"reversal_reason,omitempty"`
+	ReversedTotal  float64 `json:"reversed_total"`
 }
 
 // MarshalJSON serializa occurred_at como data pura (YYYY-MM-DD). A data efetiva
@@ -458,6 +572,12 @@ type CreateTxnInput struct {
 	// AccountTransferID marca uma perna de transferencia entre contas. Nesse
 	// caso a categoria e opcional, nao ha recibo nem split de repasses.
 	AccountTransferID *string `json:"-"`
+	// Devolucao/estorno: sign=-1 reduz o total da categoria; reversal_of_id
+	// vincula (opcionalmente) ao lancamento original. Um contra-lancamento nao
+	// gera recibo comum, split nem rateio de evento.
+	Sign           int     `json:"sign"`
+	ReversalOfID   *string `json:"reversal_of_id"`
+	ReversalReason *string `json:"reversal_reason"`
 }
 
 type EventAllocationInput struct {
@@ -484,6 +604,22 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 	if in.Amount <= 0 {
 		return nil, "", "", "", ErrAmountNotPositive
 	}
+	sign := in.Sign
+	if sign == 0 {
+		sign = 1
+	}
+	if sign != 1 && sign != -1 {
+		return nil, "", "", "", errors.New("sinal do lancamento invalido (use 1 ou -1)")
+	}
+	if in.ReversalOfID != nil && strings.TrimSpace(*in.ReversalOfID) == "" {
+		in.ReversalOfID = nil
+	}
+	if in.ReversalOfID != nil && !isTransfer {
+		if err := validateReversalLink(ctx, tx, tenantID, branchID, *in.ReversalOfID, in.Amount); err != nil {
+			return nil, "", "", "", err
+		}
+	}
+	isReversal := sign < 0 || in.ReversalOfID != nil
 	acct := ""
 	if in.AccountID != nil {
 		acct = *in.AccountID
@@ -627,27 +763,30 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 		INSERT INTO financial_transactions
 			(tenant_id, branch_id, category_id, type, amount, currency,
 			 payment_method, donor_member_id, benefactor_id, donor_name, supplier_id, is_anonymous, description, occurred_at, account_id, entry_seq,
-			 due_date, cost_center, paid_at, reconciled_at, reconciled_by, account_transfer_id)
+			 due_date, cost_center, paid_at, reconciled_at, reconciled_by, account_transfer_id,
+			 sign, reversal_of_id, reversal_reason)
 		VALUES ($1, NULLIF($2,'')::uuid, NULLIF($3,'')::uuid, $4, $5, 'BRL',
 			 $6, NULLIF($7,'')::uuid, NULLIF($8,'')::uuid, NULLIF($14,''), NULLIF($13,'')::uuid, $9, $10, $11, NULLIF($12,'')::uuid, $15,
 			 NULLIF($16,'')::date, NULLIF($17,''), CASE WHEN $18 THEN now() ELSE NULL END,
 			 CASE WHEN $19 THEN now() ELSE NULL END,
 			 CASE WHEN $19 THEN NULLIF($20,'')::uuid ELSE NULL END,
-			 NULLIF($21,'')::uuid)
+			 NULLIF($21,'')::uuid, $22, NULLIF($23,'')::uuid, NULLIF($24,''))
 		RETURNING id::text, branch_id::text, category_id::text, account_id::text,
 		          donor_member_id::text, benefactor_id::text, donor_name, entry_seq,
 		          type, amount::float8, currency, payment_method, is_anonymous,
 		          description, receipt_issued, hash, occurred_at, created_at,
-		          due_date::text, paid_at, cost_center, reconciled_at, account_transfer_id::text`,
+		          due_date::text, paid_at, cost_center, reconciled_at, account_transfer_id::text,
+		          sign, bank_direction, reversal_of_id::text, reversal_reason`,
 		tenantID, branchID, nullIfEmpty(in.CategoryID), in.Type, in.Amount,
 		in.PaymentMethod, in.DonorMemberID, in.BenefactorID, in.IsAnonymous, in.Description, when, in.AccountID,
 		in.SupplierID, in.DonorName, entrySeq, in.DueDate, in.CostCenter, in.Paid != nil && *in.Paid,
-		in.Reconciled, in.ActorID, in.AccountTransferID).
+		in.Reconciled, in.ActorID, in.AccountTransferID, sign, in.ReversalOfID, in.ReversalReason).
 		Scan(&t.ID, &t.BranchID, &t.CategoryID, &t.AccountID,
 			&t.DonorMemberID, &t.BenefactorID, &t.DonorName, &outSeq,
 			&t.Type, &t.Amount, &t.Currency,
 			&t.PaymentMethod, &t.IsAnonymous, &t.Description, &status, &t.Hash, &t.OccurredAt, &t.CreatedAt,
-			&t.DueDate, &t.PaidAt, &t.CostCenter, &t.ReconciledAt, &t.AccountTransferID)
+			&t.DueDate, &t.PaidAt, &t.CostCenter, &t.ReconciledAt, &t.AccountTransferID,
+			&t.Sign, &t.BankDirection, &t.ReversalOfID, &t.ReversalReason)
 	if err != nil {
 		return nil, "", "", "", err
 	}
@@ -658,6 +797,12 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 	// Perna de transferencia interna: nao emite recibo, nao tem rateio de evento
 	// e nao entra no split de repasses (nao e receita/despesa de resultado).
 	if isTransfer {
+		return &t, "", "", "", nil
+	}
+
+	// Contra-lancamento (devolucao/estorno): nao emite recibo comum, nao rateia
+	// evento nem aplica split. O recibo de estorno e emitido pela rotina Reverse.
+	if isReversal {
 		return &t, "", "", "", nil
 	}
 
@@ -677,6 +822,177 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 		}
 	}
 	return &t, docID, ref, token, nil
+}
+
+// ReverseTxnInput e o corpo do estorno/devolucao de um lancamento.
+type ReverseTxnInput struct {
+	// Amount vazio/zero estorna o saldo restante do original (suporta parcial).
+	Amount            float64 `json:"amount"`
+	OccurredAt        string  `json:"occurred_at"`
+	Reason            string  `json:"reason"`
+	Mode              string  `json:"mode"` // same (contra-receita/contra-despesa) | expense
+	ExpenseCategoryID string  `json:"expense_category_id"`
+	AccountID         *string `json:"account_id"`
+	PaymentMethod     *string `json:"payment_method"`
+	IssueReceipt      *bool   `json:"issue_receipt"`
+	ActorID           string  `json:"-"`
+}
+
+// Reverse cria o contra-lancamento referenciado ao original. O original NAO e
+// alterado (continua conciliado/visivel); o novo lancamento e que reduz a
+// receita/despesa. Aceita estorno parcial e emissao de recibo de estorno.
+func (r *Repo) Reverse(ctx context.Context, tx pgx.Tx, tenantID, originalID string, in ReverseTxnInput) (*Transaction, string, string, string, error) {
+	o, err := loadReversalOriginal(ctx, tx, originalID, tenantID)
+	if err != nil {
+		return nil, "", "", "", err
+	}
+	remaining := o.Amount - o.ReversedTotal
+	if remaining <= 0.005 {
+		return nil, "", "", "", ErrReversalExceedsOriginal
+	}
+	amount := in.Amount
+	if amount <= 0 {
+		amount = remaining
+	}
+	if amount > remaining+0.005 {
+		return nil, "", "", "", ErrReversalExceedsOriginal
+	}
+
+	mode := strings.ToLower(strings.TrimSpace(in.Mode))
+	switch mode {
+	case "", "same", "same_category", "contra", "contra_receita", "contra-receita", "contra_revenue":
+		mode = "same"
+	case "expense", "despesa", "devolucao":
+		mode = "expense"
+	default:
+		return nil, "", "", "", ErrReversalMode
+	}
+
+	var typ, categoryID string
+	var sign int
+	if mode == "expense" {
+		if o.Type != "income" {
+			return nil, "", "", "", ErrReversalMode
+		}
+		categoryID = strings.TrimSpace(in.ExpenseCategoryID)
+		if categoryID == "" {
+			return nil, "", "", "", ErrCategoryRequired
+		}
+		if err := tx.QueryRow(ctx, `SELECT type FROM financial_categories WHERE id = $1::uuid`, categoryID).Scan(&typ); err != nil {
+			return nil, "", "", "", err
+		}
+		if typ != "expense" {
+			return nil, "", "", "", fmt.Errorf("a conta de devolucao precisa ser de despesa")
+		}
+		sign = 1
+	} else {
+		if o.CategoryID == nil || *o.CategoryID == "" {
+			return nil, "", "", "", ErrCategoryRequired
+		}
+		typ = o.Type
+		categoryID = *o.CategoryID
+		sign = -1
+	}
+
+	accountID := o.AccountID
+	if in.AccountID != nil && strings.TrimSpace(*in.AccountID) != "" {
+		accountID = in.AccountID
+	}
+	payment := o.PaymentMethod
+	if in.PaymentMethod != nil && strings.TrimSpace(*in.PaymentMethod) != "" {
+		payment = in.PaymentMethod
+	}
+
+	desc := "Devolucao/estorno"
+	if o.Description != nil && strings.TrimSpace(*o.Description) != "" {
+		desc = "Devolucao/estorno: " + *o.Description
+	}
+	if reason := strings.TrimSpace(in.Reason); reason != "" {
+		desc += " - " + reason
+	}
+	occurred := strings.TrimSpace(in.OccurredAt)
+
+	// Herda a identificacao do original (recibo/relatorios), sem arrastar
+	// fornecedor para uma entrada nem membro/benfeitor para uma despesa.
+	var donorMemberID, benefactorID, donorName, supplierID *string
+	if o.Type == "income" {
+		donorMemberID, benefactorID, donorName = o.DonorMemberID, o.BenefactorID, o.DonorName
+	} else {
+		supplierID = o.SupplierID
+	}
+
+	reversalID := originalID
+	created, _, _, _, err := r.Create(ctx, tx, tenantID, o.BranchID, CreateTxnInput{
+		Type:           typ,
+		Amount:         amount,
+		CategoryID:     &categoryID,
+		AccountID:      accountID,
+		PaymentMethod:  payment,
+		IsAnonymous:    o.IsAnonymous,
+		Description:    &desc,
+		DonorMemberID:  donorMemberID,
+		BenefactorID:   benefactorID,
+		DonorName:      donorName,
+		SupplierID:     supplierID,
+		OccurredAt:     &occurred,
+		ActorID:        in.ActorID,
+		Sign:           sign,
+		ReversalOfID:   &reversalID,
+		ReversalReason: stringPtrOrNil(in.Reason),
+	})
+	if err != nil {
+		return nil, "", "", "", err
+	}
+
+	wantReceipt := o.ReceiptIssued && o.Type == "income"
+	if in.IssueReceipt != nil {
+		wantReceipt = *in.IssueReceipt
+	}
+	var docID, ref, token string
+	if wantReceipt {
+		docID, ref, token, err = r.issueReversalReceipt(ctx, tx, tenantID, o.BranchID, *created, o, in.Reason)
+		if err != nil {
+			return nil, "", "", "", err
+		}
+	}
+	return created, docID, ref, token, nil
+}
+
+// ListReversals devolve os estornos vinculados a um lancamento original.
+func (r *Repo) ListReversals(ctx context.Context, tx pgx.Tx, originalID string) ([]Transaction, float64, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT id::text, branch_id::text, category_id::text, account_id::text,
+		       type, amount::float8, currency, payment_method, is_anonymous,
+		       description, hash, occurred_at, created_at,
+		       voided_at, reversal_of_id::text, reversal_reason, sign, bank_direction
+		FROM financial_transactions
+		WHERE reversal_of_id = $1::uuid AND voided_at IS NULL
+		ORDER BY occurred_at, created_at, id`, originalID)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	out := []Transaction{}
+	total := 0.0
+	for rows.Next() {
+		var t Transaction
+		if err := rows.Scan(&t.ID, &t.BranchID, &t.CategoryID, &t.AccountID,
+			&t.Type, &t.Amount, &t.Currency, &t.PaymentMethod, &t.IsAnonymous,
+			&t.Description, &t.Hash, &t.OccurredAt, &t.CreatedAt,
+			&t.VoidedAt, &t.ReversalOfID, &t.ReversalReason, &t.Sign, &t.BankDirection); err != nil {
+			return nil, 0, err
+		}
+		total += t.Amount
+		out = append(out, t)
+	}
+	return out, total, rows.Err()
+}
+
+func stringPtrOrNil(s string) *string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	return &s
 }
 
 // UpdateTxnInput e o corpo da edicao de um lancamento (PATCH). Nao inclui
@@ -739,6 +1055,12 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, tenantID, id string, in Up
 		return err
 	}
 	if err := assertTxnNotTransfer(ctx, tx, id); err != nil {
+		return err
+	}
+	if err := assertTxnNotReversal(ctx, tx, id); err != nil {
+		return err
+	}
+	if err := assertTxnHasNoReversals(ctx, tx, id); err != nil {
 		return err
 	}
 
@@ -973,6 +1295,9 @@ func (r *Repo) Void(ctx context.Context, tx pgx.Tx, id, reason, actorID string) 
 	if err := assertTxnNotGrouped(ctx, tx, id); err != nil {
 		return err
 	}
+	if err := assertTxnHasNoReversals(ctx, tx, id); err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx, `
 		UPDATE financial_transactions
 		SET voided_at = now(), voided_by = NULLIF($2,'')::uuid, void_reason = NULLIF($3,'')
@@ -1004,6 +1329,9 @@ func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
 	if err := assertTxnNotGrouped(ctx, tx, id); err != nil {
 		return err
 	}
+	if err := assertTxnHasNoReversals(ctx, tx, id); err != nil {
+		return err
+	}
 	var tenantID string
 	err := tx.QueryRow(ctx, `
 		DELETE FROM financial_transactions
@@ -1016,9 +1344,9 @@ func (r *Repo) Delete(ctx context.Context, tx pgx.Tx, id string) error {
 	if err != nil {
 		return err
 	}
-	// Remove o recibo digital (documento) vinculado ao lancamento.
+	// Remove os documentos (recibo comum e recibo de estorno) vinculados.
 	if _, err := tx.Exec(ctx,
-		`DELETE FROM documents WHERE kind = 'receipt' AND content->>'tx_id' = $1`, id); err != nil {
+		`DELETE FROM documents WHERE kind IN ('receipt','reversal_receipt') AND content->>'tx_id' = $1`, id); err != nil {
 		return err
 	}
 	// Recalcula a cadeia do tenant (RPC SECURITY DEFINER - ver migracao 000061).
@@ -1058,7 +1386,7 @@ func (r *Repo) CreateBatch(ctx context.Context, tx pgx.Tx, tenantID, branchID st
 
 // List retorna lancamentos do escopo, com filtro opcional de tipo e de periodo
 // (from/to no formato AAAA-MM-DD, inclusivos). Datas vazias nao filtram.
-func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind, from, to string) ([]Transaction, error) {
+func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind, from, to string, limit, offset int) ([]Transaction, error) {
 	rows, err := tx.Query(ctx, `
 		WITH recent AS (
 		    SELECT id
@@ -1088,7 +1416,11 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind, from, to string) ([]Tr
 		          JOIN financial_accounts fa
 		            ON fa.id = CASE WHEN tr2.from_account_id = t.account_id
 		                            THEN tr2.to_account_id ELSE tr2.from_account_id END
-		         WHERE tr2.id = t.account_transfer_id)
+		         WHERE tr2.id = t.account_transfer_id),
+		       t.sign, t.bank_direction, t.reversal_of_id::text, t.reversal_reason,
+		       (SELECT COALESCE(SUM(r.amount),0)::float8
+		          FROM financial_transactions r
+		         WHERE r.reversal_of_id = t.id AND r.voided_at IS NULL)
 		FROM financial_transactions t
 		JOIN recent r ON r.id = t.id
 		LEFT JOIN financial_categories c ON c.id = t.category_id
@@ -1096,10 +1428,11 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind, from, to string) ([]Tr
 		LEFT JOIN suppliers s ON s.id = t.supplier_id
 		LEFT JOIN members dm ON dm.id = t.donor_member_id
 		LEFT JOIN benefactors db ON db.id = t.benefactor_id
-		LEFT JOIN documents d ON d.kind = 'receipt' AND d.content->>'tx_id' = t.id::text
+		LEFT JOIN documents d ON d.kind IN ('receipt','reversal_receipt') AND d.content->>'tx_id' = t.id::text
 		LEFT JOIN financial_transaction_groups g ON g.id = t.group_id
 		LEFT JOIN account_transfers at ON at.id = t.account_transfer_id
-		ORDER BY t.occurred_at, t.entry_seq NULLS LAST, t.created_at, t.id`, kind, from, to)
+		ORDER BY t.occurred_at, t.entry_seq NULLS LAST, t.created_at, t.id
+		LIMIT $4 OFFSET $5`, kind, from, to, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -1117,7 +1450,8 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind, from, to string) ([]Tr
 			&t.VoidedAt, &t.VoidReason, &t.AttachmentCount, &t.AttachmentURL,
 			&t.DueDate, &t.PaidAt, &t.CostCenter, &t.ReconciledAt,
 			&t.GroupID, &t.GroupStatus,
-			&t.AccountTransferID, &t.TransferKind, &t.CounterpartAccountName); err != nil {
+			&t.AccountTransferID, &t.TransferKind, &t.CounterpartAccountName,
+			&t.Sign, &t.BankDirection, &t.ReversalOfID, &t.ReversalReason, &t.ReversedTotal); err != nil {
 			return nil, err
 		}
 		t.Reconciled = t.ReconciledAt != nil
@@ -1197,8 +1531,8 @@ func (r *Repo) SumBalance(ctx context.Context, tx pgx.Tx, kind string) (Balance,
 	var initialBalance float64
 	err := tx.QueryRow(ctx, `
 		WITH tx_agg AS (
-			SELECT COALESCE(SUM(amount) FILTER (WHERE type='income'),0) AS inc,
-			       COALESCE(SUM(amount) FILTER (WHERE type='expense'),0) AS exp
+			SELECT COALESCE(SUM(amount * sign) FILTER (WHERE type='income'),0) AS inc,
+			       COALESCE(SUM(amount * sign) FILTER (WHERE type='expense'),0) AS exp
 			FROM financial_transactions
 			WHERE ($1 = '' OR type = $1)
 			  AND voided_at IS NULL
@@ -1222,7 +1556,7 @@ func (r *Repo) SumBalance(ctx context.Context, tx pgx.Tx, kind string) (Balance,
 
 	rows, err := tx.Query(ctx, `
 		SELECT COALESCE(t.category_id::text,''), COALESCE(c.code,''),
-		       COALESCE(c.name,'Sem categoria'), t.type, SUM(t.amount)::float8
+		       COALESCE(c.name,'Sem categoria'), t.type, SUM(t.amount * t.sign)::float8
 		FROM financial_transactions t
 		LEFT JOIN financial_categories c ON c.id = t.category_id
 		WHERE ($1 = '' OR t.type = $1)
@@ -1259,8 +1593,8 @@ func (r *Repo) SumBalance(ctx context.Context, tx pgx.Tx, kind string) (Balance,
 		),
 		agg AS (
 			SELECT account_id,
-			       COALESCE(SUM(amount) FILTER (WHERE type='income'),0) AS inc,
-			       COALESCE(SUM(amount) FILTER (WHERE type='expense'),0) AS exp
+			       COALESCE(SUM(amount) FILTER (WHERE bank_direction='income'),0) AS inc,
+			       COALESCE(SUM(amount) FILTER (WHERE bank_direction='expense'),0) AS exp
 			FROM financial_transactions
 			WHERE voided_at IS NULL
 			GROUP BY account_id

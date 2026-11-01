@@ -119,6 +119,7 @@ func (a *App) handleAdminUpdateTenantUser(w http.ResponseWriter, r *http.Request
 		writeServerError(w, err)
 		return
 	}
+	a.invalidateTenant(tenantID)
 	writeJSON(w, http.StatusOK, updated)
 }
 

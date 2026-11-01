@@ -31,6 +31,7 @@ func (r *Repo) ContributionDrops(ctx context.Context, tx pgx.Tx, months, recent 
 			       SUM(amount) AS total
 			FROM financial_transactions
 			WHERE type = 'income'
+			  AND sign = 1
 			  AND voided_at IS NULL
 			  AND donor_member_id IS NOT NULL
 			  AND occurred_at >= now() - make_interval(months => $1::int)
