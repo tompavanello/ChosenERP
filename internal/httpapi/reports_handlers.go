@@ -328,9 +328,12 @@ func (a *App) handleExportBirthdays(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Datas no formato dd/mm: o mes ja e o filtro do relatorio e o ano de
+	// nascimento/casamento nao deve ser exposto.
+	dayMonth := func(day int) string { return fmt.Sprintf("%02d/%02d", day, month) }
 	brows := make([][]string, 0, len(birthdays))
 	for _, p := range birthdays {
-		brows = append(brows, []string{strconv.Itoa(p.Day), p.FullName, p.BirthDate, strconv.Itoa(p.Age)})
+		brows = append(brows, []string{dayMonth(p.Day), p.FullName, strconv.Itoa(p.Age)})
 	}
 	mrows := make([][]string, 0, len(marriages))
 	for _, m := range marriages {
@@ -338,19 +341,19 @@ func (a *App) handleExportBirthdays(w http.ResponseWriter, r *http.Request) {
 		if m.SpouseName != nil && *m.SpouseName != "" {
 			casal += " & " + *m.SpouseName
 		}
-		mrows = append(mrows, []string{strconv.Itoa(m.Day), casal, m.MarriageDate, strconv.Itoa(m.Years)})
+		mrows = append(mrows, []string{dayMonth(m.Day), casal, strconv.Itoa(m.Years)})
 	}
 	// Nascimento e casamento podem ser exportados juntos ou como relatorios
 	// separados (part=nascimento|casamento).
 	sections := []exportSection{}
 	if part != "casamento" {
-		sections = append(sections, exportSection{Title: "Aniversarios de nascimento", Headers: []string{"Dia", "Nome", "Nascimento", "Idade"}, Rows: brows})
+		sections = append(sections, exportSection{Title: "Aniversarios de nascimento", Headers: []string{"Dia/Mes", "Nome", "Idade"}, Rows: brows})
 	}
 	if part != "nascimento" {
-		sections = append(sections, exportSection{Title: "Aniversarios de casamento", Headers: []string{"Dia", "Casal", "Data", "Anos"}, Rows: mrows})
+		sections = append(sections, exportSection{Title: "Aniversarios de casamento", Headers: []string{"Dia/Mes", "Casal", "Anos"}, Rows: mrows})
 	}
 	title := "Aniversariantes"
-	fname := fmt.Sprintf("aniversariantes-%d-%02d", time.Now().Year(), month)
+	fname := fmt.Sprintf("aniversariantes-%02d", month)
 	switch part {
 	case "nascimento":
 		title = "Aniversariantes - Nascimento"

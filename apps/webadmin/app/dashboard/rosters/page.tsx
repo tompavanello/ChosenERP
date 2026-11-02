@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, CalendarClock, Check, Pencil, Plus, Trash2, UserPlus, Users, X,
+  addDays, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek,
+} from "date-fns";
+import { ptBR } from "date-fns/locale";
+import {
+  AlertTriangle, CalendarClock, CalendarDays, Check, ChevronLeft, ChevronRight,
+  Copy, Download, FileSpreadsheet, FileText, List, MoreHorizontal, Pencil, Plus,
+  Trash2, UserPlus, Users, X,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -10,15 +16,23 @@ import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Drawer, Modal } from "@/components/ui/modal";
+import { Dropdown } from "@/components/ui/dropdown";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { EmptyState, SkeletonRows } from "@/components/ui/skeleton";
+import { Tabs } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
+import { RosterCalendar } from "@/components/scheduler/roster-calendar";
+import type { CalendarView } from "@/components/scheduler/calendar-types";
+import { ExportMenu } from "@/components/reports/export-menu";
+import { KpiCard } from "@/components/reports/kpi-card";
 import {
   listRosters, createRoster, updateRoster, deleteRoster, getRoster,
   setRosterAssignments, respondRosterAssignment, getRosterConflicts, getRosterSuggestions,
+  getRosterConflictsByPeriod, downloadExport, openPrint,
   listMinistries, listMembers, listEvents, listEventKinds,
-  type Roster, type RosterConflict, type RosterSuggestion, type Ministry, type Member, type ChurchEvent, type EventKind,
+  type Roster, type RosterConflict, type RosterPeriodConflict, type RosterSuggestion,
+  type Ministry, type Member, type ChurchEvent, type EventKind,
 } from "@/lib/api";
 import { dateTimePt } from "@/lib/format";
 
@@ -29,28 +43,50 @@ const ASSIGN_TONE: Record<string, "zinc" | "green" | "red"> = {
   convidado: "zinc", confirmado: "green", recusado: "red",
 };
 
-const localNow = () => {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
+const pad = (n: number) => String(n).padStart(2, "0");
+const localISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const localNow = () => localISO(new Date());
 
 const EMPTY = {
   title: "", ministry_id: "", event_id: "", event_kind_id: "", create_event: false,
   starts_at: localNow(), ends_at: "", location: "", notes: "", status: "rascunho",
 };
 
+const VIEWS: { key: CalendarView; label: string }[] = [
+  { key: "month", label: "Mes" },
+  { key: "week", label: "Semana" },
+  { key: "day", label: "Dia" },
+  { key: "list", label: "Lista" },
+];
+
+function rangeFor(view: CalendarView, anchor: Date) {
+  if (view === "week") {
+    const s = startOfWeek(anchor, { weekStartsOn: 0 });
+    return { from: s, to: addDays(s, 6) };
+  }
+  if (view === "day") return { from: anchor, to: anchor };
+  return {
+    from: startOfWeek(startOfMonth(anchor), { weekStartsOn: 0 }),
+    to: endOfWeek(endOfMonth(anchor), { weekStartsOn: 0 }),
+  };
+}
+
 export default function RostersPage() {
   const { toast } = useToast();
   const { hasPerm } = useAuth();
   const canWrite = hasPerm("ministries.write");
 
+  const [tab, setTab] = useState<"escalas" | "calendario">("escalas");
+  const [view, setView] = useState<CalendarView>("month");
+  const [anchor, setAnchor] = useState(new Date());
   const [rosters, setRosters] = useState<Roster[] | null>(null);
+  const [periodConflicts, setPeriodConflicts] = useState<RosterPeriodConflict[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<ChurchEvent[]>([]);
   const [ministries, setMinistries] = useState<Ministry[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [events, setEvents] = useState<ChurchEvent[]>([]);
   const [kinds, setKinds] = useState<EventKind[]>([]);
-  const [filters, setFilters] = useState({ from: "", to: "", ministry: "" });
+  const [filters, setFilters] = useState({ from: "", to: "", ministry: "", status: "" });
   const [saving, setSaving] = useState(false);
 
   const [drawer, setDrawer] = useState<{ open: boolean; editing?: Roster }>({ open: false });
@@ -62,15 +98,37 @@ export default function RostersPage() {
   const [conflicts, setConflicts] = useState<RosterConflict[]>([]);
   const [suggestions, setSuggestions] = useState<RosterSuggestion[]>([]);
   const [memberSearch, setMemberSearch] = useState("");
+  const [assignFilter, setAssignFilter] = useState<"todos" | "confirmado" | "convidado" | "recusado">("todos");
+
+  const range = useMemo(() => {
+    if (tab === "calendario") {
+      const r = rangeFor(view, anchor);
+      return { from: format(r.from, "yyyy-MM-dd"), to: format(r.to, "yyyy-MM-dd") };
+    }
+    return { from: filters.from, to: filters.to };
+  }, [tab, view, anchor, filters.from, filters.to]);
 
   const load = useCallback(async () => {
     try {
-      setRosters((await listRosters(filters)).rosters);
+      const [r, c, e] = await Promise.all([
+        listRosters({ from: range.from || undefined, to: range.to || undefined, ministry: filters.ministry || undefined }),
+        getRosterConflictsByPeriod({ from: range.from || undefined, to: range.to || undefined, ministry: filters.ministry || undefined }),
+        tab === "calendario"
+          ? listEvents({ from: range.from || undefined, to: range.to || undefined }).catch(() => ({ events: [] as ChurchEvent[] }))
+          : Promise.resolve({ events: [] as ChurchEvent[] }),
+      ]);
+      setRosters(r.rosters);
+      setPeriodConflicts(c.conflicts);
+      // O calendario de escalas ja mostra as escalas; evita duplicar o evento
+      // gerado por elas no fundo.
+      setCalendarEvents(e.events.filter((ev) => ev.origin !== "escala"));
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao carregar escalas", "error");
       setRosters([]);
+      setPeriodConflicts([]);
+      setCalendarEvents([]);
     }
-  }, [filters, toast]);
+  }, [range.from, range.to, filters.ministry, tab, toast]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -81,10 +139,38 @@ export default function RostersPage() {
   }, []);
 
   const memberName = (id: string) => members.find((m) => m.id === id)?.full_name ?? id;
+  const conflictRosterIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of periodConflicts) { set.add(c.roster_a_id); set.add(c.roster_b_id); }
+    return set;
+  }, [periodConflicts]);
+
+  const visibleRosters = useMemo(
+    () => (rosters ?? []).filter((r) => !filters.status || r.status === filters.status),
+    [rosters, filters.status],
+  );
+
+  const totals = useMemo(() => {
+    const list = visibleRosters;
+    const assignments = list.reduce((s, r) => s + r.assignment_count, 0);
+    const confirmed = list.reduce((s, r) => s + r.confirmed_count, 0);
+    return {
+      count: list.length,
+      assignments,
+      confirmed,
+      pending: Math.max(0, assignments - confirmed),
+      noTeam: list.filter((r) => r.assignment_count === 0).length,
+      fill: assignments > 0 ? (confirmed / assignments) * 100 : 0,
+    };
+  }, [visibleRosters]);
 
   // ---- CRUD ----
   function openCreate() {
-    setForm({ ...EMPTY });
+    setForm({ ...EMPTY, ministry_id: filters.ministry });
+    setDrawer({ open: true });
+  }
+  function openCreateAt(date: Date) {
+    setForm({ ...EMPTY, starts_at: localISO(date), ministry_id: filters.ministry });
     setDrawer({ open: true });
   }
   function openEdit(r: Roster) {
@@ -123,6 +209,27 @@ export default function RostersPage() {
       setSaving(false);
     }
   }
+  async function duplicateRoster(r: Roster) {
+    try {
+      const full = await getRoster(r.id);
+      const created = await createRoster({
+        title: `${r.title} (copia)`,
+        ministry_id: r.ministry_id || undefined,
+        event_kind_id: r.event_kind_id || undefined,
+        starts_at: r.starts_at,
+        ends_at: r.ends_at || undefined,
+        location: r.location || undefined,
+        notes: r.notes || undefined,
+        status: "rascunho",
+        assignments: (full.assignments ?? []).map((a) => ({ member_id: a.member_id, role: a.role })),
+      });
+      toast("Escala duplicada em rascunho.");
+      await load();
+      openEdit(created);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao duplicar", "error");
+    }
+  }
   async function removeRoster(r: Roster, deleteEvent: boolean) {
     try {
       await deleteRoster(r.id, deleteEvent);
@@ -131,6 +238,29 @@ export default function RostersPage() {
       await load();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro", "error");
+    }
+  }
+
+  async function moveRoster(r: Roster, startsAt: string, endsAt: string) {
+    if (!canWrite) return;
+    if (r.status === "cancelada") {
+      toast("Escala cancelada nao pode ser remarcada.", "info");
+      await load();
+      return;
+    }
+    if (r.status === "publicada" && !confirm(
+      "Esta escala esta publicada. Remarcar move tambem o evento gerado. Continuar?",
+    )) {
+      await load();
+      return;
+    }
+    try {
+      await updateRoster(r.id, { starts_at: startsAt, ...(endsAt ? { ends_at: endsAt } : {}) });
+      toast(r.generated_event ? "Escala e evento remarcados." : "Escala remarcada.");
+      await load();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao remarcar", "error");
+      await load();
     }
   }
 
@@ -145,6 +275,8 @@ export default function RostersPage() {
       setConflicts([]);
       setSuggestions([]);
       setMemberSearch("");
+      setAssignFilter("todos");
+      refreshConflicts(full.id);
       if (full.ministry_id) loadSuggestions(full);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao abrir escala", "error");
@@ -185,11 +317,59 @@ export default function RostersPage() {
       toast(err instanceof Error ? err.message : "Erro", "error");
     }
   }
+  async function copyLastTeam() {
+    if (!manage?.ministry_id) {
+      toast("Vincule um ministerio para copiar a equipe anterior.", "info");
+      return;
+    }
+    try {
+      const res = await listRosters({ ministry: manage.ministry_id, to: manage.starts_at.slice(0, 10) });
+      const previous = res.rosters
+        .filter((r) => r.id !== manage.id && r.starts_at < manage.starts_at)
+        .sort((a, b) => b.starts_at.localeCompare(a.starts_at))[0];
+      if (!previous) {
+        toast("Nenhuma escala anterior deste ministerio encontrada.", "info");
+        return;
+      }
+      const full = await getRoster(previous.id);
+      const map = { ...selected };
+      for (const a of full.assignments ?? []) map[a.member_id] = a.role ?? "";
+      setSelected(map);
+      toast(`Equipe copiada de "${previous.title}".`);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao copiar equipe", "error");
+    }
+  }
 
   const filteredMembers = useMemo(() => {
     const q = memberSearch.trim().toLowerCase();
     return members.filter((m) => !q || m.full_name.toLowerCase().includes(q));
   }, [members, memberSearch]);
+
+  const assignCounts = useMemo(() => {
+    const list = manage?.assignments ?? [];
+    const selectedIds = new Set(Object.keys(selected));
+    const mine = list.filter((a) => selectedIds.has(a.member_id));
+    const confirmed = mine.filter((a) => a.status === "confirmado").length;
+    const refused = mine.filter((a) => a.status === "recusado").length;
+    const total = selectedIds.size;
+    return { total, confirmed, refused, pending: Math.max(0, total - confirmed - refused) };
+  }, [manage, selected]);
+
+  const visibleAssignments = useMemo(() => {
+    return Object.entries(selected).filter(([mid]) => {
+      if (assignFilter === "todos") return true;
+      const a = manage?.assignments?.find((x) => x.member_id === mid);
+      if (assignFilter === "convidado") return !a || a.status === "convidado";
+      return a?.status === assignFilter;
+    });
+  }, [selected, manage, assignFilter]);
+
+  const periodLabel = view === "day"
+    ? format(anchor, "EEEE, dd 'de' MMMM", { locale: ptBR })
+    : view === "week"
+      ? `${format(startOfWeek(anchor, { weekStartsOn: 0 }), "dd/MM")} - ${format(addDays(startOfWeek(anchor, { weekStartsOn: 0 }), 6), "dd/MM")}`
+      : format(anchor, "MMMM 'de' yyyy", { locale: ptBR });
 
   return (
     <div className="page">
@@ -199,9 +379,53 @@ export default function RostersPage() {
         actions={canWrite ? <Button data-tour="rosters-new" onClick={openCreate}><Plus className="h-4 w-4" /> Nova escala</Button> : undefined}
       />
 
-      <Card className="mb-4 flex flex-wrap items-end gap-3">
-        <div><label className="label">De</label><Input type="date" className="h-8 text-sm" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} /></div>
-        <div><label className="label">Ate</label><Input type="date" className="h-8 text-sm" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} /></div>
+      <Tabs
+        tabs={[
+          { key: "escalas", label: "Escalas", icon: <List className="h-4 w-4" /> },
+          { key: "calendario", label: "Calendario", icon: <CalendarDays className="h-4 w-4" /> },
+        ]}
+        active={tab}
+        onChange={(k) => setTab(k as "escalas" | "calendario")}
+      />
+
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <KpiCard label="Escalas" value={String(totals.count)} icon={CalendarClock} tone="sky" />
+        <KpiCard label="Escalados" value={String(totals.assignments)} icon={Users} tone="indigo" />
+        <KpiCard label="Preenchimento" value={`${totals.fill.toFixed(0)}%`} icon={Check} tone="green" hint={`${totals.confirmed} confirmado(s)`} />
+        <KpiCard label="Nao confirmados" value={String(totals.pending)} icon={UserPlus} tone="amber" hint={`${totals.noTeam} escala(s) sem equipe`} />
+        <KpiCard label="Conflitos" value={String(periodConflicts.length)} icon={AlertTriangle} tone="red" hint="voluntarios em escalas sobrepostas" />
+      </div>
+
+      {periodConflicts.length > 0 && (
+        <Card className="mb-4 border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
+          <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="h-4 w-4" /> Conflitos no periodo ({periodConflicts.length})
+          </div>
+          <ul className="max-h-32 space-y-1 overflow-y-auto text-xs text-amber-800/90 dark:text-amber-200/80">
+            {periodConflicts.map((c, i) => (
+              <li key={`${c.member_id}-${c.roster_a_id}-${c.roster_b_id}-${i}`}>
+                <b>{c.member_name}</b> esta em <b>{c.roster_a_title}</b> ({dateTimePt(c.roster_a_starts_at)}) e <b>{c.roster_b_title}</b> ({dateTimePt(c.roster_b_starts_at)}).
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      <Card className="mb-4 flex flex-wrap items-end gap-3 p-3">
+        {tab === "escalas" && (
+          <>
+            <div><label className="label">De</label><Input type="date" className="h-8 text-sm" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} /></div>
+            <div><label className="label">Ate</label><Input type="date" className="h-8 text-sm" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} /></div>
+          </>
+        )}
+        {tab === "calendario" && (
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" className="h-8 px-2" onClick={() => setAnchor(addDays(anchor, view === "month" ? -30 : view === "week" ? -7 : -1))}><ChevronLeft className="h-4 w-4" /></Button>
+            <Button variant="ghost" className="h-8 px-2 text-xs" onClick={() => setAnchor(new Date())}>Hoje</Button>
+            <Button variant="ghost" className="h-8 px-2" onClick={() => setAnchor(addDays(anchor, view === "month" ? 30 : view === "week" ? 7 : 1))}><ChevronRight className="h-4 w-4" /></Button>
+            <span className="ml-2 text-sm font-medium capitalize text-zinc-700 dark:text-zinc-200">{periodLabel}</span>
+          </div>
+        )}
         <div>
           <label className="label">Ministerio</label>
           <Select className="h-8 w-56 text-sm" value={filters.ministry} onChange={(e) => setFilters({ ...filters, ministry: e.target.value })}>
@@ -209,41 +433,108 @@ export default function RostersPage() {
             {ministries.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </Select>
         </div>
-      </Card>
-
-      <Card className="overflow-hidden p-0">
-        {rosters === null ? (
-          <div className="p-4"><SkeletonRows rows={5} /></div>
-        ) : rosters.length === 0 ? (
-          <EmptyState icon={<CalendarClock className="h-10 w-10" />} title="Nenhuma escala" description="Crie escalas para cultos, eventos e ministerios." />
-        ) : (
-          <Table>
-            <THead><TRow><TH>Inicio</TH><TH>Titulo</TH><TH>Ministerio</TH><TH>Evento</TH><TH>Confirmados</TH><TH>Situacao</TH><TH className="text-right">Acoes</TH></TRow></THead>
-            <TBody>
-              {rosters.map((r) => (
-                <TRow key={r.id}>
-                  <TD className="whitespace-nowrap text-sm">{dateTimePt(r.starts_at)}</TD>
-                  <TD className="font-medium">{r.title}</TD>
-                  <TD className="text-sm text-zinc-500">{r.ministry_name ?? "-"}</TD>
-                  <TD className="text-sm text-zinc-500">
-                    {r.event_name ?? r.event_kind_name ?? "-"}
-                    {r.generated_event && <span className="ml-1 text-[10px] uppercase text-sky-600" title="Evento gerado pela escala">auto</span>}
-                  </TD>
-                  <TD className="text-sm tabular-nums">{r.confirmed_count}/{r.assignment_count}</TD>
-                  <TD><Badge tone={STATUS_TONE[r.status]}>{r.status}</Badge></TD>
-                  <TD>
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" data-tour="roster-manage" className="h-8 px-2" title="Gerenciar escalados" onClick={() => openManage(r)}><Users className="h-4 w-4" /></Button>
-                      {canWrite && <Button variant="ghost" className="h-8 px-2" title="Editar" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>}
-                      {canWrite && <Button variant="ghost" className="h-8 px-2" title="Excluir" onClick={() => setDeleteTarget(r)}><Trash2 className="h-4 w-4" /></Button>}
-                    </div>
-                  </TD>
-                </TRow>
-              ))}
-            </TBody>
-          </Table>
+        <div>
+          <label className="label">Situacao</label>
+          <Select className="h-8 w-40 text-sm" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
+            <option value="">Todas</option>
+            <option value="rascunho">Rascunho</option>
+            <option value="publicada">Publicada</option>
+            <option value="concluida">Concluida</option>
+            <option value="cancelada">Cancelada</option>
+          </Select>
+        </div>
+        {tab === "calendario" && (
+          <div className="ml-auto flex flex-wrap items-center gap-1">
+            {VIEWS.map((v) => (
+              <Button key={v.key} variant={view === v.key ? "outline" : "ghost"} className="h-8 px-2 text-xs" onClick={() => setView(v.key)}>
+                {v.label}
+              </Button>
+            ))}
+          </div>
         )}
       </Card>
+
+      {tab === "calendario" ? (
+        rosters === null ? (
+          <Card className="p-4"><SkeletonRows rows={8} /></Card>
+        ) : (
+          <>
+            <RosterCalendar
+              rosters={visibleRosters}
+              events={calendarEvents}
+              view={view}
+              anchor={anchor}
+              canWrite={canWrite}
+              conflictRosterIds={conflictRosterIds}
+              onOpen={openManage}
+              onMove={moveRoster}
+              onDelete={setDeleteTarget}
+              onCreateAt={openCreateAt}
+            />
+            <p className="mt-2 text-xs text-zinc-400">
+              Arraste uma escala para remarcar. Escalas publicadas movem tambem o evento gerado (com confirmacao).
+              Os eventos da igreja aparecem em segundo plano.
+            </p>
+          </>
+        )
+      ) : (
+        <Card className="overflow-hidden p-0">
+          {rosters === null ? (
+            <div className="p-4"><SkeletonRows rows={5} /></div>
+          ) : visibleRosters.length === 0 ? (
+            <EmptyState icon={<CalendarClock className="h-10 w-10" />} title="Nenhuma escala" description="Crie escalas para cultos, eventos e ministerios." />
+          ) : (
+            <Table>
+              <THead><TRow><TH>Inicio</TH><TH>Titulo</TH><TH>Ministerio</TH><TH>Evento</TH><TH>Preenchimento</TH><TH>Situacao</TH><TH className="text-right">Acoes</TH></TRow></THead>
+              <TBody>
+                {visibleRosters.map((r) => (
+                  <TRow key={r.id}>
+                    <TD className="whitespace-nowrap text-sm">{dateTimePt(r.starts_at)}</TD>
+                    <TD className="font-medium">
+                      <span className="flex items-center gap-1">
+                        {r.title}
+                        {conflictRosterIds.has(r.id) && (
+                          <span title="Conflito de agenda"><AlertTriangle className="h-3.5 w-3.5 text-amber-600" /></span>
+                        )}
+                      </span>
+                    </TD>
+                    <TD className="text-sm text-zinc-500">{r.ministry_name ?? "-"}</TD>
+                    <TD className="text-sm text-zinc-500">
+                      {r.event_name ?? r.event_kind_name ?? "-"}
+                      {r.generated_event && <span className="ml-1 text-[10px] uppercase text-sky-600" title="Evento gerado pela escala">auto</span>}
+                    </TD>
+                    <TD>
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                          <div className="h-1.5 rounded-full bg-emerald-500" style={{ width: `${r.assignment_count > 0 ? (r.confirmed_count / r.assignment_count) * 100 : 0}%` }} />
+                        </div>
+                        <span className="text-xs tabular-nums text-zinc-500">{r.confirmed_count}/{r.assignment_count}</span>
+                      </div>
+                    </TD>
+                    <TD><Badge tone={STATUS_TONE[r.status]}>{r.status}</Badge></TD>
+                    <TD>
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" data-tour="roster-manage" className="h-8 px-2" title="Gerenciar escalados" onClick={() => openManage(r)}><Users className="h-4 w-4" /></Button>
+                        <Dropdown
+                          trigger={<MoreHorizontal className="h-4 w-4" />}
+                          items={[
+                            { label: "Editar", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(r), disabled: !canWrite },
+                            { label: "Duplicar", icon: <Copy className="h-4 w-4" />, onClick: () => duplicateRoster(r), disabled: !canWrite },
+                            { label: "Imprimir / PDF", icon: <FileText className="h-4 w-4" />, onClick: () => exportRoster(r, "pdf") },
+                            { label: "Excel (XLSX)", icon: <FileSpreadsheet className="h-4 w-4" />, onClick: () => exportRoster(r, "xlsx") },
+                            { label: "CSV", icon: <Download className="h-4 w-4" />, onClick: () => exportRoster(r, "csv") },
+                            { label: "Excluir", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteTarget(r), disabled: !canWrite },
+                          ]}
+                        />
+                      </div>
+                    </TD>
+                  </TRow>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+      )}
 
       {/* Drawer criar/editar */}
       <Drawer open={drawer.open} onClose={() => setDrawer({ open: false })} size="xl" title={drawer.editing ? "Editar escala" : "Nova escala"}>
@@ -321,16 +612,35 @@ export default function RostersPage() {
             Conflito de agenda: {conflicts.map((c) => `${c.member_name} (${c.other_roster_title})`).join("; ")}
           </div>
         )}
+
+        <div className="mb-3 flex flex-wrap items-center gap-1">
+          {([
+            ["todos", `Todos (${assignCounts.total})`],
+            ["confirmado", `Confirmados (${assignCounts.confirmed})`],
+            ["convidado", `Pendentes (${assignCounts.pending})`],
+            ["recusado", `Recusados (${assignCounts.refused})`],
+          ] as const).map(([key, label]) => (
+            <Button key={key} variant={assignFilter === key ? "outline" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setAssignFilter(key)}>
+              {label}
+            </Button>
+          ))}
+          {manage?.ministry_id && (
+            <Button variant="outline" className="ml-auto h-7 px-2 text-xs" onClick={copyLastTeam}>
+              <Copy className="mr-1 h-3.5 w-3.5" /> Copiar ultima equipe
+            </Button>
+          )}
+        </div>
+
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded border border-zinc-200 dark:border-zinc-700">
             <div className="border-b border-zinc-100 p-2 text-sm font-semibold dark:border-zinc-800">
-              Escalados ({Object.keys(selected).length})
+              Escalados ({visibleAssignments.length})
               <span className="ml-1 block text-xs font-normal text-zinc-400">
                 Pessoas alem do ministerio{manage?.ministry_name ? ` - ${manage.ministry_name}` : ""}
               </span>
             </div>
             <ul className="max-h-96 space-y-1 overflow-y-auto p-2">
-              {Object.entries(selected).map(([mid, role]) => {
+              {visibleAssignments.map(([mid, role]) => {
                 const asg = manage?.assignments?.find((a) => a.member_id === mid);
                 return (
                   <li key={mid} className="rounded border border-zinc-100 p-2 text-sm dark:border-zinc-800">
@@ -348,7 +658,7 @@ export default function RostersPage() {
                   </li>
                 );
               })}
-              {Object.keys(selected).length === 0 && <li className="p-2 text-xs text-zinc-400">Ninguem escalado ainda.</li>}
+              {visibleAssignments.length === 0 && <li className="p-2 text-xs text-zinc-400">Ninguem neste filtro.</li>}
             </ul>
             <div className="flex justify-end gap-2 border-t border-zinc-100 p-2 dark:border-zinc-800">
               <Button className="h-8 text-sm" onClick={saveAssignments} disabled={!canWrite}>Salvar escalados</Button>
@@ -393,6 +703,15 @@ export default function RostersPage() {
             </div>
           </div>
         </div>
+        {manage && (
+          <div className="mt-3 flex justify-end">
+            <ExportMenu
+              path={`/api/v1/rosters/${manage.id}/export`}
+              filenameBase={`escala-${manage.id}`}
+              trigger={<Button variant="outline" className="h-8 text-sm"><CalendarClock className="mr-1 h-3.5 w-3.5" /> Exportar escala</Button>}
+            />
+          </div>
+        )}
       </Drawer>
 
       <Modal open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title="Excluir escala">
@@ -436,4 +755,11 @@ export default function RostersPage() {
       </Modal>
     </div>
   );
+}
+
+/** Exporta uma escala via URL (o menu visual usa o mesmo endpoint). */
+async function exportRoster(r: Roster, format: "csv" | "xlsx" | "pdf") {
+  const path = `/api/v1/rosters/${r.id}/export?format=${format}`;
+  if (format === "pdf") await openPrint(path);
+  else await downloadExport(path, `escala-${r.id}.${format}`);
 }

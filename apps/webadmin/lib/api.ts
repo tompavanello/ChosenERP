@@ -3552,6 +3552,16 @@ export interface RosterSuggestion {
   frequency?: string;
   busy: boolean;
 }
+export interface RosterPeriodConflict {
+  member_id: string;
+  member_name: string;
+  roster_a_id: string;
+  roster_a_title: string;
+  roster_a_starts_at: string;
+  roster_b_id: string;
+  roster_b_title: string;
+  roster_b_starts_at: string;
+}
 
 export const listRosters = (params: { from?: string; to?: string; ministry?: string } = {}) => {
   const q = new URLSearchParams();
@@ -3580,6 +3590,14 @@ export const respondRosterAssignment = (rosterId: string, assignmentId: string, 
   });
 export const getRosterConflicts = (id: string) =>
   api<{ conflicts: RosterConflict[] }>(`/api/v1/rosters/${id}/conflicts`);
+export const getRosterConflictsByPeriod = (params: { from?: string; to?: string; ministry?: string } = {}) => {
+  const q = new URLSearchParams();
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  if (params.ministry) q.set("ministry", params.ministry);
+  const qs = q.toString();
+  return api<{ conflicts: RosterPeriodConflict[] }>(`/api/v1/rosters/conflicts${qs ? `?${qs}` : ""}`);
+};
 export const getRosterSuggestions = (params: { ministry_id: string; starts_at: string; ends_at?: string; roster_id?: string }) => {
   const q = new URLSearchParams();
   q.set("ministry_id", params.ministry_id);

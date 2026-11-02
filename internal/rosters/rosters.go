@@ -100,6 +100,19 @@ type Suggestion struct {
 	Busy       bool    `json:"busy"`
 }
 
+// PeriodConflict e um voluntario escalado em duas escalas que se sobrepoem no
+// periodo consultado (visao do calendario/painel, sem abrir escala por escala).
+type PeriodConflict struct {
+	MemberID     string    `json:"member_id"`
+	MemberName   string    `json:"member_name"`
+	RosterAID    string    `json:"roster_a_id"`
+	RosterATitle string    `json:"roster_a_title"`
+	RosterAStart time.Time `json:"roster_a_starts_at"`
+	RosterBID    string    `json:"roster_b_id"`
+	RosterBTitle string    `json:"roster_b_title"`
+	RosterBStart time.Time `json:"roster_b_starts_at"`
+}
+
 type Repo struct{}
 
 const rosterCols = `r.id::text, r.branch_id::text, r.ministry_id::text, mi.name, r.event_id::text, ek.name,
@@ -323,6 +336,25 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput)
 	if err != nil {
 		return nil, err
 	}
+	// Mantem o evento gerado pela escala em sincronia com o novo horario/titulo
+	// e com a situacao da escala. Eventos externos vinculados nao sao tocados.
+	if _, err := tx.Exec(ctx, `
+		UPDATE church_events e SET
+			starts_at = r.starts_at,
+			ends_at = r.ends_at,
+			title = r.title,
+			kind_id = COALESCE(r.event_kind_id, e.kind_id),
+			status = CASE r.status
+				WHEN 'publicada' THEN 'confirmed'
+				WHEN 'concluida' THEN 'done'
+				WHEN 'cancelada' THEN 'cancelled'
+				ELSE 'planned' END,
+			owner_ministry_id = COALESCE(r.ministry_id, e.owner_ministry_id),
+			updated_at = now()
+		FROM rosters r
+		WHERE r.id = $1::uuid AND r.generated_event AND e.id = r.event_id`, updatedID); err != nil {
+		return nil, err
+	}
 	if err := r.syncInvitees(ctx, tx, updatedID); err != nil {
 		return nil, err
 	}
@@ -334,8 +366,16 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput)
 func (r *Repo) generateEvent(ctx context.Context, tx pgx.Tx, rosterID string) error {
 	var eventID string
 	err := tx.QueryRow(ctx, `
-		INSERT INTO church_events (tenant_id, branch_id, kind_id, title, starts_at, ends_at, participants_count, attendance_mode, notes, created_by, origin, origin_id)
-		SELECT r.tenant_id, r.branch_id, r.event_kind_id, r.title, r.starts_at, r.ends_at, 0, 'nominal', r.title, r.created_by, 'escala', r.id
+		INSERT INTO church_events
+			(tenant_id, branch_id, kind_id, title, starts_at, ends_at, participants_count,
+			 attendance_mode, notes, created_by, origin, origin_id, owner_ministry_id, status)
+		SELECT r.tenant_id, r.branch_id, r.event_kind_id, r.title, r.starts_at, r.ends_at, 0,
+		       'nominal', r.title, r.created_by, 'escala', r.id, r.ministry_id,
+		       CASE r.status
+		           WHEN 'publicada' THEN 'confirmed'
+		           WHEN 'concluida' THEN 'done'
+		           WHEN 'cancelada' THEN 'cancelled'
+		           ELSE 'planned' END
 		FROM rosters r WHERE r.id = $1::uuid
 		RETURNING id::text`, rosterID).Scan(&eventID)
 	if err != nil {
@@ -535,6 +575,41 @@ func (r *Repo) Suggestions(ctx context.Context, tx pgx.Tx, ministryID, startsAt,
 			return nil, err
 		}
 		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// ConflictsByPeriod lista pares de escalas sobrepostas que compartilham um
+// voluntario, no periodo e (opcionalmente) no ministerio informado.
+func (r *Repo) ConflictsByPeriod(ctx context.Context, tx pgx.Tx, from, to, ministryID string) ([]PeriodConflict, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT DISTINCT a1.member_id::text, mb.full_name,
+		       r1.id::text, r1.title, r1.starts_at,
+		       r2.id::text, r2.title, r2.starts_at
+		FROM roster_assignments a1
+		JOIN rosters r1 ON r1.id = a1.roster_id AND r1.status <> 'cancelada'
+		JOIN roster_assignments a2 ON a2.member_id = a1.member_id AND a2.roster_id > a1.roster_id
+		JOIN rosters r2 ON r2.id = a2.roster_id AND r2.status <> 'cancelada'
+		JOIN members mb ON mb.id = a1.member_id
+		WHERE ($1 = '' OR r1.starts_at::date >= $1::date)
+		  AND ($2 = '' OR r1.starts_at::date <= $2::date)
+		  AND ($3 = '' OR r1.ministry_id = NULLIF($3,'')::uuid OR r2.ministry_id = NULLIF($3,'')::uuid)
+		  AND r1.starts_at < COALESCE(r2.ends_at, r2.starts_at + interval '2 hours')
+		  AND COALESCE(r1.ends_at, r1.starts_at + interval '2 hours') > r2.starts_at
+		ORDER BY mb.full_name, r1.starts_at`, from, to, ministryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []PeriodConflict{}
+	for rows.Next() {
+		var c PeriodConflict
+		if err := rows.Scan(&c.MemberID, &c.MemberName,
+			&c.RosterAID, &c.RosterATitle, &c.RosterAStart,
+			&c.RosterBID, &c.RosterBTitle, &c.RosterBStart); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
 	}
 	return out, rows.Err()
 }
