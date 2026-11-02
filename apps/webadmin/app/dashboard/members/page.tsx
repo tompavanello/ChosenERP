@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Search, Users, MessageCircle, Phone, Mail, IdCard, GitBranch, Trash2, ListPlus, Upload,
+  Search, Users, MessageCircle, Phone, Mail, IdCard, GitBranch, Trash2, ListPlus, Upload, UserPlus,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -16,11 +16,13 @@ import { SkeletonRows, EmptyState } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
 import {
-  listMembers, deleteMember, assetURL, type Member,
+  listMembers, deleteMember, createMember, syncMemberCargos, assetURL, type Member,
 } from "@/lib/api";
 import { useBranches } from "@/lib/swr-hooks";
+import { Drawer } from "@/components/ui/modal";
 import { MemberBulkGrid } from "@/components/members/member-bulk-grid";
 import { MemberImport } from "@/components/members/member-import";
+import { MemberForm } from "@/components/members/member-form";
 import { CardCell } from "@/components/members/card-cell";
 import { RowActions } from "@/components/people/row-actions";
 import { MEMBERSHIP_STATUS, CARGO_KINDS } from "@/lib/constants";
@@ -41,7 +43,9 @@ export default function MembersPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PER_PAGE);
   const [showQuick, setShowQuick] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [savingForm, setSavingForm] = useState(false);
   const [sortColumn, setSortColumn] = useState<string>("full_name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
@@ -111,6 +115,21 @@ export default function MembersPage() {
       await reload();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Erro ao excluir", "error");
+    }
+  }
+
+  async function createFromForm(data: Record<string, unknown>, ctx: { cargoIds: string[] }) {
+    setSavingForm(true);
+    try {
+      const novo = await createMember(data);
+      if (ctx.cargoIds.length) await syncMemberCargos(novo.id, ctx.cargoIds);
+      toast("Membro cadastrado.");
+      setShowForm(false);
+      await reload();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Erro ao cadastrar", "error");
+    } finally {
+      setSavingForm(false);
     }
   }
 
@@ -354,8 +373,11 @@ export default function MembersPage() {
               <Button variant="outline" onClick={() => setShowImport(true)}>
                 <Upload className="h-4 w-4" /> Importar planilha
               </Button>
-              <Button variant="outline" onClick={() => setShowQuick((v) => !v)}>
+              <Button variant="outline" data-tour="members-quick" onClick={() => setShowQuick((v) => !v)}>
                 <ListPlus className="h-4 w-4" /> {showQuick ? "Fechar cadastro rapido" : "Cadastro rapido"}
+              </Button>
+              <Button data-tour="members-new" onClick={() => setShowForm(true)}>
+                <UserPlus className="h-4 w-4" /> Novo membro
               </Button>
             </div>
           )
@@ -363,7 +385,7 @@ export default function MembersPage() {
       />
 
       {showQuick && canWrite && (
-        <Card className="mb-4 p-4">
+        <Card className="mb-4 p-4" data-tour="members-quick-panel">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Users className="h-4 w-4 text-sky-600" />
             <h3 className="text-sm font-semibold text-zinc-700">Cadastro rapido de membros</h3>
@@ -379,6 +401,15 @@ export default function MembersPage() {
       {canWrite && (
         <MemberImport open={showImport} onClose={() => setShowImport(false)} onImported={reload} />
       )}
+
+      <Drawer open={showForm} onClose={() => setShowForm(false)} title="Novo membro" size="lg">
+        <MemberForm
+          saving={savingForm}
+          submitLabel="Cadastrar"
+          onSubmit={createFromForm}
+          onCancel={() => setShowForm(false)}
+        />
+      </Drawer>
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total" value={members ? String(stats.total) : "..."} icon={Users} />
@@ -422,7 +453,7 @@ export default function MembersPage() {
           <EmptyState
             icon={<Users className="h-10 w-10" />}
             title="Nenhum membro encontrado"
-            description="Ajuste a busca ou use o Cadastro rapido para incluir membros."
+            description="Ajuste a busca ou use o botao Novo membro (formulario) ou o Cadastro rapido para incluir membros."
           />
         </Card>
       ) : (
