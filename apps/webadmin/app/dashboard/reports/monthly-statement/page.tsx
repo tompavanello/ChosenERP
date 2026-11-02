@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ArrowDownRight, ArrowUpRight, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
@@ -16,6 +17,10 @@ import {
 } from "@/lib/api";
 import { currency, datePt } from "@/lib/format";
 import { ExportButtons } from "@/components/reports/export-buttons";
+import { ReportSection } from "@/components/reports/report-section";
+import { KpiCard } from "@/components/reports/kpi-card";
+import { TrendChart } from "@/components/reports/trend-chart";
+import { COLORS, currencyCompact } from "@/components/reports/chart-theme";
 
 function mesAtual() {
   const d = new Date();
@@ -108,6 +113,16 @@ export default function MonthlyStatementPage() {
     </TRow>
   );
 
+  // Totais por semana (soma das linhas) para a leitura de tendencia no topo.
+  const weekly = st
+    ? st.weeks.map((w, i) => {
+        const inc = st.income.reduce((s, l) => s + (l.weeks[i] ?? 0), 0);
+        const exp = st.expense.reduce((s, l) => s + (l.weeks[i] ?? 0), 0);
+        return { name: w.label, Entradas: inc, Saidas: exp, Resultado: inc - exp };
+      })
+    : [];
+  const bestWeek = [...weekly].sort((a, b) => b.Resultado - a.Resultado)[0];
+
   return (
     <div className="page">
       <PageHeader
@@ -133,12 +148,37 @@ export default function MonthlyStatementPage() {
         <div className="grid gap-4 md:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}</div>
       ) : (
         <>
-          <div className="mb-6 grid gap-4 md:grid-cols-4">
-            <Card><p className="text-sm text-zinc-500">Saldo inicial</p><p className="mt-1 text-2xl font-semibold">{currency(st.opening_balance)}</p></Card>
-            <Card><p className="text-sm text-zinc-500">Entradas</p><p className="mt-1 text-2xl font-semibold text-emerald-600">{currency(st.total_income)}</p></Card>
-            <Card><p className="text-sm text-zinc-500">Saidas</p><p className="mt-1 text-2xl font-semibold text-red-600">{currency(st.total_expense)}</p></Card>
-            <Card><p className="text-sm text-zinc-500">Saldo final</p><p className={`mt-1 text-2xl font-semibold ${st.closing_balance >= 0 ? "text-sky-700" : "text-red-600"}`}>{currency(st.closing_balance)}</p></Card>
+          <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiCard label="Saldo inicial" value={currency(st.opening_balance)} icon={Wallet} tone="zinc" hint="liquido acumulado ate o mes anterior" />
+            <KpiCard label="Entradas" value={currency(st.total_income)} icon={ArrowUpRight} tone="green" />
+            <KpiCard label="Saidas" value={currency(st.total_expense)} icon={ArrowDownRight} tone="red" />
+            <KpiCard
+              label="Saldo final"
+              value={currency(st.closing_balance)}
+              icon={Wallet}
+              tone="sky"
+              delta={st.opening_balance !== 0 ? ((st.closing_balance - st.opening_balance) / Math.abs(st.opening_balance)) * 100 : undefined}
+              deltaLabel="variacao no mes"
+            />
           </div>
+
+          <ReportSection
+            title="Como o mes caminhou semana a semana?"
+            subtitle="Regime de caixa (domingo a sabado)"
+            className="mb-4"
+            insight={bestWeek ? `Melhor semana: ${bestWeek.name} com ${currency(bestWeek.Resultado)} de resultado.` : undefined}
+          >
+            <TrendChart
+              data={weekly}
+              series={[
+                { key: "Entradas", label: "Entradas", color: COLORS.income, type: "bar" },
+                { key: "Saidas", label: "Saidas", color: COLORS.expense, type: "bar" },
+                { key: "Resultado", label: "Resultado", color: COLORS.net, type: "line" },
+              ]}
+              height={220}
+              format={currencyCompact}
+            />
+          </ReportSection>
 
           <Card className="mb-6 overflow-hidden p-0">
             <h3 className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-emerald-700 dark:border-zinc-800 dark:text-emerald-400">Entradas</h3>

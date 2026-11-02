@@ -793,3 +793,103 @@ export const VISIBILITY_LABELS: Record<string, string> = {
   grupo: "Meu grupo",
   igreja: "Igreja",
 };
+
+// ---- Central de ajuda / suporte (app do membro) ----
+
+export interface HelpSummary {
+  slug: string;
+  app: "webadmin" | "member";
+  title: string;
+  category: string;
+  summary: string;
+  tags?: string[];
+  order: number;
+  tour?: string;
+  routes?: string[];
+}
+
+export interface HelpArticle extends HelpSummary {
+  body: string;
+}
+
+export interface HelpContext {
+  path: string;
+  guide?: HelpArticle;
+  articles: HelpSummary[];
+  tour?: string;
+}
+
+export interface HelpChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface SupportTicketMessage {
+  id: string;
+  ticket_id: string;
+  author_kind: "user" | "platform" | "ai";
+  author_name?: string | null;
+  body: string;
+  created_at: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  subject: string;
+  description: string;
+  kind: string;
+  status: string;
+  priority: string;
+  app: "webadmin" | "member";
+  page_path: string;
+  created_at: string;
+  updated_at: string;
+  messages?: SupportTicketMessage[];
+}
+
+function helpQs(params: Record<string, string | undefined>) {
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== "") sp.set(k, v);
+  }
+  const s = sp.toString();
+  return s ? `?${s}` : "";
+}
+
+export const getHelpContext = (path: string, app = "member") =>
+  api<{ context: HelpContext; ai_enabled: boolean }>(`/api/v1/help/context${helpQs({ path, app })}`);
+
+export const getHelpArticles = (params: { app?: string; q?: string; category?: string }) =>
+  api<{ articles: HelpSummary[]; categories: string[]; ai_enabled: boolean }>(
+    `/api/v1/help/articles${helpQs({ app: "member", ...params })}`,
+  );
+
+export const getHelpArticle = (slug: string, app = "member") =>
+  api<HelpArticle>(`/api/v1/help/articles/${encodeURIComponent(slug)}${helpQs({ app })}`);
+
+export const askHelp = (body: { app?: string; path: string; messages: HelpChatMessage[] }) =>
+  api<{ answer: string; sources: HelpSummary[]; escalate: boolean }>("/api/v1/help/chat", {
+    method: "POST",
+    body: JSON.stringify({ app: "member", ...body }),
+  });
+
+export const sendHelpFeedback = (body: { app?: string; slug: string; helpful: boolean; comment?: string }) =>
+  api<{ ok: boolean }>("/api/v1/help/feedback", {
+    method: "POST",
+    body: JSON.stringify({ app: "member", ...body }),
+  });
+
+export const listMyTickets = (app = "member") =>
+  api<{ tickets: SupportTicket[] }>(`/api/v1/support/tickets${helpQs({ app })}`);
+
+export const createSupportTicket = (body: Record<string, unknown>) =>
+  api<SupportTicket>("/api/v1/support/tickets", { method: "POST", body: JSON.stringify(body) });
+
+export const getSupportTicket = (id: string) =>
+  api<SupportTicket>(`/api/v1/support/tickets/${id}`);
+
+export const addSupportTicketMessage = (id: string, body: string) =>
+  api<SupportTicketMessage>(`/api/v1/support/tickets/${id}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });

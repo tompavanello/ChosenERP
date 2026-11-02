@@ -361,7 +361,7 @@ export default function AnnouncementsPage() {
                 <Zap className="h-4 w-4" /> Automacoes
               </Button>
             )}
-            <Button onClick={openCreate}><Plus className="h-4 w-4" /> Novo Comunicado</Button>
+            <Button data-tour="announcements-new" onClick={openCreate}><Plus className="h-4 w-4" /> Novo Comunicado</Button>
           </>
         }
       />
@@ -418,7 +418,7 @@ export default function AnnouncementsPage() {
                       <Button size="sm" variant="outline" onClick={() => viewDeliveries(a)}>
                         <Search className="h-3 w-3" /> Status
                       </Button>
-                      <Button size="sm" onClick={() => openSend(a)}>
+                      <Button size="sm" data-tour="announcement-send" onClick={() => openSend(a)}>
                         <Send className="h-3 w-3" /> Enviar
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => removeAnn(a)} title="Excluir">
@@ -435,17 +435,18 @@ export default function AnnouncementsPage() {
 
       {/* Form Drawer (criar/editar) */}
       <Drawer open={formOpen} onClose={() => setFormOpen(false)} title={form.id ? "Editar Comunicado" : "Novo Comunicado"} size="xl">
-        <form onSubmit={saveAnn} className="space-y-4">
+        <form onSubmit={saveAnn} className="space-y-4" data-tour="announcement-form">
           <Field label="Titulo *">
-            <Input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <Input data-tour="announcement-title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           </Field>
           <Field label="Corpo da mensagem">
-            <Textarea rows={3} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder="Digite a mensagem do comunicado..." />
+            <Textarea data-tour="announcement-body" rows={3} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder="Digite a mensagem do comunicado..." />
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Publico-alvo">
               <select
+                data-tour="announcement-audience"
                 value={form.audience}
                 onChange={(e) => setForm({ ...form, audience: e.target.value })}
                 className="input w-full"
@@ -481,7 +482,7 @@ export default function AnnouncementsPage() {
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" type="button" onClick={() => setFormOpen(false)} disabled={saving}>Cancelar</Button>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" data-tour="announcement-save" disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {form.id ? "Salvar" : "Criar"}
             </Button>

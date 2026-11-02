@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, BookOpen, BookMarked, BookText, Cake, Calendar, CalendarCheck, HandCoins, Heart, Inbox, Play, Radio, User, UserCog, Users, UsersRound } from "lucide-react";
+import { Bell, BookOpen, BookMarked, BookText, Cake, Calendar, CalendarCheck, CircleHelp, HandCoins, Heart, Inbox, Play, Radio, User, UserCog, Users, UsersRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import {
@@ -193,7 +193,13 @@ export default function HomePage() {
             </Card>
           </Link>
         )}
-        <Link href="/perfil" className="col-span-2">
+        <Link href="/ajuda">
+          <Card className="flex h-full flex-col items-center justify-center gap-1 py-5 text-center">
+            <CircleHelp className="h-5 w-5 text-[var(--brand)]" />
+            <span className="text-sm font-medium">Ajuda</span>
+          </Card>
+        </Link>
+        <Link href="/perfil">
           <Card className="flex h-full flex-col items-center justify-center gap-1 py-5 text-center">
             <User className="h-5 w-5 text-[var(--brand)]" />
             <span className="text-sm font-medium">Meu perfil</span>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Wallet, Plus, Eye, Send, Filter, Tags, Repeat, Banknote, Upload, Download, FileText, Paperclip, Pencil, Trash2, FolderTree, ChevronUp, ChevronDown, ChevronRight, CheckCircle2, RotateCcw, Lock, Layers, RefreshCw, Undo2 } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Wallet, Plus, Eye, Send, Filter, Tags, Banknote, Upload, Download, FileText, Paperclip, Pencil, Trash2, FolderTree, ChevronUp, ChevronDown, ChevronRight, CheckCircle2, RotateCcw, Lock, Layers, RefreshCw, Undo2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -31,7 +31,7 @@ import {
 import { PAYMENT_METHODS, ACCOUNT_TYPES, TRANSFER_KINDS } from "@/lib/constants";
 import { currency, datePt, dateTimePt, monthEndISO, monthStartISO, todayISO } from "@/lib/format";
 import { downloadCSVTemplate } from "@/lib/template";
-import { RecurringPanel } from "@/components/finance/recurring-panel";
+
 import { BulkEntry } from "@/components/finance/bulk-entry";
 import { TransactionForm, type TransactionFormState } from "@/components/finance/transaction-form";
 import { GroupDetailDrawer, GroupSelectionDrawer } from "@/components/finance/transaction-group";
@@ -1181,7 +1181,7 @@ export default function FinancePage() {
         tabs={[
           { key: "lancamentos", label: "Lancamentos", icon: <Wallet className="h-4 w-4" /> },
           { key: "agrupamentos", label: "Agrupamentos", icon: <Layers className="h-4 w-4" /> },
-          { key: "recorrentes", label: "Recorrencias", icon: <Repeat className="h-4 w-4" /> },
+
           { key: "contas", label: "Contas Bancarias", icon: <Banknote className="h-4 w-4" /> },
           { key: "categorias", label: "Plano de Contas", icon: <Tags className="h-4 w-4" /> },
           { key: "grupos", label: "Grupos de contas", icon: <FolderTree className="h-4 w-4" /> },
@@ -1480,7 +1480,6 @@ export default function FinancePage() {
         </Card>
       )}
 
-      {tab === "recorrentes" && <RecurringPanel />}
 
       {tab === "contas" && (
         <Card className="overflow-hidden p-0">

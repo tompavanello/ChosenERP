@@ -31,22 +31,25 @@ func TestFinancialTransactions_EditInPlace(t *testing.T) {
 			return err
 		}
 
-		// Edita: valor 250, descricao "depois". Mesma conta/data.
+		// Edita: valor 250, descricao "depois" e sinal invertido (estorno).
+		// Mesma conta/data.
 		if _, err := tx.Exec(testCtx, `
 			SELECT fin_tx_edit($1::uuid, $2, $3, $4::numeric, $5, $6, $7, $8, $9,
-				$10, $11, $12::timestamptz, $13, $14, $15, $16)`,
+				$10, $11, $12::timestamptz, $13, $14, $15, $16, $17)`,
 			txID, fixCatA, "income", 250.0, "pix", "", "", "", "",
-			false, "depois", date, fixAccountA, "", "", false); err != nil {
+			false, "depois", date, fixAccountA, "", "", false, -1); err != nil {
 			return err
 		}
 
-		var idOut, desc, hashAfter string
+		var idOut, desc, hashAfter, bankDir string
 		var amount float64
 		var seq *int
+		var signOut int
 		if err := tx.QueryRow(testCtx, `
-			SELECT id::text, amount::float8, COALESCE(description,''), entry_seq, hash
+			SELECT id::text, amount::float8, COALESCE(description,''), entry_seq, hash,
+			       sign, bank_direction
 			FROM financial_transactions WHERE id = $1::uuid`, txID).
-			Scan(&idOut, &amount, &desc, &seq, &hashAfter); err != nil {
+			Scan(&idOut, &amount, &desc, &seq, &hashAfter, &signOut, &bankDir); err != nil {
 			return err
 		}
 		if idOut != txID {
@@ -63,6 +66,9 @@ func TestFinancialTransactions_EditInPlace(t *testing.T) {
 		}
 		if hashAfter == hashBefore {
 			t.Errorf("hash nao foi recalculado")
+		}
+		if signOut != -1 || bankDir != "expense" {
+			t.Errorf("sinal/bank_direction nao foram atualizados: sign=%d bank=%s", signOut, bankDir)
 		}
 
 		// UPDATE direto do papel da aplicacao continua bloqueado.

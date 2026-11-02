@@ -298,7 +298,7 @@ export function MemberBulkGrid({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-tour="member-quick-grid">
       <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
         <table className="w-full min-w-[940px] text-[13px]">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-[10px] uppercase tracking-wider text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
@@ -324,6 +324,7 @@ export function MemberBulkGrid({
                   </td>
                   <td className="px-2 py-1">
                     <Input
+                      data-tour={i === 0 ? "member-bulk-name" : undefined}
                       className="h-8 text-xs"
                       placeholder="Nome e sobrenome"
                       value={`${r.first_name} ${r.last_name}`.trim()}
@@ -535,7 +536,7 @@ export function MemberBulkGrid({
         <Button type="button" variant="ghost" onClick={resetRows} disabled={saving}>
           {isEdit ? "Descartar alteracoes" : "Limpar"}
         </Button>
-        <Button type="button" onClick={submit} disabled={saving || !hasPerm("members.write")}>
+        <Button type="button" data-tour="member-bulk-save" onClick={submit} disabled={saving || !hasPerm("members.write")}>
           {saving ? "Salvando..." : isEdit ? `Salvar ${ready.length || ""}`.trim() : `Cadastrar ${ready.length || ""}`.trim()}
         </Button>
       </div>

@@ -33,11 +33,20 @@ export default function LoginPage() {
   // Branding do subdominio (igreja.dominio) + slug detectado do host.
   const [slug, setSlug] = useState("");
   const [brand, setBrand] = useState<PublicTenant | null>(null);
+  const [expired, setExpired] = useState(false);
 
   useEffect(() => {
     const s = tenantSlugFromHost();
     setSlug(s);
     if (s) getPublicTenant(s).then(setBrand).catch(() => setBrand(null));
+    try {
+      if (localStorage.getItem("chosen_session_expired") === "1") {
+        setExpired(true);
+        localStorage.removeItem("chosen_session_expired");
+      }
+    } catch {
+      /* storage indisponivel */
+    }
   }, []);
 
   async function onSubmit(e: React.FormEvent) {
@@ -94,6 +103,12 @@ export default function LoginPage() {
             </p>
           </div>
         </div>
+
+        {expired && (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+            Sua sessao expirou. Entre novamente para continuar.
+          </div>
+        )}
 
         {pendingSelection ? (
           <div className="card space-y-3">

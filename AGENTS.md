@@ -193,6 +193,37 @@ docker compose -f infra/docker-compose.yml up -d member
   (`users.phone`, normalizado e unico). Senha provisoria (`must_change_password`)
   forca a troca no 1o acesso (tela `/trocar-senha`).
 
+### Central de ajuda, manual e suporte (`000115`)
+
+O produto tem uma **Central de Ajuda** compartilhada pelo webadmin e pelo app do
+membro:
+
+- **Conteudo:** Markdown com frontmatter em `internal/help/content/{webadmin,member}`.
+  O binario embute os arquivos (`internal/help`) e resolve artigos por app, rota,
+  papel, permissao e feature do plano. O manual completo e indexado em
+  `Docs/manual/`.
+- **API:** `GET /api/v1/help/articles`, `GET /api/v1/help/articles/{slug}`,
+  `GET /api/v1/help/context?app=&path=`, `POST /api/v1/help/chat`,
+  `POST /api/v1/help/feedback`. As rotas nao sao gateadas por plano.
+- **IA:** usa `HELP_AI_BASE_URL`/`HELP_AI_API_KEY`/`HELP_AI_MODEL`; sem a chave
+  dedicada cai para `AI_*`. O prompt recebe somente os artigos visiveis + rota,
+  papel e plano, com instrucoes de nao executar acoes nem expor dados sensiveis.
+  Sem chave, a UI usa busca + chamados.
+- **Guia de uso:** modal de primeiro acesso, checklist "Primeiros passos" e
+  tours (`data-tour`) no webadmin; slides no app do membro. O botao **Tour** no
+  topo abre os **Roteiros guiados** (`lib/tours.ts`): cadastrar membro, lancar/
+  configurar financeiro, conciliar/fechar mes, criar evento, visitante,
+  comunicado, escala, administracao geral e administracao da plataforma. Cada
+  etapa pode navegar, abrir o formulario, focar campos e oferecer "Executar e
+  avancar"; a tela continua interativa.
+- **Chamados (`000115`):** `support_tickets`/`support_ticket_messages` com RLS
+  (usuario ve os proprios; Sede ve a igreja; `system`/platform ve tudo). O
+  usuario abre em **Ajuda > Meus chamados**; a plataforma atende em
+  **Plataforma > Suporte**. Ao abrir, a API pode notificar
+  `SUPPORT_EMAIL`/`SUPPORT_WHATSAPP` (Dispatcher global) sem bloquear o chamado.
+- **Feedback:** `help_feedback` guarda "resolveu/nao resolveu" por artigo para o
+  backlog de conteudo.
+
 ### Console da plataforma (admin do SaaS)
 
 `users.is_platform_admin` (`000075`) distingue o operador do SaaS do

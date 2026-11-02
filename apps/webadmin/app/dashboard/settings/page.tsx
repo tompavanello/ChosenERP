@@ -283,7 +283,9 @@ export default function SettingsPage() {
         }
       />
 
+      <div data-tour="settings-tabs">
       <Tabs
+        tourPrefix="settings-tab"
         tabs={[
           { key: "igreja", label: "Dados da igreja", icon: <Church className="h-4 w-4" /> },
           { key: "filiais", label: "Filiais", icon: <Building2 className="h-4 w-4" /> },
@@ -296,6 +298,7 @@ export default function SettingsPage() {
         active={tab}
         onChange={setTab}
       />
+      </div>
 
       {tab === "assinatura" ? (
         <OwnBilling />
@@ -303,10 +306,10 @@ export default function SettingsPage() {
 
       {tab === "igreja" && (
         tenant === null ? <Card className="p-4"><SkeletonRows rows={5} /></Card> : (
-          <Card className="max-w-2xl p-4">
+          <Card className="max-w-2xl p-4" data-tour="settings-church-form">
             <form onSubmit={saveTenant} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Nome da igreja" required className="sm:col-span-2">
-                <Input required disabled={!canWrite} className="h-8 text-sm" value={tenantForm.name} onChange={(e) => setTenantForm({ ...tenantForm, name: e.target.value })} />
+                <Input data-tour="settings-church-name" required disabled={!canWrite} className="h-8 text-sm" value={tenantForm.name} onChange={(e) => setTenantForm({ ...tenantForm, name: e.target.value })} />
               </Field>
               <Field label="Razao social">
                 <Input disabled={!canWrite} className="h-8 text-sm" value={tenantForm.legal_name} onChange={(e) => setTenantForm({ ...tenantForm, legal_name: e.target.value })} />
@@ -357,14 +360,14 @@ export default function SettingsPage() {
               </Field>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 sm:col-span-2">Contribuicoes (Pix)</p>
               <Field label="Chave Pix" hint="Exibida no botao Contribuir do app do membro.">
-                <Input disabled={!canWrite} className="h-8 text-sm" placeholder="CPF/CNPJ, e-mail, telefone ou chave aleatoria" value={tenantForm.pix_key} onChange={(e) => setTenantForm({ ...tenantForm, pix_key: e.target.value })} />
+                <Input data-tour="settings-pix" disabled={!canWrite} className="h-8 text-sm" placeholder="CPF/CNPJ, e-mail, telefone ou chave aleatoria" value={tenantForm.pix_key} onChange={(e) => setTenantForm({ ...tenantForm, pix_key: e.target.value })} />
               </Field>
               <Field label="Nome do beneficiario">
                 <Input disabled={!canWrite} className="h-8 text-sm" placeholder="Razao social / nome da igreja" value={tenantForm.pix_name} onChange={(e) => setTenantForm({ ...tenantForm, pix_name: e.target.value })} />
               </Field>
               {canWrite && (
                 <div className="flex justify-end sm:col-span-2">
-                  <Button type="submit" className="h-8 text-sm" disabled={savingTenant}>{savingTenant ? "Salvando..." : "Salvar"}</Button>
+                  <Button type="submit" data-tour="settings-save" className="h-8 text-sm" disabled={savingTenant}>{savingTenant ? "Salvando..." : "Salvar"}</Button>
                 </div>
               )}
             </form>

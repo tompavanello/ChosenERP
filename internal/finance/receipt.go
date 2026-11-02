@@ -96,8 +96,14 @@ func (r *Repo) updateReceipt(ctx context.Context, tx pgx.Tx, tenantID string, t 
 	if err != nil {
 		return err
 	}
+	return r.updateReceiptDoc(ctx, tx, tenantID, docID, token, t)
+}
+
+// updateReceiptDoc reescreve o conteudo de um recibo comum ja emitido,
+// preservando o documento e o token.
+func (r *Repo) updateReceiptDoc(ctx context.Context, tx pgx.Tx, tenantID, docID, token string, t Transaction) error {
 	content, ref := r.buildReceiptContent(ctx, tx, tenantID, t, token)
-	_, err = tx.Exec(ctx, `
+	_, err := tx.Exec(ctx, `
 		UPDATE documents SET content = $2, document_ref = $3, title = $4
 		WHERE id = $1::uuid`, docID, content, ref, "Recibo "+ref)
 	return err
@@ -175,10 +181,10 @@ func (r *Repo) GetMembershipCard(ctx context.Context, tx pgx.Tx, memberID string
 	return ref, token, nil
 }
 
-// issueReversalReceipt gera o recibo de estorno de uma entrada marcada com a
-// flag de estorno (valor abatido da receita).
-func (r *Repo) issueReversalReceipt(ctx context.Context, tx pgx.Tx, tenantID, branchID string, reversal Transaction) (string, string, string, error) {
-	token := randomToken(12)
+// buildReversalReceiptContent monta o conteudo (JSON) do recibo de estorno e a
+// ref derivada do hash. O token entra no href: novo na emissao, existente na
+// edicao (para o link/QR continuar valido).
+func (r *Repo) buildReversalReceiptContent(ctx context.Context, tx pgx.Tx, tenantID, branchID string, reversal Transaction, token string) ([]byte, string) {
 	ref := "REC-EST-" + hex.EncodeToString([]byte(reversal.Hash))[:8]
 
 	var churchName, churchLegal, churchDoc string
@@ -225,6 +231,14 @@ func (r *Repo) issueReversalReceipt(ctx context.Context, tx pgx.Tx, tenantID, br
 		"church_legal_name": churchLegal,
 		"church_doc":        churchDoc,
 	})
+	return content, ref
+}
+
+// issueReversalReceipt gera o recibo de estorno de uma entrada marcada com a
+// flag de estorno (valor abatido da receita).
+func (r *Repo) issueReversalReceipt(ctx context.Context, tx pgx.Tx, tenantID, branchID string, reversal Transaction) (string, string, string, error) {
+	token := randomToken(12)
+	content, ref := r.buildReversalReceiptContent(ctx, tx, tenantID, branchID, reversal, token)
 
 	var docID string
 	err := tx.QueryRow(ctx, `
@@ -237,6 +251,67 @@ func (r *Repo) issueReversalReceipt(ctx context.Context, tx pgx.Tx, tenantID, br
 		return "", "", "", err
 	}
 	return docID, ref, token, nil
+}
+
+// updateReversalReceipt atualiza um recibo de estorno ja emitido, mantendo o
+// mesmo documento/token (link/QR continuam validos).
+func (r *Repo) updateReversalReceipt(ctx context.Context, tx pgx.Tx, tenantID, branchID, docID, token string, reversal Transaction) error {
+	content, ref := r.buildReversalReceiptContent(ctx, tx, tenantID, branchID, reversal, token)
+	_, err := tx.Exec(ctx, `
+		UPDATE documents SET content = $2, document_ref = $3, title = $4
+		WHERE id = $1::uuid`, docID, content, ref, "Recibo de Estorno "+ref)
+	return err
+}
+
+// syncTxnReceipt mantem o recibo coerente com o sinal apos a edicao. Entrada
+// estornada usa recibo de estorno; os demais lancamentos usam o recibo comum
+// (despesa estornada nao emite recibo, igual ao Create). Quando o tipo do
+// documento muda, o antigo e removido e um novo e emitido; quando permanece o
+// mesmo, o conteudo e atualizado preservando o token.
+func (r *Repo) syncTxnReceipt(ctx context.Context, tx pgx.Tx, tenantID, branchID string, sign int, t Transaction) error {
+	wantKind := "receipt"
+	if sign < 0 {
+		if t.Type == "income" {
+			wantKind = "reversal_receipt"
+		} else {
+			wantKind = ""
+		}
+	}
+
+	var docID, docKind, token string
+	err := tx.QueryRow(ctx, `
+		SELECT id::text, kind, qr_token FROM documents
+		WHERE kind IN ('receipt','reversal_receipt') AND content->>'tx_id' = $1`, t.ID).
+		Scan(&docID, &docKind, &token)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	has := err == nil
+
+	if wantKind == "" {
+		if has {
+			_, err = tx.Exec(ctx, `DELETE FROM documents WHERE id = $1::uuid`, docID)
+			return err
+		}
+		return nil
+	}
+	if has && docKind == wantKind {
+		if wantKind == "reversal_receipt" {
+			return r.updateReversalReceipt(ctx, tx, tenantID, branchID, docID, token, t)
+		}
+		return r.updateReceiptDoc(ctx, tx, tenantID, docID, token, t)
+	}
+	if has {
+		if _, err := tx.Exec(ctx, `DELETE FROM documents WHERE id = $1::uuid`, docID); err != nil {
+			return err
+		}
+	}
+	if wantKind == "reversal_receipt" {
+		_, _, _, err := r.issueReversalReceipt(ctx, tx, tenantID, branchID, t)
+		return err
+	}
+	_, _, _, err = r.issueReceipt(ctx, tx, tenantID, branchID, t)
+	return err
 }
 
 func randomToken(n int) string {

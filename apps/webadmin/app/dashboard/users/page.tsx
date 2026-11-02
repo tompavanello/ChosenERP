@@ -136,7 +136,7 @@ export default function UsersPage() {
       <PageHeader
         title="Usuarios e Acessos"
         description="Crie usuarios, defina perfis e gerencie a seguranca"
-        actions={canManage ? <Button onClick={openCreate}><Plus className="h-4 w-4" /> Novo usuario</Button> : undefined}
+        actions={canManage ? <Button data-tour="users-new" onClick={openCreate}><Plus className="h-4 w-4" /> Novo usuario</Button> : undefined}
       />
 
       <MfaCard />
@@ -193,23 +193,23 @@ export default function UsersPage() {
         title={drawer.editing ? `Editar - ${drawer.editing.full_name}` : "Novo usuario"}
         size="lg"
       >
-        <form onSubmit={submit} className="space-y-3">
+        <form onSubmit={submit} className="space-y-3" data-tour="user-form">
           <Field label="Nome completo *">
-            <Input required className="h-8 text-sm" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
+            <Input data-tour="user-name" required className="h-8 text-sm" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
           </Field>
           {!drawer.editing && (
             <>
               <Field label="E-mail *">
-                <Input required type="email" className="h-8 text-sm" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                <Input data-tour="user-email" required type="email" className="h-8 text-sm" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </Field>
               <Field label="Senha *" hint="Minimo de 8 caracteres.">
-                <Input required type="password" className="h-8 text-sm" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                <Input data-tour="user-password" required type="password" className="h-8 text-sm" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
               </Field>
             </>
           )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Perfil">
-              <Select className="h-8 text-sm" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+              <Select data-tour="user-role" className="h-8 text-sm" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                 {roles.map((r) => <option key={r.key} value={r.key}>{r.name}</option>)}
               </Select>
             </Field>
@@ -228,7 +228,7 @@ export default function UsersPage() {
           </Field>
           <div className="flex justify-end gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
             <Button variant="ghost" type="button" className="h-8 text-sm" onClick={() => setDrawer({ open: false })}>Cancelar</Button>
-            <Button type="submit" className="h-8 text-sm" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
+            <Button type="submit" data-tour="user-save" className="h-8 text-sm" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>
         </form>
       </Drawer>

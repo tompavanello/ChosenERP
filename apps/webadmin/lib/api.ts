@@ -1717,6 +1717,73 @@ export const getContributionDrops = (months = 6, recent = 1) =>
     `/api/v1/reports/contribution-drop?months=${months}&recent=${recent}`,
   );
 
+// ---- Insights (regras deterministicas + narrativa opcional por IA) ----
+export type InsightSeverity = "good" | "info" | "warn" | "critical";
+export interface InsightAction {
+  label: string;
+  href: string;
+}
+export interface Insight {
+  id: string;
+  severity: InsightSeverity;
+  title: string;
+  message: string;
+  metric?: string;
+  benchmark?: string;
+  action?: InsightAction;
+}
+export interface InsightSummary {
+  income: number;
+  expense: number;
+  net: number;
+  cash: number;
+  monthly_expense: number;
+  runway_months: number;
+  expense_ratio: number;
+  donors: number;
+  active_members: number;
+  total_members: number;
+  top10_share: number;
+  recurring_amount: number;
+  recurring_count: number;
+  visitors: number;
+  converted_visitors: number;
+  group_members: number;
+  events: number;
+  participants: number;
+  missing_contact: number;
+  zero_attendance: number;
+  upcoming_without_roster: number;
+  pending_assignments: number;
+  lapsed_givers: number;
+}
+export interface InsightReport {
+  scope: string;
+  from: string;
+  to: string;
+  generated_at: string;
+  summary: InsightSummary;
+  insights: Insight[];
+}
+export const getInsights = (params: { scope?: string; from?: string; to?: string } = {}) => {
+  const q = new URLSearchParams();
+  if (params.scope) q.set("scope", params.scope);
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  const qs = q.toString();
+  return api<InsightReport>(`/api/v1/insights${qs ? `?${qs}` : ""}`);
+};
+export const getInsightNarrative = (params: { scope?: string; from?: string; to?: string } = {}) => {
+  const q = new URLSearchParams();
+  if (params.scope) q.set("scope", params.scope);
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  const qs = q.toString();
+  return api<{ ai_enabled: boolean; narrative: string }>(`/api/v1/insights/narrative${qs ? `?${qs}` : ""}`, {
+    method: "POST",
+  });
+};
+
 // ---- Relatorio de participantes por evento (comparativo ano anterior) ----
 export interface AttendancePeriod {
   from: string;
@@ -3049,6 +3116,12 @@ export interface ChurchEvent {
   /** Origem da ocorrencia: manual (avulso), programacao ou escala. */
   origin: "manual" | "programacao" | "escala";
   origin_id?: string;
+  /** Ministerio dono da ocorrencia (planejamento por area). */
+  owner_ministry_id?: string;
+  owner_ministry_name?: string;
+  status: "planned" | "confirmed" | "cancelled" | "done";
+  /** Data local da ocorrencia na serie (usada para excecoes). */
+  occurrence_date?: string;
   created_at: string;
 }
 export interface EventInvitee {
@@ -3127,6 +3200,29 @@ export const getMemberAppOverview = () =>
   );
 export const deleteEvent = (id: string) =>
   api<{ ok: boolean }>(`/api/v1/events/${id}`, { method: "DELETE" });
+
+// ---- Agenda / scheduler ----
+export const listAgenda = (params: {
+  from?: string; to?: string; kind?: string; ministry?: string; origin?: string; status?: string;
+} = {}) => {
+  const q = new URLSearchParams();
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  if (params.kind) q.set("kind", params.kind);
+  if (params.ministry) q.set("ministry", params.ministry);
+  if (params.origin) q.set("origin", params.origin);
+  if (params.status) q.set("status", params.status);
+  const qs = q.toString();
+  return api<{ events: ChurchEvent[] }>(`/api/v1/agenda${qs ? `?${qs}` : ""}`);
+};
+export const moveAgendaOccurrence = (
+  id: string,
+  data: { starts_at: string; ends_at?: string; scope?: "this" | "this_and_following" | "all" },
+) => api<ChurchEvent>(`/api/v1/agenda/occurrences/${id}/move`, { method: "POST", body: JSON.stringify(data) });
+export const deleteAgendaOccurrence = (id: string, scope: "this" | "all" = "this") =>
+  api<{ ok: boolean }>(`/api/v1/agenda/occurrences/${id}?scope=${scope}`, { method: "DELETE" });
+export const setAgendaStatus = (id: string, status: ChurchEvent["status"]) =>
+  api<ChurchEvent>(`/api/v1/agenda/occurrences/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
 export const listEventAttendance = (id: string) =>
   api<{ attendance: EventAttendance[] }>(`/api/v1/events/${id}/attendance`);
 export const saveEventAttendance = (id: string, participantsCount: number, presentMemberIds: string[]) =>
@@ -3171,6 +3267,8 @@ export interface Programacao {
   notes?: string;
   is_active: boolean;
   sort_order: number;
+  owner_ministry_id?: string;
+  owner_ministry_name?: string;
   created_at: string;
 }
 

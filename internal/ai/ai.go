@@ -51,6 +51,20 @@ type chatRequest struct {
 	Model       string        `json:"model"`
 	Messages    []chatMessage `json:"messages"`
 	Temperature float64       `json:"temperature"`
+	MaxTokens   int           `json:"max_tokens,omitempty"`
+}
+
+// Message e uma mensagem de conversa (role user/assistant/system).
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// Options ajusta a chamada. Zero usa os padroes (modelo do cliente, 0.7).
+type Options struct {
+	Model       string
+	Temperature float64
+	MaxTokens   int
 }
 
 type chatMessage struct {
@@ -69,16 +83,38 @@ type chatResponse struct {
 
 // Chat envia system+user e devolve o texto da resposta.
 func (c *Client) Chat(ctx context.Context, system, user string) (string, error) {
+	return c.ChatMessages(ctx, system, []Message{{Role: "user", Content: user}}, Options{})
+}
+
+// ChatMessages envia um historico de conversa (com system no inicio).
+func (c *Client) ChatMessages(ctx context.Context, system string, msgs []Message, opts Options) (string, error) {
 	if !c.Enabled() {
 		return "", ErrDisabled
 	}
+	model := strings.TrimSpace(opts.Model)
+	if model == "" {
+		model = c.Model
+	}
+	temp := opts.Temperature
+	if temp <= 0 {
+		temp = 0.7
+	}
+	all := make([]chatMessage, 0, len(msgs)+1)
+	if strings.TrimSpace(system) != "" {
+		all = append(all, chatMessage{Role: "system", Content: system})
+	}
+	for _, m := range msgs {
+		role := strings.TrimSpace(m.Role)
+		if role == "" {
+			role = "user"
+		}
+		all = append(all, chatMessage{Role: role, Content: m.Content})
+	}
 	payload, err := json.Marshal(chatRequest{
-		Model: c.Model,
-		Messages: []chatMessage{
-			{Role: "system", Content: system},
-			{Role: "user", Content: user},
-		},
-		Temperature: 0.7,
+		Model:       model,
+		Messages:    all,
+		Temperature: temp,
+		MaxTokens:   opts.MaxTokens,
 	})
 	if err != nil {
 		return "", err

@@ -1,19 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
-} from "recharts";
+import { ArrowDownRight, ArrowUpRight, Scale } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { getAssemblyReport, type AssemblyReport } from "@/lib/api";
 import { currency, monthLabel } from "@/lib/format";
 import { ExportButtons } from "@/components/reports/export-buttons";
+import { ReportToolbar } from "@/components/reports/report-toolbar";
+import { ReportSection } from "@/components/reports/report-section";
+import { KpiCard } from "@/components/reports/kpi-card";
+import { RankedBar } from "@/components/reports/ranked-bar";
+import { WaterfallChart } from "@/components/reports/waterfall-chart";
+import { TrendChart } from "@/components/reports/trend-chart";
+import { COLORS, currencyCompact } from "@/components/reports/chart-theme";
 
 export default function AssemblyReportPage() {
   const { toast } = useToast();
@@ -43,9 +46,11 @@ export default function AssemblyReportPage() {
 
   const bal = report?.balance;
   const months = report?.months ?? [];
-  const income = (bal?.by_category ?? []).filter((c) => c.type === "income");
-  const expense = (bal?.by_category ?? []).filter((c) => c.type === "expense");
-  const monthly = months.map((p) => ({ name: monthLabel(p.month), Entradas: p.income, Saidas: p.expense }));
+  const income = (bal?.by_category ?? []).filter((c) => c.type === "income").map((c) => ({ name: c.category, value: c.total }));
+  const expense = (bal?.by_category ?? []).filter((c) => c.type === "expense").map((c) => ({ name: c.category, value: c.total }));
+  const monthly = months.map((p) => ({ name: monthLabel(p.month), Entradas: p.income, Saidas: p.expense, Resultado: p.net }));
+  const margin = bal && bal.income > 0 ? (bal.net / bal.income) * 100 : 0;
+  const covered = report ? `${report.from} a ${report.to}` : "";
 
   return (
     <div className="page">
@@ -61,12 +66,7 @@ export default function AssemblyReportPage() {
         }
       />
 
-      <Card className="mb-6 flex flex-wrap items-end gap-3">
-        <div><label className="label">De</label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-        <div><label className="label">Ate</label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-        <Button onClick={() => load(from, to)}>Filtrar</Button>
-        <Button variant="ghost" onClick={() => { setFrom(""); setTo(""); load("", ""); }}>Mes atual</Button>
-      </Card>
+      <ReportToolbar from={from} to={to} onFrom={setFrom} onTo={setTo} onChange={load} actions={<span className="text-xs text-zinc-400">{covered}</span>} />
 
       {loading ? (
         <div className="grid gap-4 md:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-24" />)}</div>
@@ -74,19 +74,54 @@ export default function AssemblyReportPage() {
         <p className="text-sm text-zinc-400">Sem dados.</p>
       ) : (
         <>
-          <div className="mb-6 grid gap-4 md:grid-cols-3">
-            <Card><p className="text-sm text-zinc-500">Entradas</p><p className="mt-1 text-2xl font-semibold text-emerald-600">{currency(bal.income)}</p></Card>
-            <Card><p className="text-sm text-zinc-500">Saidas</p><p className="mt-1 text-2xl font-semibold text-red-600">{currency(bal.expense)}</p></Card>
-            <Card><p className="text-sm text-zinc-500">Resultado do periodo</p><p className={`mt-1 text-2xl font-semibold ${bal.net >= 0 ? "text-sky-700" : "text-red-600"}`}>{currency(bal.net)}</p></Card>
+          <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiCard label="Entradas do periodo" value={currency(bal.income)} icon={ArrowUpRight} tone="green" />
+            <KpiCard label="Saidas do periodo" value={currency(bal.expense)} icon={ArrowDownRight} tone="red" />
+            <KpiCard label="Resultado do periodo" value={currency(bal.net)} icon={Scale} tone="sky" />
+            <KpiCard label="Margem de sobra" value={`${margin.toFixed(1)}%`} tone="indigo" hint="resultado / entradas" />
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="mb-4 grid gap-4 lg:grid-cols-2">
+            <ReportSection title="Entradas por conta" subtitle="Prestacao de contas das receitas" insight={income[0] ? `${income[0].name} e a maior receita.` : undefined}>
+              <RankedBar data={income} total={bal.income} color={COLORS.income} emptyLabel="Sem entradas." />
+            </ReportSection>
+            <ReportSection title="Saidas por conta" subtitle="Prestacao de contas das despesas" insight={expense[0] ? `${expense[0].name} e a maior despesa.` : undefined}>
+              <RankedBar data={expense} total={bal.expense} color={COLORS.expense} emptyLabel="Sem saidas." />
+            </ReportSection>
+          </div>
+
+          <div className="mb-4 grid gap-4 lg:grid-cols-2">
+            <ReportSection title="Resumo do resultado" subtitle="Como o periodo fechou">
+              <WaterfallChart
+                items={[
+                  { name: "Entradas", value: bal.income, type: "positive" },
+                  { name: "Saidas", value: -bal.expense, type: "negative" },
+                  { name: "Resultado", value: bal.net, type: "total" },
+                ]}
+                height={200}
+              />
+            </ReportSection>
+            <ReportSection title="Evolucao mensal" subtitle="Entradas, saidas e resultado mes a mes">
+              <TrendChart
+                data={monthly}
+                series={[
+                  { key: "Entradas", label: "Entradas", color: COLORS.income, type: "bar" },
+                  { key: "Saidas", label: "Saidas", color: COLORS.expense, type: "bar" },
+                  { key: "Resultado", label: "Resultado", color: COLORS.net, type: "line" },
+                ]}
+                height={200}
+                format={currencyCompact}
+              />
+            </ReportSection>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
             <Card className="overflow-hidden p-0">
-              <h3 className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-700">Entradas por conta</h3>
+              <h3 className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">Entradas por conta</h3>
               <Table>
                 <THead><TRow><TH>Conta contabil</TH><TH className="text-right">Total</TH></TRow></THead>
                 <TBody>
-                  {income.map((c) => (
+                  {(bal.by_category ?? []).filter((c) => c.type === "income").map((c) => (
                     <TRow key={c.category_id}>
                       <TD>{c.code && <span className="mr-2 text-xs tabular-nums text-zinc-400">{c.code}</span>}{c.category}</TD>
                       <TD className="text-right text-emerald-600">{currency(c.total)}</TD>
@@ -97,11 +132,11 @@ export default function AssemblyReportPage() {
               </Table>
             </Card>
             <Card className="overflow-hidden p-0">
-              <h3 className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-700">Saidas por conta</h3>
+              <h3 className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">Saidas por conta</h3>
               <Table>
                 <THead><TRow><TH>Conta contabil</TH><TH className="text-right">Total</TH></TRow></THead>
                 <TBody>
-                  {expense.map((c) => (
+                  {(bal.by_category ?? []).filter((c) => c.type === "expense").map((c) => (
                     <TRow key={c.category_id}>
                       <TD>{c.code && <span className="mr-2 text-xs tabular-nums text-zinc-400">{c.code}</span>}{c.category}</TD>
                       <TD className="text-right text-red-600">{currency(c.total)}</TD>
@@ -112,23 +147,6 @@ export default function AssemblyReportPage() {
               </Table>
             </Card>
           </div>
-
-          <Card className="mt-6">
-            <h3 className="mb-4 text-sm font-semibold text-zinc-700">Entradas x Saidas por mes</h3>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthly}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#9ca3af" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" width={60} />
-                  <Tooltip formatter={(v: unknown) => currency(Number(v))} />
-                  <Legend />
-                  <Bar dataKey="Entradas" fill="#10b981" />
-                  <Bar dataKey="Saidas" fill="#ef4444" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
         </>
       )}
     </div>

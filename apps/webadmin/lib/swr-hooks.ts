@@ -130,9 +130,11 @@ export function useBalance() {
   );
 }
 
-export function useBranches() {
+export function useBranches(enabled = true) {
+  // `enabled=false` evita chamar /branches antes da sessao ser validada (o que
+  // gerava um 401 desnecessario no console enquanto o /me ainda estava subindo).
   return useSWR<{ branches: Branch[] }>(
-    "branches",
+    enabled ? "branches" : null,
     () => listBranches(),
     { revalidateOnFocus: false, dedupingInterval: 60000 }
   );

@@ -1,26 +1,30 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
-  CartesianGrid, Legend,
-} from "recharts";
+import { ArrowDownRight, ArrowUpRight, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { getDRE, getMonthlyBalance, type DRE, type MonthlyPoint } from "@/lib/api";
 import { currency, monthLabel } from "@/lib/format";
 import { ExportButtons } from "@/components/reports/export-buttons";
-
-const CORES = ["#0ea5e9", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444", "#14b8a6", "#ec4899", "#6366f1", "#84cc16", "#f97316"];
+import { ReportToolbar } from "@/components/reports/report-toolbar";
+import { ReportSection } from "@/components/reports/report-section";
+import { KpiCard } from "@/components/reports/kpi-card";
+import { RankedBar } from "@/components/reports/ranked-bar";
+import { TrendChart } from "@/components/reports/trend-chart";
+import { COLORS, currencyCompact } from "@/components/reports/chart-theme";
 
 function anoAtual() {
   return new Date().getFullYear();
 }
 
+/**
+ * Entradas x Saidas: comparacao por categoria (barras ranqueadas) e evolucao
+ * mensal. As antigas pizzas foram substituidas por barras/composicao, que sao
+ * mais precisas para comparar valores.
+ */
 export default function IncomeExpensePage() {
   const { toast } = useToast();
   const ano = anoAtual();
@@ -47,10 +51,12 @@ export default function IncomeExpensePage() {
     load(from, to);
   }, [load, from, to]);
 
-  const incomePie = (dre?.lines ?? []).filter((l) => l.type === "income" && l.total > 0).map((l) => ({ name: l.category, value: l.total }));
-  const expensePie = (dre?.lines ?? []).filter((l) => l.type === "expense" && l.total > 0).map((l) => ({ name: l.category, value: l.total }));
-  const monthly = series.map((p) => ({ name: monthLabel(p.month), Entradas: p.income, Saidas: p.expense }));
+  const income = (dre?.lines ?? []).filter((l) => l.type === "income").map((l) => ({ name: l.category, value: l.total }));
+  const expense = (dre?.lines ?? []).filter((l) => l.type === "expense").map((l) => ({ name: l.category, value: l.total }));
+  const monthly = series.map((p) => ({ name: monthLabel(p.month), Entradas: p.income, Saidas: p.expense, Resultado: p.net }));
   const cmp = dre?.comparison;
+  const deltaIncome = cmp && cmp.prev_income !== 0 ? ((dre!.income - cmp.prev_income) / Math.abs(cmp.prev_income)) * 100 : 0;
+  const deltaExpense = cmp && cmp.prev_expense !== 0 ? ((dre!.expense - cmp.prev_expense) / Math.abs(cmp.prev_expense)) * 100 : 0;
 
   return (
     <div className="page">
@@ -66,76 +72,76 @@ export default function IncomeExpensePage() {
         }
       />
 
-      <Card className="mb-6 flex flex-wrap items-end gap-3">
-        <div><label className="label">De</label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-        <div><label className="label">Ate</label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-        <Button variant="ghost" onClick={() => { setFrom(`${ano}-01-01`); setTo(`${ano}-12-31`); }}>Ano atual</Button>
-      </Card>
+      <ReportToolbar
+        from={from}
+        to={to}
+        onFrom={setFrom}
+        onTo={setTo}
+        onChange={load}
+        actions={<span className="text-xs text-zinc-400">{dre?.lines.length ?? 0} conta(s)</span>}
+      />
 
       {loading ? (
-        <div className="grid gap-4 lg:grid-cols-2">{[0, 1].map((i) => <Skeleton key={i} className="h-72" />)}</div>
+        <div className="grid gap-4 lg:grid-cols-2">{[0, 1].map((i) => <Skeleton key={i} className="h-48" />)}</div>
       ) : dre ? (
         <>
-          <div className="mb-6 grid gap-6 lg:grid-cols-2">
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Entradas de Recursos</h3>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={incomePie} dataKey="value" nameKey="name" outerRadius={100} label={(e) => e.name}>
-                      {incomePie.map((_, i) => <Cell key={i} fill={CORES[i % CORES.length]} />)}
-                    </Pie>
-                    <Tooltip formatter={(v: unknown) => currency(Number(v))} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Saidas de Recursos</h3>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={expensePie} dataKey="value" nameKey="name" outerRadius={100} label={(e) => e.name}>
-                      {expensePie.map((_, i) => <Cell key={i} fill={CORES[(i + 3) % CORES.length]} />)}
-                    </Pie>
-                    <Tooltip formatter={(v: unknown) => currency(Number(v))} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
+          <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiCard label="Entradas" value={currency(dre.income)} icon={ArrowUpRight} tone="green" delta={deltaIncome} deltaLabel="vs. periodo anterior" />
+            <KpiCard label="Saidas" value={currency(dre.expense)} icon={ArrowDownRight} tone="red" delta={deltaExpense} positiveIsGood={false} deltaLabel="vs. periodo anterior" />
+            <KpiCard label="Resultado" value={currency(dre.net)} icon={Wallet} tone="sky" delta={cmp?.delta_pct} deltaLabel="vs. periodo anterior" />
+            <KpiCard
+              label="Margem de sobra"
+              value={dre.income > 0 ? `${(((dre.income - dre.expense) / dre.income) * 100).toFixed(1)}%` : "-"}
+              tone="indigo"
+              hint="resultado / entradas"
+            />
           </div>
 
-          <Card className="mb-6">
-            <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Entradas x Saidas por mes</h3>
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthly}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#9ca3af" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" width={60} />
-                  <Tooltip formatter={(v: unknown) => currency(Number(v))} />
-                  <Legend />
-                  <Bar dataKey="Entradas" fill="#10b981" />
-                  <Bar dataKey="Saidas" fill="#ef4444" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
+          <div className="mb-4 grid gap-4 lg:grid-cols-2">
+            <ReportSection
+              title="De onde vem a receita?"
+              subtitle="Categorias de entrada ordenadas por volume"
+              insight={income.length > 0 ? `A maior fonte representa ${((income[0].value / Math.max(dre.income, 1)) * 100).toFixed(0)}% das entradas.` : undefined}
+            >
+              <RankedBar data={income} total={dre.income} color={COLORS.income} emptyLabel="Sem entradas no periodo." />
+            </ReportSection>
+            <ReportSection
+              title="Para onde vai o dinheiro?"
+              subtitle="Categorias de saida ordenadas por volume"
+              insight={expense.length > 0 ? `A maior despesa representa ${((expense[0].value / Math.max(dre.expense, 1)) * 100).toFixed(0)}% das saidas.` : undefined}
+            >
+              <RankedBar data={expense} total={dre.expense} color={COLORS.expense} emptyLabel="Sem saidas no periodo." />
+            </ReportSection>
+          </div>
 
-          <Card>
-            <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Comparativo com o periodo anterior</h3>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Comparativo label="Entradas" atual={dre.income} anterior={cmp?.prev_income ?? 0} positivo />
-              <Comparativo label="Saidas" atual={dre.expense} anterior={cmp?.prev_expense ?? 0} />
-              <Comparativo label="Resultado" atual={dre.net} anterior={cmp?.prev_net ?? 0} positivo />
-              <Card>
-                <p className="text-sm text-zinc-500">Variacao do resultado</p>
-                <p className={`mt-1 text-2xl font-semibold ${(cmp?.delta_pct ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                  {(cmp?.delta_pct ?? 0) >= 0 ? "+" : ""}{(cmp?.delta_pct ?? 0).toFixed(1)}%
-                </p>
-              </Card>
-            </div>
-          </Card>
+          <ReportSection
+            title="Entradas, saidas e resultado por mes"
+            subtitle="Barras comparam valores; a linha mostra o resultado do mes"
+            className="mb-4"
+          >
+            <TrendChart
+              data={monthly}
+              series={[
+                { key: "Entradas", label: "Entradas", color: COLORS.income, type: "bar" },
+                { key: "Saidas", label: "Saidas", color: COLORS.expense, type: "bar" },
+                { key: "Resultado", label: "Resultado", color: COLORS.net, type: "line" },
+              ]}
+              format={currencyCompact}
+            />
+          </ReportSection>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Comparativo label="Entradas" atual={dre.income} anterior={cmp?.prev_income ?? 0} positivo />
+            <Comparativo label="Saidas" atual={dre.expense} anterior={cmp?.prev_expense ?? 0} />
+            <Comparativo label="Resultado" atual={dre.net} anterior={cmp?.prev_net ?? 0} positivo />
+            <Card className="p-3">
+              <p className="text-xs text-zinc-500">Variacao do resultado</p>
+              <p className={`mt-1 text-xl font-semibold ${(cmp?.delta_pct ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                {(cmp?.delta_pct ?? 0) >= 0 ? "+" : ""}{(cmp?.delta_pct ?? 0).toFixed(1)}%
+              </p>
+              <p className="mt-1 text-xs text-zinc-400">sobre {currency(cmp?.prev_net ?? 0)}</p>
+            </Card>
+          </div>
         </>
       ) : null}
     </div>
@@ -146,8 +152,8 @@ function Comparativo({ label, atual, anterior, positivo }: { label: string; atua
   const delta = atual - anterior;
   const bom = positivo ? delta >= 0 : delta <= 0;
   return (
-    <Card>
-      <p className="text-sm text-zinc-500">{label}</p>
+    <Card className="p-3">
+      <p className="text-xs text-zinc-500">{label}</p>
       <p className="mt-1 text-xl font-semibold">{currency(atual)}</p>
       <p className={`text-xs ${bom ? "text-emerald-600" : "text-red-600"}`}>
         {delta >= 0 ? "+" : ""}{currency(delta)} vs. anterior ({currency(anterior)})

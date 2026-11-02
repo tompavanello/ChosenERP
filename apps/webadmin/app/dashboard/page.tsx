@@ -2,23 +2,25 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { 
-  ArrowDownRight, ArrowUpRight, Wallet, Users, DoorOpen, 
-  TrendingUp, Activity, UserPlus, BarChart3, HandHeart, FileText 
-} from "lucide-react";
 import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
-} from "recharts";
+  ArrowUpRight, Wallet, Users, DoorOpen,
+  UserPlus, BarChart3, HandHeart,
+} from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
-import { StatCard } from "@/components/ui/stat-card";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/auth-provider";
-import { getBalance, getMonthlyBalance, listMembers, listVisitors, type Balance, type MonthlyPoint } from "@/lib/api";
+import { getBalance, getInsights, getMonthlyBalance, listMembers, listVisitors, type Balance, type Insight, type MonthlyPoint } from "@/lib/api";
 import { currency, monthLabel, number } from "@/lib/format";
 import { ACCOUNT_TYPES } from "@/lib/constants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BirthdaysSummaryCard } from "@/components/reports/birthdays-summary-card";
+import { OnboardingChecklist } from "@/components/help/onboarding";
+import { KpiCard } from "@/components/reports/kpi-card";
+import { InsightList } from "@/components/reports/insight-card";
+import { ReportSection } from "@/components/reports/report-section";
+import { TrendChart } from "@/components/reports/trend-chart";
+import { COLORS, currencyCompact } from "@/components/reports/chart-theme";
 
 // Quick nav shortcuts
 const QUICK_ACTIONS = [
@@ -38,6 +40,7 @@ export default function OverviewPage() {
   const [series, setSeries] = useState<MonthlyPoint[]>([]);
   const [members, setMembers] = useState<number | null>(null);
   const [visitors, setVisitors] = useState<number | null>(null);
+  const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -61,6 +64,11 @@ export default function OverviewPage() {
         setMembers(m);
         setVisitors(v);
       }
+      if (hasPerm("reports.read")) {
+        getInsights({ scope: "all" })
+          .then((r) => setInsights(r.insights.slice(0, 3)))
+          .catch(() => setInsights([]));
+      }
       setLoading(false);
     };
     load().catch(() => setLoading(false));
@@ -83,6 +91,8 @@ export default function OverviewPage() {
   return (
     <div className="page space-y-6">
       <PageHeader title="Visao Geral" description="Resumo operacional e financeiro da sua unidade." />
+
+      <OnboardingChecklist />
 
       {/* Quick Nav Cards */}
       <div className="mb-4">
@@ -108,17 +118,14 @@ export default function OverviewPage() {
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {hasPerm("finance.read") ? (
+        <KpiCard label="Membros" value={members != null ? number(members) : "..."} icon={Users} tone="sky" />
+        <KpiCard label="Visitantes" value={visitors != null ? number(visitors) : "..."} icon={DoorOpen} tone="amber" />
+        {hasPerm("finance.read") && (
           <>
-            <StatCard label="Entradas" value={balance ? currency(balance.income) : "..."} icon={ArrowUpRight} tone="green" />
-            <StatCard label="Saidas" value={balance ? currency(balance.expense) : "..."} icon={ArrowDownRight} tone="red" />
-            <StatCard label="Saldo" value={balance ? currency(balance.net) : "..."} icon={Wallet} tone="sky" />
+            <KpiCard label="Entradas" value={balance ? currency(balance.income) : "..."} icon={ArrowUpRight} tone="green" spark={series.map((p) => p.income)} />
+            <KpiCard label="Saldo" value={balance ? currency(balance.net) : "..."} icon={Wallet} tone="sky" spark={series.map((p) => p.net)} />
           </>
-        ) : (
-          <StatCard label="Membros" value={members != null ? number(members) : "..."} icon={Users} tone="sky" />
         )}
-        <StatCard label="Membros" value={members != null ? number(members) : "..."} icon={Users} tone="sky" />
-        <StatCard label="Visitantes" value={visitors != null ? number(visitors) : "..."} icon={DoorOpen} tone="amber" />
       </div>
 
       {hasPerm("finance.read") && (balance?.by_account_type?.length ?? 0) > 0 && (
@@ -131,38 +138,44 @@ export default function OverviewPage() {
         </div>
       )}
 
+      {/* Diagnostico do periodo (regras deterministicas) */}
+      {hasPerm("reports.read") && insights.length > 0 && (
+        <div className="mt-2">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-zinc-500">O que merece atencao</h3>
+            <Link href="/dashboard/reports/insights" className="text-xs text-sky-600 hover:underline">
+              Ver diagnostico completo {"->"}
+            </Link>
+          </div>
+          <InsightList insights={insights} />
+        </div>
+      )}
+
       {/* Aniversariantes do mes - resumo (total do mes e quantos hoje) */}
       {hasPerm("members.read") && <BirthdaysSummaryCard className="mt-6" />}
 
       {/* Chart */}
       {hasPerm("finance.read") && series.length > 0 && (
-        <Card className="p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-700">
-              <TrendingUp className="h-4 w-4 text-sky-600" /> Evolucao do saldo (mensal)
-            </h3>
-            <span className="flex items-center gap-2 text-xs text-zinc-400">
-              <Activity className="h-3.5 w-3.5" /> {series.length} mes(es)
-            </span>
-          </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="net" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#9ca3af" />
-                <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" width={60} />
-                <Tooltip formatter={(v: unknown) => currency(Number(v))} labelStyle={{ color: "#111" }} />
-                <Area type="monotone" dataKey="Saldo" stroke="#8b5cf6" strokeWidth={2.5} fill="url(#net)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
+        <ReportSection
+          title="Evolucao do saldo (mensal)"
+          subtitle={`${series.length} mes(es) no periodo`}
+          insight={
+            series.length > 1
+              ? `Ultimo mes: ${currency(series[series.length - 1].net)}. Variacao de ${(
+                  ((series[series.length - 1].net - series[series.length - 2].net) /
+                    Math.max(Math.abs(series[series.length - 2].net), 1)) *
+                  100
+                ).toFixed(1)}% sobre o mes anterior.`
+              : undefined
+          }
+        >
+          <TrendChart
+            data={chartData}
+            series={[{ key: "Saldo", label: "Saldo", color: COLORS.net, type: "area" }]}
+            height={260}
+            format={currencyCompact}
+          />
+        </ReportSection>
       )}
 
       {/* Recent activity placeholder */}

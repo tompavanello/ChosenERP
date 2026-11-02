@@ -24,22 +24,26 @@ var Kinds = map[string]bool{
 
 // Programacao e um horario fixo recorrente.
 type Programacao struct {
-	ID              string    `json:"id"`
-	BranchID        string    `json:"branch_id"`
-	Name            string    `json:"name"`
-	Kind            string    `json:"kind"`
-	KindName        *string   `json:"kind_name,omitempty"`
-	KindColor       *string   `json:"kind_color,omitempty"`
+	ID        string  `json:"id"`
+	BranchID  string  `json:"branch_id"`
+	Name      string  `json:"name"`
+	Kind      string  `json:"kind"`
+	KindName  *string `json:"kind_name,omitempty"`
+	KindColor *string `json:"kind_color,omitempty"`
 	// Title e o titulo amigavel (usado quando kind='outro').
-	Title           *string   `json:"title,omitempty"`
-	Weekday         int       `json:"weekday"`
-	StartTime       string    `json:"start_time"` // "HH:MM"
-	DurationMinutes int       `json:"duration_minutes"`
-	Location        *string   `json:"location,omitempty"`
-	Notes           *string   `json:"notes,omitempty"`
-	IsActive        bool      `json:"is_active"`
-	SortOrder       int       `json:"sort_order"`
-	CreatedAt       time.Time `json:"created_at"`
+	Title           *string `json:"title,omitempty"`
+	Weekday         int     `json:"weekday"`
+	StartTime       string  `json:"start_time"` // "HH:MM"
+	DurationMinutes int     `json:"duration_minutes"`
+	Location        *string `json:"location,omitempty"`
+	Notes           *string `json:"notes,omitempty"`
+	IsActive        bool    `json:"is_active"`
+	SortOrder       int     `json:"sort_order"`
+	// OwnerMinistryID e o ministerio responsavel pela serie (usado para a visao
+	// "Minha agenda" e pelo filtro do calendario).
+	OwnerMinistryID   *string   `json:"owner_ministry_id,omitempty"`
+	OwnerMinistryName *string   `json:"owner_ministry_name,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 type CreateInput struct {
@@ -53,6 +57,7 @@ type CreateInput struct {
 	Notes           *string `json:"notes"`
 	IsActive        *bool   `json:"is_active"`
 	SortOrder       *int    `json:"sort_order"`
+	OwnerMinistryID *string `json:"owner_ministry_id"`
 }
 
 type UpdateInput struct {
@@ -66,6 +71,7 @@ type UpdateInput struct {
 	Notes           *string `json:"notes"`
 	IsActive        *bool   `json:"is_active"`
 	SortOrder       *int    `json:"sort_order"`
+	OwnerMinistryID *string `json:"owner_ministry_id"`
 }
 
 type Repo struct{}
@@ -73,13 +79,14 @@ type Repo struct{}
 // cols faz o join de exibicao com o catalogo selado (nome/cor do tipo).
 const cols = `p.id::text, p.branch_id::text, p.name, p.kind, k.name, k.color, p.title,
 	p.weekday, to_char(p.start_time,'HH24:MI'), p.duration_minutes,
-	p.location, p.notes, p.is_active, p.sort_order, p.created_at`
+	p.location, p.notes, p.is_active, p.sort_order, p.created_at,
+	p.owner_ministry_id::text, m.name`
 
 func scan(row pgx.Row) (*Programacao, error) {
 	var p Programacao
 	err := row.Scan(&p.ID, &p.BranchID, &p.Name, &p.Kind, &p.KindName, &p.KindColor, &p.Title,
 		&p.Weekday, &p.StartTime, &p.DurationMinutes, &p.Location, &p.Notes,
-		&p.IsActive, &p.SortOrder, &p.CreatedAt)
+		&p.IsActive, &p.SortOrder, &p.CreatedAt, &p.OwnerMinistryID, &p.OwnerMinistryName)
 	if err != nil {
 		return nil, err
 	}
@@ -92,6 +99,7 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx) ([]Programacao, error) {
 		SELECT `+cols+`
 		FROM programacoes p
 		LEFT JOIN event_kinds k ON k.tenant_id = p.tenant_id AND k.slug = p.kind
+		LEFT JOIN ministries m ON m.id = p.owner_ministry_id
 		ORDER BY p.kind, p.weekday, p.start_time, p.sort_order, p.name`)
 	if err != nil {
 		return nil, err
@@ -113,6 +121,7 @@ func (r *Repo) Get(ctx context.Context, tx pgx.Tx, id string) (*Programacao, err
 		SELECT `+cols+`
 		FROM programacoes p
 		LEFT JOIN event_kinds k ON k.tenant_id = p.tenant_id AND k.slug = p.kind
+		LEFT JOIN ministries m ON m.id = p.owner_ministry_id
 		WHERE p.id = $1::uuid`, id))
 }
 
@@ -133,12 +142,13 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID, actorI
 	err := tx.QueryRow(ctx, `
 		INSERT INTO programacoes
 			(tenant_id, branch_id, name, kind, title, weekday, start_time,
-			 duration_minutes, location, notes, is_active, sort_order, created_by)
+			 duration_minutes, location, notes, is_active, sort_order, owner_ministry_id, created_by)
 		VALUES ($1, $2, $3, $4, NULLIF(btrim($5),''), $6, $7::time, $8, $9, $10,
-			COALESCE($11, true), $12, $13::uuid)
+			COALESCE($11, true), $12, NULLIF($14,'')::uuid, $13::uuid)
 		RETURNING id::text`,
 		tenantID, branchID, strings.TrimSpace(in.Name), kind, str(in.Title), in.Weekday,
-		in.StartTime, dur, in.Location, in.Notes, in.IsActive, order, actorID).Scan(&id)
+		in.StartTime, dur, in.Location, in.Notes, in.IsActive, order, actorID,
+		str(in.OwnerMinistryID)).Scan(&id)
 	if err != nil {
 		return nil, err
 	}
@@ -164,12 +174,13 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, id string, in UpdateInput)
 			notes = COALESCE($8, p.notes),
 			is_active = COALESCE($9, p.is_active),
 			sort_order = COALESCE($10, p.sort_order),
+			owner_ministry_id = COALESCE(NULLIF($13,'')::uuid, p.owner_ministry_id),
 			updated_at = now()
 		WHERE p.id = $1::uuid
 		RETURNING p.id::text`,
 		id, in.Name, kindPtr, in.Weekday, in.StartTime, in.DurationMinutes,
 		in.Location, in.Notes, in.IsActive, in.SortOrder,
-		in.Title != nil, str(in.Title)).Scan(&updatedID)
+		in.Title != nil, str(in.Title), str(in.OwnerMinistryID)).Scan(&updatedID)
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +214,7 @@ func (r *Repo) GenerateEvents(ctx context.Context, tx pgx.Tx, programacaoID, fro
 			title = p.title,
 			kind_id = k.id,
 			notes = p.notes,
+			owner_ministry_id = p.owner_ministry_id,
 			updated_at = now()
 		FROM programacoes p
 		LEFT JOIN event_kinds k ON k.tenant_id = p.tenant_id AND k.slug = p.kind
@@ -210,21 +222,62 @@ func (r *Repo) GenerateEvents(ctx context.Context, tx pgx.Tx, programacaoID, fro
 		  AND (NULLIF($1,'')::uuid IS NULL OR p.id = NULLIF($1,'')::uuid)
 		  AND (e.title IS DISTINCT FROM p.title
 		       OR e.kind_id IS DISTINCT FROM k.id
-		       OR e.notes IS DISTINCT FROM p.notes)`,
+		       OR e.notes IS DISTINCT FROM p.notes
+		       OR e.owner_ministry_id IS DISTINCT FROM p.owner_ministry_id)`,
 		programacaoID)
 	if err != nil {
 		return 0, 0, err
 	}
 	updated = tag.RowsAffected()
 
-	// 2) Insere as ocorrencias novas do periodo.
+	// 2) Remove as ocorrencias marcadas como canceladas na serie.
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM church_events e
+		USING programacao_exceptions x
+		WHERE e.origin = 'programacao' AND e.origin_id = x.programacao_id
+		  AND e.occurrence_date = x.occurrence_date
+		  AND x.action = 'cancel'
+		  AND (NULLIF($1,'')::uuid IS NULL OR x.programacao_id = NULLIF($1,'')::uuid)`,
+		programacaoID); err != nil {
+		return 0, updated, err
+	}
+
+	// 3) Materializa as ocorrencias REMARCADAS (excecao 'move') dentro do periodo.
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO church_events
+			(tenant_id, branch_id, kind_id, title, starts_at, ends_at, attendance_mode, notes,
+			 created_by, origin, origin_id, owner_ministry_id, occurrence_date)
+		SELECT p.tenant_id, p.branch_id, k.id, p.title, x.new_starts_at,
+		       COALESCE(x.new_ends_at,
+		                x.new_starts_at + make_interval(mins => p.duration_minutes)),
+		       'nominal', p.notes, $4::uuid, 'programacao', p.id,
+		       p.owner_ministry_id, x.occurrence_date
+		FROM programacao_exceptions x
+		JOIN programacoes p ON p.id = x.programacao_id
+		LEFT JOIN event_kinds k ON k.tenant_id = p.tenant_id AND k.slug = p.kind
+		WHERE x.action = 'move'
+		  AND x.occurrence_date BETWEEN $2::date AND $3::date
+		  AND (NULLIF($1,'')::uuid IS NULL OR p.id = NULLIF($1,'')::uuid)
+		  AND rls_write(p.tenant_id, p.branch_id, false)
+		  AND NOT EXISTS (
+		      SELECT 1 FROM church_events e
+		      WHERE e.origin = 'programacao' AND e.origin_id = p.id
+		        AND e.occurrence_date = x.occurrence_date
+		  )`,
+		programacaoID, from, to, actorID); err != nil {
+		return 0, updated, err
+	}
+
+	// 4) Insere as ocorrencias novas do periodo (ignorando canceladas/remarcadas).
 	tag2, err := tx.Exec(ctx, `
 		INSERT INTO church_events
-			(tenant_id, branch_id, kind_id, title, starts_at, ends_at, attendance_mode, notes, created_by, origin, origin_id)
+			(tenant_id, branch_id, kind_id, title, starts_at, ends_at, attendance_mode, notes,
+			 created_by, origin, origin_id, owner_ministry_id, occurrence_date)
 		SELECT p.tenant_id, p.branch_id, k.id, p.title,
 		       ((g.d::date + p.start_time) AT TIME ZONE tz.tz),
 		       ((g.d::date + p.start_time + make_interval(mins => p.duration_minutes)) AT TIME ZONE tz.tz),
-		       'nominal', p.notes, $4::uuid, 'programacao', p.id
+		       'nominal', p.notes, $4::uuid, 'programacao', p.id,
+		       p.owner_ministry_id, g.d::date
 		FROM programacoes p
 		LEFT JOIN event_kinds k ON k.tenant_id = p.tenant_id AND k.slug = p.kind
 		CROSS JOIN LATERAL (
@@ -237,9 +290,14 @@ func (r *Repo) GenerateEvents(ctx context.Context, tx pgx.Tx, programacaoID, fro
 		  AND (NULLIF($1,'')::uuid IS NULL OR p.id = NULLIF($1,'')::uuid)
 		  AND EXTRACT(DOW FROM g.d)::int = p.weekday
 		  AND NOT EXISTS (
+		      SELECT 1 FROM programacao_exceptions x
+		      WHERE x.programacao_id = p.id AND x.occurrence_date = g.d::date
+		        AND x.action IN ('cancel','move')
+		  )
+		  AND NOT EXISTS (
 		      SELECT 1 FROM church_events e
 		      WHERE e.origin = 'programacao' AND e.origin_id = p.id
-		        AND e.starts_at = ((g.d::date + p.start_time) AT TIME ZONE tz.tz)
+		        AND e.occurrence_date = g.d::date
 		  )`,
 		programacaoID, from, to, actorID)
 	if err != nil {

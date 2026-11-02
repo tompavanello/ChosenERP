@@ -196,7 +196,7 @@ export default function RostersPage() {
       <PageHeader
         title="Escalas"
         description="Convocacao de voluntarios, confirmacao de presenca e conflito de agenda"
-        actions={canWrite ? <Button onClick={openCreate}><Plus className="h-4 w-4" /> Nova escala</Button> : undefined}
+        actions={canWrite ? <Button data-tour="rosters-new" onClick={openCreate}><Plus className="h-4 w-4" /> Nova escala</Button> : undefined}
       />
 
       <Card className="mb-4 flex flex-wrap items-end gap-3">
@@ -233,7 +233,7 @@ export default function RostersPage() {
                   <TD><Badge tone={STATUS_TONE[r.status]}>{r.status}</Badge></TD>
                   <TD>
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" className="h-8 px-2" title="Gerenciar escalados" onClick={() => openManage(r)}><Users className="h-4 w-4" /></Button>
+                      <Button variant="ghost" data-tour="roster-manage" className="h-8 px-2" title="Gerenciar escalados" onClick={() => openManage(r)}><Users className="h-4 w-4" /></Button>
                       {canWrite && <Button variant="ghost" className="h-8 px-2" title="Editar" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>}
                       {canWrite && <Button variant="ghost" className="h-8 px-2" title="Excluir" onClick={() => setDeleteTarget(r)}><Trash2 className="h-4 w-4" /></Button>}
                     </div>
@@ -247,9 +247,9 @@ export default function RostersPage() {
 
       {/* Drawer criar/editar */}
       <Drawer open={drawer.open} onClose={() => setDrawer({ open: false })} size="xl" title={drawer.editing ? "Editar escala" : "Nova escala"}>
-        <form onSubmit={saveRoster} className="space-y-3">
+        <form onSubmit={saveRoster} className="space-y-3" data-tour="roster-form">
           <Field label="Titulo" required>
-            <Input required className="h-8 text-sm" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <Input data-tour="roster-title" required className="h-8 text-sm" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           </Field>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Ministerio">
@@ -286,7 +286,7 @@ export default function RostersPage() {
               </span>
             </label>
             <Field label="Inicio" required>
-              <Input required type="datetime-local" className="h-8 text-sm" value={form.starts_at} onChange={(e) => setForm({ ...form, starts_at: e.target.value })} />
+              <Input data-tour="roster-start" required type="datetime-local" className="h-8 text-sm" value={form.starts_at} onChange={(e) => setForm({ ...form, starts_at: e.target.value })} />
             </Field>
             <Field label="Termino">
               <Input type="datetime-local" className="h-8 text-sm" value={form.ends_at} onChange={(e) => setForm({ ...form, ends_at: e.target.value })} />
@@ -308,7 +308,7 @@ export default function RostersPage() {
           </Field>
           <div className="flex justify-end gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
             <Button variant="ghost" type="button" className="h-8 text-sm" onClick={() => setDrawer({ open: false })}>Cancelar</Button>
-            <Button type="submit" className="h-8 text-sm" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
+            <Button type="submit" data-tour="roster-save" className="h-8 text-sm" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>
         </form>
       </Drawer>

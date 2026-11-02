@@ -52,6 +52,11 @@ type Event struct {
 	// aponta para a definicao de origem (sem FK - origem polimorfica).
 	Origin   string  `json:"origin"`
 	OriginID *string `json:"origin_id,omitempty"`
+	// Dono e situacao da ocorrencia na agenda (planejamento por ministerio).
+	OwnerMinistryID   *string `json:"owner_ministry_id,omitempty"`
+	OwnerMinistryName *string `json:"owner_ministry_name,omitempty"`
+	Status            string  `json:"status"`
+	OccurrenceDate    *string `json:"occurrence_date,omitempty"`
 	// MyRSVP e a resposta do membro logado ("going"/"maybe"/"declined"); so e
 	// preenchido nas rotas /me/events.
 	MyRSVP    *string   `json:"my_rsvp,omitempty"`
@@ -67,6 +72,8 @@ type CreateInput struct {
 	AttendanceMode    *string  `json:"attendance_mode"`
 	EstimatedCost     *float64 `json:"estimated_cost"`
 	Notes             *string  `json:"notes"`
+	OwnerMinistryID   *string  `json:"owner_ministry_id"`
+	Status            *string  `json:"status"`
 }
 
 type UpdateInput struct {
@@ -78,6 +85,8 @@ type UpdateInput struct {
 	AttendanceMode    *string  `json:"attendance_mode"`
 	EstimatedCost     *float64 `json:"estimated_cost"`
 	Notes             *string  `json:"notes"`
+	OwnerMinistryID   *string  `json:"owner_ministry_id"`
+	Status            *string  `json:"status"`
 }
 
 // Invitee e uma pessoa ou ministerio convocado para o evento.
@@ -141,13 +150,15 @@ const eventCols = `e.id::text, e.branch_id::text, e.kind_id::text, k.name, e.tit
 	e.attendance_mode, e.estimated_cost::float8,
 	(SELECT count(*) FROM event_invitees i WHERE i.event_id = e.id)::int,
 	(SELECT COALESCE(SUM(a.amount),0) FROM financial_event_allocations a WHERE a.event_id = e.id)::float8,
-	e.notes, e.origin, e.origin_id::text, e.created_at`
+	e.notes, e.origin, e.origin_id::text, e.owner_ministry_id::text, m.name, e.status,
+	e.occurrence_date::text, e.created_at`
 
 func scanEvent(row pgx.Row) (*Event, error) {
 	var e Event
 	err := row.Scan(&e.ID, &e.BranchID, &e.KindID, &e.KindName, &e.Title, &e.StartsAt, &e.EndsAt,
 		&e.ParticipantsCount, &e.AttendanceCount, &e.AttendanceMode, &e.EstimatedCost,
-		&e.InvitedCount, &e.CostActual, &e.Notes, &e.Origin, &e.OriginID, &e.CreatedAt)
+		&e.InvitedCount, &e.CostActual, &e.Notes, &e.Origin, &e.OriginID,
+		&e.OwnerMinistryID, &e.OwnerMinistryName, &e.Status, &e.OccurrenceDate, &e.CreatedAt)
 	return &e, err
 }
 
@@ -156,6 +167,7 @@ func (r *Repo) ListEvents(ctx context.Context, tx pgx.Tx, from, to, kindID strin
 		SELECT `+eventCols+`
 		FROM church_events e
 		LEFT JOIN event_kinds k ON k.id = e.kind_id
+		LEFT JOIN ministries m ON m.id = e.owner_ministry_id
 		WHERE ($1 = '' OR e.starts_at::date >= $1::date)
 		  AND ($2 = '' OR e.starts_at::date <= $2::date)
 		  AND ($3 = '' OR e.kind_id = $3::uuid)
@@ -180,6 +192,7 @@ func (r *Repo) GetEvent(ctx context.Context, tx pgx.Tx, id string) (*Event, erro
 		SELECT `+eventCols+`
 		FROM church_events e
 		LEFT JOIN event_kinds k ON k.id = e.kind_id
+		LEFT JOIN ministries m ON m.id = e.owner_ministry_id
 		WHERE e.id = $1::uuid`, id))
 }
 
@@ -202,10 +215,14 @@ func (r *Repo) CreateEvent(ctx context.Context, tx pgx.Tx, tenantID, branchID, a
 		mode = *in.AttendanceMode
 	}
 	err = tx.QueryRow(ctx, `
-		INSERT INTO church_events (tenant_id, branch_id, kind_id, starts_at, ends_at, participants_count, attendance_mode, estimated_cost, notes, title, created_by)
-		VALUES ($1, NULLIF($2,'')::uuid, NULLIF($3,'')::uuid, $4, $5, $6, $7, $8, $9, NULLIF($11,''), $10::uuid)
+		INSERT INTO church_events
+			(tenant_id, branch_id, kind_id, starts_at, ends_at, participants_count, attendance_mode,
+			 estimated_cost, notes, title, created_by, owner_ministry_id, status)
+		VALUES ($1, NULLIF($2,'')::uuid, NULLIF($3,'')::uuid, $4, $5, $6, $7, $8, $9,
+			NULLIF($11,''), $10::uuid, NULLIF($12,'')::uuid, COALESCE(NULLIF($13,''),'planned'))
 		RETURNING id::text`,
-		tenantID, branchID, str(in.KindID), starts, ends, in.ParticipantsCount, mode, in.EstimatedCost, in.Notes, actorID, str(in.Title)).Scan(&newID)
+		tenantID, branchID, str(in.KindID), starts, ends, in.ParticipantsCount, mode, in.EstimatedCost,
+		in.Notes, actorID, str(in.Title), str(in.OwnerMinistryID), str(in.Status)).Scan(&newID)
 	if err != nil {
 		return nil, err
 	}
@@ -239,13 +256,38 @@ func (r *Repo) UpdateEvent(ctx context.Context, tx pgx.Tx, id string, in UpdateI
 			attendance_mode = COALESCE($8, e.attendance_mode),
 			estimated_cost = COALESCE($9, e.estimated_cost),
 			title = CASE WHEN $10::boolean THEN NULLIF(btrim($11),'') ELSE e.title END,
+			owner_ministry_id = CASE WHEN $12::boolean THEN NULLIF($13,'')::uuid ELSE e.owner_ministry_id END,
+			status = COALESCE(NULLIF($14,''), e.status),
 			updated_at = now()
 		WHERE e.id = $1::uuid
 		RETURNING e.id::text`,
 		id, in.KindID != nil, str(in.KindID), startsPtr, endsPtr, in.ParticipantsCount, in.Notes,
-		in.AttendanceMode, in.EstimatedCost, in.Title != nil, str(in.Title)).Scan(&updatedID)
+		in.AttendanceMode, in.EstimatedCost, in.Title != nil, str(in.Title),
+		in.OwnerMinistryID != nil, str(in.OwnerMinistryID), str(in.Status)).Scan(&updatedID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Se o horario de uma ocorrencia de serie mudou, grava a excecao para que a
+	// proxima publicacao da grade nao recrie a ocorrencia no horario antigo.
+	if startsPtr != nil {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO programacao_exceptions
+				(tenant_id, branch_id, programacao_id, occurrence_date, action,
+				 new_starts_at, new_ends_at)
+			SELECT e.tenant_id, e.branch_id, e.origin_id,
+			       COALESCE(e.occurrence_date,
+			                (e.starts_at AT TIME ZONE COALESCE(NULLIF(t.timezone,''),'America/Sao_Paulo'))::date),
+			       'move', e.starts_at, e.ends_at
+			FROM church_events e
+			JOIN tenants t ON t.id = e.tenant_id
+			WHERE e.id = $1::uuid AND e.origin = 'programacao' AND e.origin_id IS NOT NULL
+			ON CONFLICT (programacao_id, occurrence_date) DO UPDATE SET
+				action = 'move',
+				new_starts_at = EXCLUDED.new_starts_at,
+				new_ends_at = EXCLUDED.new_ends_at`, updatedID); err != nil {
+			return nil, err
+		}
 	}
 	return r.GetEvent(ctx, tx, updatedID)
 }

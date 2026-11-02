@@ -100,6 +100,13 @@ type Config struct {
 	AIBaseURL string
 	AIAPIKey  string
 	AIModel   string
+	// IA dedicada da Central de Ajuda. Sem HELP_AI_API_KEY cai para AI_*.
+	HelpAIBaseURL string
+	HelpAIAPIKey  string
+	HelpAIModel   string
+	// Destino da notificacao de novos chamados (inbox interno e o principal).
+	SupportEmail    string
+	SupportWhatsApp string
 	// api.bible (Biblia licenciada). Sem API_BIBLE_KEY o recurso fica off.
 	APIBibleKey     string
 	APIBibleBaseURL string
@@ -200,6 +207,11 @@ func Load() Config {
 		AIBaseURL:       getenv("AI_BASE_URL", ""),
 		AIAPIKey:        getenv("AI_API_KEY", ""),
 		AIModel:         getenv("AI_MODEL", "gpt-4o-mini"),
+		HelpAIBaseURL:   getenv("HELP_AI_BASE_URL", ""),
+		HelpAIAPIKey:    getenv("HELP_AI_API_KEY", ""),
+		HelpAIModel:     getenv("HELP_AI_MODEL", "gpt-4o-mini"),
+		SupportEmail:    getenv("SUPPORT_EMAIL", ""),
+		SupportWhatsApp: getenv("SUPPORT_WHATSAPP", ""),
 		APIBibleKey:     getenv("API_BIBLE_KEY", ""),
 		APIBibleBaseURL: getenv("API_BIBLE_BASE_URL", ""),
 

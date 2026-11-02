@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Activity, ChevronRight, Save } from "lucide-react";
+import { Activity, ChevronRight, CircleHelp, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/input";
@@ -169,6 +169,15 @@ export default function PerfilPage() {
         <Card className="flex items-center justify-between">
           <span className="flex items-center gap-2 text-sm font-medium">
             <Activity className="h-4 w-4 text-[var(--brand)]" /> Minha frequência
+          </span>
+          <ChevronRight className="h-4 w-4 text-[var(--muted)]" />
+        </Card>
+      </Link>
+
+      <Link href="/ajuda" className="block">
+        <Card className="flex items-center justify-between">
+          <span className="flex items-center gap-2 text-sm font-medium">
+            <CircleHelp className="h-4 w-4 text-[var(--brand)]" /> Central de ajuda
           </span>
           <ChevronRight className="h-4 w-4 text-[var(--muted)]" />
         </Card>

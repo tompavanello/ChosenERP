@@ -190,6 +190,12 @@ services:
       AI_BASE_URL: ${AI_BASE_URL:-}
       AI_API_KEY: ${AI_API_KEY:-}
       AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
+      # Central de ajuda: IA dedicada (fallback para AI_*) e notificacao de chamados.
+      HELP_AI_BASE_URL: ${HELP_AI_BASE_URL:-}
+      HELP_AI_API_KEY: ${HELP_AI_API_KEY:-}
+      HELP_AI_MODEL: ${HELP_AI_MODEL:-gpt-4o-mini}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      SUPPORT_WHATSAPP: ${SUPPORT_WHATSAPP:-}
       API_BIBLE_KEY: ${API_BIBLE_KEY:-}
       API_BIBLE_BASE_URL: ${API_BIBLE_BASE_URL:-}
       # Backup por igreja: diretorio persistente dos pacotes .zip.

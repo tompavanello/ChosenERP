@@ -16,7 +16,9 @@
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.10.1",
+    "remark-gfm": "^4.0.1",
     "swr": "^2.5.1",
     "tailwind-merge": "^2.6.1"
   },

@@ -25,6 +25,7 @@ export default function ReconciliationPage() {
         description="Concilie lancamentos, encerre o periodo pelo proprio conciliador e importe o extrato bancario na aba Bancaria."
       />
       <Tabs
+        tourPrefix="recon-tab"
         tabs={[
           { key: "lancamentos", label: "Lancamentos", icon: <ListChecks className="h-4 w-4" /> },
           { key: "periodo", label: "Periodos", icon: <ClipboardCheck className="h-4 w-4" /> },

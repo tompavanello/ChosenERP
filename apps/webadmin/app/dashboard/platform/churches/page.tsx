@@ -75,7 +75,7 @@ export default function PlatformChurchesPage() {
         title="Igrejas"
         description="Console da plataforma: crie, edite, ajuste plano/limites e suspenda igrejas."
         actions={
-          <Button onClick={() => setNewOpen(true)}>
+          <Button data-tour="platform-new-church" onClick={() => setNewOpen(true)}>
             <Plus className="h-4 w-4" /> Nova igreja
           </Button>
         }
@@ -134,21 +134,21 @@ export default function PlatformChurchesPage() {
 
       {/* Criar igreja */}
       <Drawer open={newOpen} onClose={() => setNewOpen(false)} title="Nova igreja">
-        <form onSubmit={submitNew} className="space-y-3">
+        <form onSubmit={submitNew} className="space-y-3" data-tour="platform-church-form">
           <Field label="Nome da igreja *">
-            <Input required className="h-8 text-sm" value={newForm.name} onChange={(e) => setNewForm({ ...newForm, name: e.target.value })} />
+            <Input data-tour="platform-church-name" required className="h-8 text-sm" value={newForm.name} onChange={(e) => setNewForm({ ...newForm, name: e.target.value })} />
           </Field>
           <Field label="Subdominio (slug) *" hint={`Ex.: matriz -> matriz.${BASE_DOMAIN}`}>
-            <Input required className="h-8 text-sm" value={newForm.slug} onChange={(e) => setNewForm({ ...newForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, "-") })} />
+            <Input data-tour="platform-church-slug" required className="h-8 text-sm" value={newForm.slug} onChange={(e) => setNewForm({ ...newForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, "-") })} />
           </Field>
           <Field label="Plano">
-            <Select className="h-8 text-sm" value={newForm.plan} onChange={(e) => setNewForm({ ...newForm, plan: e.target.value })}>
+            <Select data-tour="platform-church-plan" className="h-8 text-sm" value={newForm.plan} onChange={(e) => setNewForm({ ...newForm, plan: e.target.value })}>
               {plans.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
             </Select>
           </Field>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Primeiro super_admin</p>
           <Field label="Nome do admin *">
-            <Input required className="h-8 text-sm" value={newForm.admin_name} onChange={(e) => setNewForm({ ...newForm, admin_name: e.target.value })} />
+            <Input data-tour="platform-church-admin" required className="h-8 text-sm" value={newForm.admin_name} onChange={(e) => setNewForm({ ...newForm, admin_name: e.target.value })} />
           </Field>
           <Field label="E-mail do admin *">
             <Input required type="email" className="h-8 text-sm" value={newForm.admin_email} onChange={(e) => setNewForm({ ...newForm, admin_email: e.target.value })} />
@@ -158,7 +158,7 @@ export default function PlatformChurchesPage() {
           </Field>
           <div className="flex justify-end gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
             <Button variant="ghost" type="button" className="h-8 text-sm" onClick={() => setNewOpen(false)}>Cancelar</Button>
-            <Button type="submit" className="h-8 text-sm" disabled={savingNew}>{savingNew ? "Criando..." : "Criar igreja"}</Button>
+            <Button type="submit" data-tour="platform-church-save" className="h-8 text-sm" disabled={savingNew}>{savingNew ? "Criando..." : "Criar igreja"}</Button>
           </div>
         </form>
       </Drawer>

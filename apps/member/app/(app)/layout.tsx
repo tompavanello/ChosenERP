@@ -13,6 +13,9 @@ import {
   VISITOR_ROLE,
   type PublicTenant,
 } from "@/lib/api";
+import { HelpProvider } from "@/components/help/help-provider";
+import { HelpButton } from "@/components/help/help-button";
+import { MemberWelcome } from "@/components/help/member-welcome";
 
 const MEMBER_NAV = [
   { href: "/home", label: "Inicio", icon: Home },
@@ -74,6 +77,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const nav = isVisitor ? VISITOR_NAV : MEMBER_NAV;
 
   return (
+    <HelpProvider>
     <div
       className="mx-auto flex min-h-screen max-w-md flex-col bg-[var(--paper)]"
       style={brand ? ({ ["--brand" as string]: brand } as React.CSSProperties) : undefined}
@@ -93,9 +97,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {isVisitor && <span className="ml-2 rounded-full bg-black/5 px-2 py-0.5 text-[10px] text-[var(--muted)]">Visitante</span>}
           </span>
         </div>
-        <button onClick={logout} className="text-[var(--muted)]" aria-label="Sair">
-          <LogOut className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-3">
+          <HelpButton />
+          <button onClick={logout} className="text-[var(--muted)]" aria-label="Sair">
+            <LogOut className="h-5 w-5" />
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 px-4 pb-24 pt-4">{children}</main>
@@ -118,5 +125,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         })}
       </nav>
     </div>
+    <MemberWelcome />
+    </HelpProvider>
   );
 }

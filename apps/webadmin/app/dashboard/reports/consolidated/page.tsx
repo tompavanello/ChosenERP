@@ -11,12 +11,15 @@ import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { StatCard } from "@/components/ui/stat-card";
 import { EmptyState, Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
 import { getConsolidated, type ConsolidatedResult } from "@/lib/api";
 import { currency, number } from "@/lib/format";
+import { ReportSection } from "@/components/reports/report-section";
+import { KpiCard } from "@/components/reports/kpi-card";
+import { RankedBar } from "@/components/reports/ranked-bar";
+import { COLORS } from "@/components/reports/chart-theme";
 
 const KIND_LABEL: Record<string, string> = {
   matriz: "Matriz",
@@ -75,28 +78,36 @@ export default function ConsolidatedReportPage() {
       ) : (
         <>
           <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <StatCard label="Filiais" value={number(data.branches.length)} />
-            <StatCard label="Membros" value={number(data.totals.member_count)} />
-            <StatCard label="Visitantes" value={number(data.totals.visitor_count)} />
-            <StatCard label="Entradas" value={currency(data.totals.income)} />
-            <StatCard label="Saldo" value={currency(data.totals.net)} />
+            <KpiCard label="Filiais" value={number(data.branches.length)} tone="zinc" />
+            <KpiCard label="Membros" value={number(data.totals.member_count)} tone="sky" />
+            <KpiCard label="Visitantes" value={number(data.totals.visitor_count)} tone="amber" />
+            <KpiCard label="Entradas" value={currency(data.totals.income)} tone="green" />
+            <KpiCard label="Saldo" value={currency(data.totals.net)} tone="indigo" />
           </div>
 
           {chartData.length > 0 && (
-            <Card className="mb-4 p-4">
-              <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Entradas x Saidas por filial</h3>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v) => currency(Number(v))} />
-                  <Legend />
-                  <Bar dataKey="Entradas" fill="#0ea5e9" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="Saidas" fill="#f97316" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
+            <div className="mb-4 grid gap-4 lg:grid-cols-2">
+              <ReportSection title="Entradas x saidas por filial" subtitle="Comparacao direta entre unidades">
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(v) => currency(Number(v))} />
+                    <Legend />
+                    <Bar dataKey="Entradas" fill="#10b981" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="Saidas" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ReportSection>
+              <ReportSection title="Saldo por filial" subtitle="Ranking do resultado no periodo" insight="Filiais negativas pedem revisao de despesas e repasses.">
+                <RankedBar
+                  data={data.branches.map((b) => ({ name: b.name, value: b.net }))}
+                  total={Math.abs(data.totals.net)}
+                  color={COLORS.net}
+                />
+              </ReportSection>
+            </div>
           )}
 
           <Card className="overflow-hidden p-0">

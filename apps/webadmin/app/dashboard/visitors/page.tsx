@@ -118,7 +118,7 @@ export default function VisitorsPage() {
       <PageHeader
         title="Visitantes"
         description="Trilha de acolhimento e conversao"
-        actions={<Button onClick={() => setOpen(true)}><UserPlus className="h-4 w-4" /> Novo Visitante</Button>}
+        actions={<Button data-tour="visitors-new" onClick={() => setOpen(true)}><UserPlus className="h-4 w-4" /> Novo Visitante</Button>}
       />
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
@@ -176,7 +176,7 @@ export default function VisitorsPage() {
                       <TD className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           {v.journey_stage === "converted" && (
-                            <Button variant="ghost" size="sm" onClick={() => { setConvertVisitor(v); setConvertOpen(true); }} title="Converter para membro">
+                            <Button variant="ghost" data-tour="visitor-convert" size="sm" onClick={() => { setConvertVisitor(v); setConvertOpen(true); }} title="Converter para membro">
                               <UserCheck className="h-3.5 w-3.5 text-green-600" />
                             </Button>
                           )}
@@ -201,11 +201,11 @@ export default function VisitorsPage() {
       </Card>
 
       <Drawer open={open} onClose={() => setOpen(false)} title="Novo Visitante">
-        <form onSubmit={add} className="grid grid-cols-2 gap-3">
-          <Field label="Nome *"><Input required value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} /></Field>
+        <form onSubmit={add} className="grid grid-cols-2 gap-3" data-tour="visitor-form">
+          <Field label="Nome *"><Input data-tour="visitor-name" required value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} /></Field>
           <Field label="Sobrenome *"><Input required value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} /></Field>
           <Field label="E-mail" className="col-span-2"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-          <Field label="Telefone"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+          <Field label="Telefone"><Input data-tour="visitor-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
           <Field label="WhatsApp"><Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} /></Field>
           <Field label="Como nos conheceu?" className="col-span-2">
             <Select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>
@@ -215,7 +215,7 @@ export default function VisitorsPage() {
           </Field>
           <div className="col-span-2 flex justify-end gap-2 pt-2">
             <Button variant="ghost" type="button" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button type="submit">Salvar</Button>
+            <Button type="submit" data-tour="visitor-save">Salvar</Button>
           </div>
         </form>
       </Drawer>

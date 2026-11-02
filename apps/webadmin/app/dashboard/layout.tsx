@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  Church, LayoutDashboard, Users, Wallet, LogOut, HeartHandshake, DoorOpen,
-  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, PieChart, TrendingUp, TrendingDown, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, CalendarCheck, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight, Globe, Layers, BookOpen, BookMarked, BookText, Play, Radio, Inbox, Smartphone, CreditCard, DatabaseBackup, ScrollText,
+  Church, LayoutDashboard, Users, Wallet, LogOut, HeartHandshake, DoorOpen, CircleHelp, LifeBuoy,
+  BarChart3, Menu, Building2, ArrowLeftRight, Bell, Cake, TrendingUp, TrendingDown, UserCog, FileSpreadsheet, CalendarDays, Gavel, Settings, CalendarClock, CalendarHeart, CalendarCheck, Baby, Truck, ShieldCheck, ClipboardCheck, ChevronDown, ChevronRight, Globe, Layers, BookOpen, BookMarked, BookText, Play, Radio, Inbox, Smartphone, CreditCard, DatabaseBackup, ScrollText, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -14,6 +14,10 @@ import { getBranchContext, setBranchContext } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar } from "@/components/ui/avatar";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { HelpProvider } from "@/components/help/help-provider";
+import { HelpButton } from "@/components/help/help-button";
+import { TourButton } from "@/components/help/tour-button";
+import { OnboardingChecklist, TourOverlay, WelcomeGuide } from "@/components/help/onboarding";
 
 type NavItem = {
   key: string;
@@ -86,6 +90,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
   {
     title: "Relatorios",
     items: [
+      { key: "rep-insights", href: "/dashboard/reports/insights", label: "Diagnostico e insights", icon: Sparkles, perms: ["reports.read"], feature: "reports" },
       { key: "rep-balance", href: "/dashboard/reports/balance", label: "Balancete mensal", icon: BarChart3, perms: ["finance.read"], feature: "reports" },
       { key: "rep-dre", href: "/dashboard/reports/dre", label: "DRE", icon: TrendingUp, perms: ["finance.read"], feature: "reports" },
       { key: "rep-statement", href: "/dashboard/reports/monthly-statement", label: "Demonstrativo Mensal", icon: FileSpreadsheet, perms: ["finance.read"], feature: "reports" },
@@ -93,7 +98,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
       { key: "rep-inc-exp", href: "/dashboard/reports/income-expense", label: "Entradas x Saidas", icon: ArrowLeftRight, perms: ["finance.read"], feature: "reports" },
       { key: "rep-consolidated", href: "/dashboard/reports/consolidated", label: "Consolidado Sede > Filiais", icon: Building2, perms: ["finance.read"], feature: "reports" },
       { key: "rep-birthdays", href: "/dashboard/reports/birthdays", label: "Aniversariantes", icon: Cake, perms: ["members.read"], feature: "reports" },
-      { key: "rep-demographics", href: "/dashboard/reports/demographics", label: "Demograficos", icon: PieChart, perms: ["members.read"], feature: "reports" },
+      { key: "rep-demographics", href: "/dashboard/reports/demographics", label: "Demograficos", icon: Users, perms: ["members.read"], feature: "reports" },
       { key: "rep-drop", href: "/dashboard/reports/contribution-drop", label: "Queda de contribuição", icon: TrendingDown, perms: ["finance.read"], feature: "reports" },
       { key: "rep-attendance", href: "/dashboard/reports/attendance", label: "Participantes por evento", icon: CalendarCheck, perms: ["members.read"], feature: "reports" },
     ],
@@ -106,6 +111,7 @@ const NAV_SECTIONS: { title: string | null; items: NavItem[] }[] = [
       { key: "platform-plans", href: "/dashboard/platform/plans", label: "Planos", icon: Layers, perms: [], platformOnly: true },
       { key: "platform-billing", href: "/dashboard/platform/billing", label: "Cobranca", icon: CreditCard, perms: [], platformOnly: true },
       { key: "platform-backups", href: "/dashboard/platform/backups", label: "Backups", icon: DatabaseBackup, perms: [], platformOnly: true },
+      { key: "platform-support", href: "/dashboard/platform/support", label: "Suporte", icon: LifeBuoy, perms: [], platformOnly: true },
     ],
   },
 ];
@@ -115,7 +121,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const { user, ready, logout, hasPerm, hasFeature, switchTenant, isPlatformAdmin } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { data: branchData } = useBranches();
+  const { data: branchData } = useBranches(ready && !!user);
   const [branchCtx, setBranchCtx] = useState("");
   useEffect(() => setBranchCtx(getBranchContext()), []);
   const isHQ = user?.role === "super_admin" || user?.role === "admin_sede";
@@ -178,7 +184,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     href === "/dashboard" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 
   const Sidebar = (
-    <aside className="flex h-full w-56 shrink-0 flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <aside data-tour="sidebar" className="flex h-full w-56 shrink-0 flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
       <div className="flex items-center gap-2 px-4 py-3.5">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sky-600 to-sky-500 text-white">
           <Church className="h-4 w-4" />
@@ -218,6 +224,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       <Link
                         key={item.key}
                         href={item.href}
+                        data-tour={`nav-${item.key}`}
+                        data-nav-active={active ? "true" : undefined}
                         className={cn(
                           "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors",
                           active
@@ -238,6 +246,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </nav>
 
       <div className="border-t border-zinc-200 p-2 dark:border-zinc-800">
+        <Link href="/dashboard/help" className="mb-1 flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900">
+          <CircleHelp className="h-4 w-4 shrink-0" /> Central de ajuda
+        </Link>
         <Link href="/dashboard/profile" className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-900">
           <Avatar name={user.full_name} size="sm" />
           <div className="min-w-0">
@@ -256,6 +267,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
 
   return (
+    <HelpProvider>
     <div className="flex min-h-screen">
       {/* Sidebar fixa: antes ela rolava junto com o conteudo da pagina. */}
       <div className="sticky top-0 hidden h-screen lg:block">{Sidebar}</div>
@@ -268,7 +280,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-zinc-200 bg-white/80 px-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
+        <header data-tour="topbar" className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-zinc-200 bg-white/80 px-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
           <button
             className="rounded-md p-2 text-zinc-500 hover:bg-zinc-100 lg:hidden dark:hover:bg-zinc-800"
             onClick={() => setMobileOpen(true)}
@@ -314,6 +326,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <span className="max-w-32 truncate">{branchName}</span>
               </div>
             ) : null}
+            <TourButton />
+            <HelpButton />
             <ThemeToggle />
             <Link href="/dashboard/profile" title="Meu perfil" className="rounded-full transition-opacity hover:opacity-80">
               <Avatar name={user.full_name} size="sm" />
@@ -321,8 +335,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-5 lg:p-6">{children}</main>
+        <main data-tour="page-content" className="flex-1 p-4 sm:p-5 lg:p-6">{children}</main>
       </div>
     </div>
+    <WelcomeGuide />
+    <TourOverlay />
+    </HelpProvider>
   );
 }

@@ -171,6 +171,7 @@ export default function AccountStatementPage() {
   const initialState: Partial<TransactionFormState> | undefined = editing
     ? {
         type: editing.type,
+        reversal: (editing.sign ?? 1) < 0,
         amount: String(editing.amount),
         category_id: editing.category_id ?? "",
         account_id: editing.account_id ?? "",

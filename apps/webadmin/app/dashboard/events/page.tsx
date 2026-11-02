@@ -33,7 +33,7 @@ import { EVENT_ORIGIN } from "@/lib/constants";
 const EMPTY_EVENT = {
   kind_id: "", title: "", date: new Date().toISOString().slice(0, 10), start_time: "19:00",
   end_date: "", end_time: "", attendance_mode: "nominal", participants_count: "",
-  estimated_cost: "", notes: "",
+  estimated_cost: "", notes: "", owner_ministry_id: "",
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -130,6 +130,7 @@ export default function EventsPage() {
       participants_count: String(ev.participants_count || ""),
       estimated_cost: ev.estimated_cost != null ? String(ev.estimated_cost) : "",
       notes: ev.notes ?? "",
+      owner_ministry_id: ev.owner_ministry_id ?? "",
     });
     try {
       const [a, inv] = await Promise.all([listEventAttendance(ev.id), listEventInvitees(ev.id)]);
@@ -160,6 +161,7 @@ export default function EventsPage() {
         attendance_mode: form.attendance_mode,
         estimated_cost: form.estimated_cost === "" ? undefined : Number(form.estimated_cost),
         notes: form.notes || undefined,
+        owner_ministry_id: form.owner_ministry_id || undefined,
       };
       const ev = eventDrawer.editing ? await updateEvent(eventDrawer.editing.id, payload) : await createEvent(payload);
       await saveEventAttendance(ev.id, total, form.attendance_mode === "nominal" ? [...present] : []);
@@ -248,10 +250,11 @@ export default function EventsPage() {
       <PageHeader
         title="Eventos"
         description="Agenda da igreja: cultos/programacao publicados, escalas e eventos avulsos"
-        actions={canWrite ? <Button onClick={openCreate}><Plus className="h-4 w-4" /> Novo evento avulso</Button> : undefined}
+        actions={canWrite ? <Button data-tour="events-new" onClick={openCreate}><Plus className="h-4 w-4" /> Novo evento avulso</Button> : undefined}
       />
 
       <Tabs
+        tourPrefix="events-tab"
         tabs={[
           { key: "eventos", label: "Eventos", icon: <CalendarDays className="h-4 w-4" /> },
           { key: "calendario", label: "Calendario", icon: <CalendarDays className="h-4 w-4" /> },
@@ -282,7 +285,7 @@ export default function EventsPage() {
               <EmptyState icon={<CalendarDays className="h-10 w-10" />} title="Nenhum evento" description="Publique a programacao (cultos, oracao...) ou crie um evento avulso." />
             ) : (
               <Table>
-                <THead><TRow><TH>Periodo</TH><TH>Tipo</TH><TH>Origem</TH><TH>Presenca</TH><TH className="text-right">Convocados</TH><TH className="text-right">Custo est.</TH><TH className="text-right">Custo real</TH><TH className="text-right">Acoes</TH></TRow></THead>
+                <THead><TRow><TH>Periodo</TH><TH>Tipo</TH><TH>Ministerio</TH><TH>Origem</TH><TH>Presenca</TH><TH className="text-right">Convocados</TH><TH className="text-right">Custo est.</TH><TH className="text-right">Custo real</TH><TH className="text-right">Acoes</TH></TRow></THead>
                 <TBody>
                   {events.map((ev) => (
                     <TRow key={ev.id}>
@@ -300,6 +303,7 @@ export default function EventsPage() {
                           <Badge tone="sky">{ev.kind_name ?? "-"}</Badge>
                         )}
                       </TD>
+                      <TD className="text-sm text-zinc-500">{ev.owner_ministry_name ?? "-"}</TD>
                       <TD>
                         <Badge tone={(EVENT_ORIGIN[ev.origin]?.tone as Tone) ?? "zinc"} className="text-[10px]">
                           {EVENT_ORIGIN[ev.origin]?.label ?? ev.origin}
@@ -431,21 +435,27 @@ export default function EventsPage() {
 
       {/* Drawer do evento (avulso) */}
       <Drawer open={eventDrawer.open} onClose={() => setEventDrawer({ open: false })} size="2xl" title={eventDrawer.editing ? "Editar evento" : "Novo evento avulso"}>
-        <form onSubmit={saveEvent} className="space-y-4">
+        <form onSubmit={saveEvent} className="space-y-4" data-tour="event-form">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Tipo de evento">
-              <Select className="h-8 text-sm" value={form.kind_id} onChange={(e) => setForm({ ...form, kind_id: e.target.value })}>
+              <Select data-tour="event-kind" className="h-8 text-sm" value={form.kind_id} onChange={(e) => setForm({ ...form, kind_id: e.target.value })}>
                 <option value="">-</option>
                 {kinds.filter((k) => k.is_active).map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
               </Select>
             </Field>
             <Field label="Titulo" hint="Opcional - aparece no calendario no lugar do tipo.">
-              <Input className="h-8 text-sm" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Ex: Retiro de Jovens" />
+              <Input data-tour="event-title" className="h-8 text-sm" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Ex: Retiro de Jovens" />
+            </Field>
+            <Field label="Ministerio responsavel" hint="Dono da ocorrencia na agenda por area.">
+              <Select className="h-8 text-sm" value={form.owner_ministry_id} onChange={(e) => setForm({ ...form, owner_ministry_id: e.target.value })}>
+                <option value="">Sem ministerio</option>
+                {ministries.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </Select>
             </Field>
             <Field label="Custo estimado (R$)" hint="Opcional.">
               <CurrencyInput className="h-8 text-sm" value={form.estimated_cost} onChange={(v) => setForm({ ...form, estimated_cost: v })} />
             </Field>
-            <Field label="Inicio - data *"><Input required type="date" className="h-8 text-sm" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
+            <Field label="Inicio - data *"><Input data-tour="event-date" required type="date" className="h-8 text-sm" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
             <Field label="Inicio - hora *"><Input required type="time" className="h-8 text-sm" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} /></Field>
             <Field label="Termino - data" hint="Use para eventos de mais de um dia (retiro, acampamento).">
               <Input type="date" className="h-8 text-sm" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
@@ -532,7 +542,7 @@ export default function EventsPage() {
 
           <div className="flex justify-end gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
             <Button variant="ghost" type="button" className="h-8 text-sm" onClick={() => setEventDrawer({ open: false })}>Cancelar</Button>
-            <Button type="submit" className="h-8 text-sm" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
+            <Button type="submit" data-tour="event-save" className="h-8 text-sm" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>
         </form>
       </Drawer>

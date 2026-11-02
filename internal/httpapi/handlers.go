@@ -50,6 +50,13 @@ type Config struct {
 	AIModel         string
 	APIBibleKey     string
 	APIBibleBaseURL string
+	// IA dedicada da Central de Ajuda (fallback para AI_* quando vazia).
+	HelpAIBaseURL string
+	HelpAIAPIKey  string
+	HelpAIModel   string
+	// Destino opcional da notificacao de novos chamados.
+	SupportEmail    string
+	SupportWhatsApp string
 	// BackupDir e o diretorio dos pacotes de backup por igreja.
 	BackupDir string
 }

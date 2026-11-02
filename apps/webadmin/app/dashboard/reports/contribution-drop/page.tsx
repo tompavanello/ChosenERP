@@ -1,14 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { TrendingDown } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, TrendingDown, UserMinus, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Field, Select } from "@/components/ui/input";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { SkeletonRows, EmptyState } from "@/components/ui/skeleton";
 import { getContributionDrops, type ContributionDrop } from "@/lib/api";
-import { currency, datePt } from "@/lib/format";
+import { currency, datePt, number } from "@/lib/format";
+import { ReportSection } from "@/components/reports/report-section";
+import { KpiCard } from "@/components/reports/kpi-card";
+import { RankedBar } from "@/components/reports/ranked-bar";
+import { COLORS } from "@/components/reports/chart-theme";
 
 export default function ContributionDropPage() {
   const [items, setItems] = useState<ContributionDrop[] | null>(null);
@@ -29,12 +33,29 @@ export default function ContributionDropPage() {
   }, [load]);
 
   const total = (items ?? []).reduce((s, m) => s + m.total, 0);
+  const avg = items && items.length > 0 ? total / items.length : 0;
+  const top = useMemo(() => (items ?? []).slice(0, 8).map((m) => ({ name: m.member_name, value: m.total })), [items]);
+  const buckets = useMemo(() => {
+    const b = [
+      { name: `Ha ${recent} a ${recent + 1} mes(es)`, value: 0 },
+      { name: "Ha 2 a 3 meses", value: 0 },
+      { name: "Ha 4 a 5 meses", value: 0 },
+      { name: "Ha 6 meses ou mais", value: 0 },
+    ];
+    for (const m of items ?? []) {
+      const days = Math.max(0, Math.floor((Date.now() - new Date(m.last_at).getTime()) / 86400000));
+      const mo = Math.floor(days / 30);
+      const idx = mo <= recent + 1 ? 0 : mo <= 3 ? 1 : mo <= 5 ? 2 : 3;
+      b[idx].value += 1;
+    }
+    return b;
+  }, [items, recent]);
 
   return (
     <div className="page">
       <PageHeader title="Queda de contribuição" description="Membros que contribuíram no período e pararam (sigilo financeiro)" />
 
-      <div className="mb-4 flex items-end gap-3">
+      <Card className="mb-4 flex flex-wrap items-end gap-3 p-3">
         <Field label="Janela (meses)">
           <Select className="h-8 w-32 text-sm" value={months} onChange={(e) => setMonths(Number(e.target.value))}>
             {[3, 6, 12].map((m) => <option key={m} value={m}>{m}</option>)}
@@ -45,7 +66,26 @@ export default function ContributionDropPage() {
             {[1, 2, 3].map((m) => <option key={m} value={m}>{m}</option>)}
           </Select>
         </Field>
+        <p className="ml-auto text-xs text-zinc-400">Os valores abaixo sao sigilosos e visiveis apenas por quem tem permissao financeira.</p>
+      </Card>
+
+      <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard label="Pessoas em queda" value={items ? number(items.length) : "..."} icon={UserMinus} tone="amber" />
+        <KpiCard label="Total que parou" value={currency(total)} icon={Wallet} tone="red" hint="soma das ultimas contribuicoes" />
+        <KpiCard label="Ticket medio" value={currency(avg)} icon={TrendingDown} tone="sky" />
+        <KpiCard label="Risco principal" value={top[0]?.name ?? "-"} icon={AlertTriangle} tone="indigo" hint={top[0] ? currency(top[0].value) : "sem doadores em queda"} />
       </div>
+
+      {items && items.length > 0 && (
+        <div className="mb-4 grid gap-4 lg:grid-cols-2">
+          <ReportSection title="Ha quanto tempo pararam?" subtitle="Faixas de tempo desde a ultima contribuicao">
+            <RankedBar data={buckets} format={(n) => `${n} pessoa(s)`} color={COLORS.amber} showShare />
+          </ReportSection>
+          <ReportSection title="Maiores valores em risco" subtitle="Top 8 por total contribuido no periodo" insight="Comece o acolhimento pelos maiores valores e pelos mais antigos.">
+            <RankedBar data={top} total={total} color={COLORS.expense} emptyLabel="Sem doadores em queda." />
+          </ReportSection>
+        </div>
+      )}
 
       <Card className="overflow-hidden p-0">
         {items === null ? (

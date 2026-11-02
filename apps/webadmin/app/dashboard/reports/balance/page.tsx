@@ -1,19 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
-} from "recharts";
+import { ArrowDownRight, ArrowUpRight, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { getMonthlyBalance, type MonthlyPoint } from "@/lib/api";
 import { currency, monthLabel } from "@/lib/format";
 import { ExportButtons } from "@/components/reports/export-buttons";
+import { ReportToolbar } from "@/components/reports/report-toolbar";
+import { ReportSection } from "@/components/reports/report-section";
+import { KpiCard } from "@/components/reports/kpi-card";
+import { TrendChart } from "@/components/reports/trend-chart";
+import { WaterfallChart } from "@/components/reports/waterfall-chart";
+import { COLORS, currencyCompact } from "@/components/reports/chart-theme";
 
 export default function BalanceReportPage() {
   const { toast } = useToast();
@@ -44,6 +46,11 @@ export default function BalanceReportPage() {
   if (to) params.to = to;
   const totalIncome = series.reduce((a, p) => a + p.income, 0);
   const totalExpense = series.reduce((a, p) => a + p.expense, 0);
+  const totalNet = totalIncome - totalExpense;
+  const last = series[series.length - 1];
+  const prev = series[series.length - 2];
+  const deltaNet = prev && prev.net !== 0 ? ((last.net - prev.net) / Math.abs(prev.net)) * 100 : undefined;
+  const margin = totalIncome > 0 ? (totalNet / totalIncome) * 100 : 0;
 
   return (
     <div className="page">
@@ -59,44 +66,65 @@ export default function BalanceReportPage() {
         }
       />
 
-      <Card className="mb-6 flex flex-wrap items-end gap-3">
-        <div><label className="label">De</label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-        <div><label className="label">Ate</label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-        <Button onClick={() => load(from, to)}>Filtrar</Button>
-        <Button variant="ghost" onClick={() => { setFrom(""); setTo(""); load("", ""); }}>Mes atual</Button>
-      </Card>
+      <ReportToolbar
+        from={from}
+        to={to}
+        onFrom={setFrom}
+        onTo={setTo}
+        onChange={load}
+        actions={<span className="text-xs text-zinc-400">{series.length} mes(es)</span>}
+      />
 
       {loading ? (
         <div className="grid gap-4 md:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}</div>
       ) : (
         <>
-          <div className="mb-6 grid gap-4 md:grid-cols-3">
-            <Card><p className="text-sm text-zinc-500">Entradas</p><p className="mt-1 text-2xl font-semibold text-emerald-600">{currency(totalIncome)}</p></Card>
-            <Card><p className="text-sm text-zinc-500">Saidas</p><p className="mt-1 text-2xl font-semibold text-red-600">{currency(totalExpense)}</p></Card>
-            <Card><p className="text-sm text-zinc-500">Saldo</p><p className={`mt-1 text-2xl font-semibold ${totalIncome - totalExpense >= 0 ? "text-sky-700" : "text-red-600"}`}>{currency(totalIncome - totalExpense)}</p></Card>
+          <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiCard label="Entradas no periodo" value={currency(totalIncome)} icon={ArrowUpRight} tone="green" spark={series.map((p) => p.income)} />
+            <KpiCard label="Saidas no periodo" value={currency(totalExpense)} icon={ArrowDownRight} tone="red" spark={series.map((p) => p.expense)} />
+            <KpiCard label="Saldo do periodo" value={currency(totalNet)} icon={Wallet} tone="sky" delta={deltaNet} deltaLabel="ultimo mes vs. anterior" spark={series.map((p) => p.net)} />
+            <KpiCard label="Margem de sobra" value={`${margin.toFixed(1)}%`} tone="indigo" hint="resultado / entradas do periodo" />
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold text-zinc-700">Saldo por mes</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={monthly}><defs><linearGradient id="bnet" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4} /><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} /><XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#9ca3af" /><YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" width={60} /><Tooltip formatter={(v: unknown) => currency(Number(v))} /><Area type="monotone" dataKey="Saldo" stroke="#8b5cf6" strokeWidth={2.5} fill="url(#bnet)" /></AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold text-zinc-700">Entradas x Saidas</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={monthly}><CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} /><XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#9ca3af" /><YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" width={60} /><Tooltip formatter={(v: unknown) => currency(Number(v))} /><Legend /><Bar dataKey="Entradas" fill="#10b981" /><Bar dataKey="Saidas" fill="#ef4444" /></BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
+          <div className="mb-4 grid gap-4 lg:grid-cols-2">
+            <ReportSection title="Evolucao do saldo" subtitle="Resultado mes a mes no periodo" insight={last ? `Ultimo mes: ${currency(last.net)} de saldo.` : undefined}>
+              <TrendChart
+                data={monthly}
+                series={[{ key: "Saldo", label: "Saldo", color: COLORS.net, type: "area" }]}
+                height={240}
+                format={currencyCompact}
+              />
+            </ReportSection>
+            <ReportSection title="Entradas x saidas" subtitle="Comparacao direta por mes" insight={totalIncome > 0 ? `As saidas consomem ${((totalExpense / totalIncome) * 100).toFixed(0)}% das entradas.` : undefined}>
+              <TrendChart
+                data={monthly}
+                series={[
+                  { key: "Entradas", label: "Entradas", color: COLORS.income, type: "bar" },
+                  { key: "Saidas", label: "Saidas", color: COLORS.expense, type: "bar" },
+                ]}
+                height={240}
+                format={currencyCompact}
+              />
+            </ReportSection>
           </div>
 
-          <Card className="mt-6 overflow-hidden p-0">
-            <h3 className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-700">Serie mensal</h3>
+          <ReportSection
+            title="Como o periodo fechou?"
+            subtitle="Fluxo: entradas, saidas e o resultado final"
+            className="mb-4"
+          >
+            <WaterfallChart
+              items={[
+                { name: "Entradas", value: totalIncome, type: "positive" },
+                { name: "Saidas", value: -totalExpense, type: "negative" },
+                { name: "Resultado", value: totalNet, type: "total" },
+              ]}
+              height={200}
+            />
+          </ReportSection>
+
+          <Card className="overflow-hidden p-0">
+            <h3 className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">Serie mensal</h3>
             <Table>
               <THead><TRow><TH>Mes</TH><TH className="text-right">Entradas</TH><TH className="text-right">Saidas</TH><TH className="text-right">Saldo</TH></TRow></THead>
               <TBody>

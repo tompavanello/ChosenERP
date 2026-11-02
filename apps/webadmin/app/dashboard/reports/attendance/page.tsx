@@ -1,9 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
-} from "recharts";
 import { CalendarDays, Trophy, TrendingUp, Users, UserCheck } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -11,9 +8,14 @@ import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/input";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatCard } from "@/components/ui/stat-card";
 import { useToast } from "@/components/ui/toast";
 import { ExportButtons } from "@/components/reports/export-buttons";
+import { ReportSection } from "@/components/reports/report-section";
+import { KpiCard } from "@/components/reports/kpi-card";
+import { TrendChart } from "@/components/reports/trend-chart";
+import { Heatmap } from "@/components/reports/heatmap";
+import { RankedBar } from "@/components/reports/ranked-bar";
+import { COLORS, numberCompact } from "@/components/reports/chart-theme";
 import {
   getAttendanceReport, listEventKinds,
   type AttendanceEventRow, type AttendanceReport, type EventKind,
@@ -63,6 +65,23 @@ export default function AttendanceReportPage() {
 
   const s = rep?.summary;
 
+  // Heatmap dos ultimos 6 meses x tipo (publico somado), construido a partir
+  // dos eventos do periodo para dar a leitura de sazonalidade por tipo.
+  const heat = useMemo(() => {
+    if (!rep) return { rows: [] as string[], cols: [] as string[], values: [] as number[][] };
+    const monthCols = rep.monthly.slice(-6).map((m) => monthLabel(m.month));
+    const monthKeys = rep.monthly.slice(-6).map((m) => m.month);
+    const kindNames = Array.from(new Set(rep.events.map((e) => e.kind_name))).slice(0, 6);
+    const values = kindNames.map((k) =>
+      monthKeys.map((mk) =>
+        rep.events
+          .filter((e) => e.kind_name === k && e.starts_at.slice(0, 7) === mk)
+          .reduce((sum, e) => sum + e.participants, 0),
+      ),
+    );
+    return { rows: kindNames, cols: monthCols, values };
+  }, [rep]);
+
   return (
     <div className="page">
       <PageHeader
@@ -104,73 +123,49 @@ export default function AttendanceReportPage() {
       ) : (
         <>
           {s && (
-            <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard
-                label="Participantes"
-                value={number(s.participants)}
-                icon={Users}
-                tone="sky"
-                hint={`${s.delta_participants_pct >= 0 ? "+" : ""}${s.delta_participants_pct.toFixed(1)}% vs. ano anterior`}
-              />
-              <StatCard
-                label="Eventos realizados"
-                value={number(s.events)}
-                icon={CalendarDays}
-                tone="indigo"
-                hint={`${s.delta_events_pct >= 0 ? "+" : ""}${s.delta_events_pct.toFixed(1)}% vs. ano anterior`}
-              />
-              <StatCard
-                label="Media por evento"
-                value={s.avg_per_event.toFixed(1)}
-                icon={TrendingUp}
-                tone="green"
-                hint={`${s.delta_avg_pct >= 0 ? "+" : ""}${s.delta_avg_pct.toFixed(1)}% vs. ano anterior`}
-              />
-              <StatCard
-                label="Maior publico"
-                value={rep.top_events[0] ? number(rep.top_events[0].participants) : "0"}
-                icon={Trophy}
-                tone="amber"
-                hint={rep.top_events[0]?.title ?? "Sem eventos no periodo"}
-              />
+            <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <KpiCard label="Participantes" value={number(s.participants)} icon={Users} tone="sky" delta={s.delta_participants_pct} deltaLabel="vs. ano anterior" />
+              <KpiCard label="Eventos realizados" value={number(s.events)} icon={CalendarDays} tone="indigo" delta={s.delta_events_pct} deltaLabel="vs. ano anterior" />
+              <KpiCard label="Media por evento" value={s.avg_per_event.toFixed(1)} icon={TrendingUp} tone="green" delta={s.delta_avg_pct} deltaLabel="vs. ano anterior" />
+              <KpiCard label="Maior publico" value={rep.top_events[0] ? number(rep.top_events[0].participants) : "0"} icon={Trophy} tone="amber" hint={rep.top_events[0]?.title ?? "Sem eventos no periodo"} />
             </div>
           )}
 
-          <div className="mb-6 grid gap-6 lg:grid-cols-2">
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Evolucao mensal de participantes</h3>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={rep.monthly.map((m) => ({ name: monthLabel(m.month), Atual: m.participants, "Ano anterior": m.prev_participants }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#9ca3af" />
-                    <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" allowDecimals={false} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="Atual" fill="#0ea5e9" />
-                    <Bar dataKey="Ano anterior" fill="#cbd5e1" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
+          <div className="mb-4 grid gap-4 lg:grid-cols-2">
+            <ReportSection
+              title="Evolucao mensal de participantes"
+              subtitle="Atual comparado com o mesmo mes do ano anterior"
+              insight={s ? `A media por evento ${s.delta_avg_pct >= 0 ? "subiu" : "caiu"} ${Math.abs(s.delta_avg_pct).toFixed(1)}% no ano.` : undefined}
+            >
+              <TrendChart
+                data={rep.monthly.map((m) => ({ name: monthLabel(m.month), Atual: m.participants, "Ano anterior": m.prev_participants }))}
+                series={[
+                  { key: "Atual", label: "Atual", color: COLORS.sky, type: "bar" },
+                  { key: "Ano anterior", label: "Ano anterior", color: "#cbd5e1", type: "bar" },
+                ]}
+                height={280}
+                format={numberCompact}
+                yFormat={numberCompact}
+              />
+            </ReportSection>
 
-            <Card>
-              <h3 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Participantes por tipo de evento</h3>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={rep.by_kind.map((k) => ({ name: k.kind_name, Atual: k.participants, "Ano anterior": k.prev_participants }))} layout="vertical" margin={{ left: 8, right: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 12 }} stroke="#9ca3af" allowDecimals={false} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} stroke="#9ca3af" width={90} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="Atual" fill="#8b5cf6" />
-                    <Bar dataKey="Ano anterior" fill="#ddd6fe" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
+            <ReportSection title="Participantes por tipo de evento" subtitle="Ranking por volume no periodo">
+              <RankedBar
+                data={rep.by_kind.map((k) => ({ name: k.kind_name, value: k.participants }))}
+                format={numberCompact}
+                color={COLORS.indigo}
+                emptyLabel="Sem eventos no periodo."
+              />
+            </ReportSection>
           </div>
+
+          <ReportSection
+            title="Sazonalidade por tipo e mes"
+            subtitle="Onde o publico se concentra nos ultimos 6 meses"
+            className="mb-4"
+          >
+            <Heatmap rows={heat.rows} cols={heat.cols} values={heat.values} format={numberCompact} />
+          </ReportSection>
 
           <Card className="mb-6 overflow-hidden p-0">
             <h3 className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">

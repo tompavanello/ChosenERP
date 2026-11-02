@@ -1,17 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ArrowDownRight, ArrowUpRight, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { getDRE, type DRE } from "@/lib/api";
 import { currency } from "@/lib/format";
 import { ExportButtons } from "@/components/reports/export-buttons";
+import { ReportToolbar } from "@/components/reports/report-toolbar";
+import { ReportSection } from "@/components/reports/report-section";
+import { KpiCard } from "@/components/reports/kpi-card";
+import { RankedBar } from "@/components/reports/ranked-bar";
+import { WaterfallChart } from "@/components/reports/waterfall-chart";
+import { COLORS } from "@/components/reports/chart-theme";
 
 export default function DreReportPage() {
   const { toast } = useToast();
@@ -39,6 +44,9 @@ export default function DreReportPage() {
   if (from) params.from = from;
   if (to) params.to = to;
   const delta = dre?.comparison?.delta_pct ?? 0;
+  const income = (dre?.lines ?? []).filter((l) => l.type === "income").map((l) => ({ name: l.category, value: l.total }));
+  const expense = (dre?.lines ?? []).filter((l) => l.type === "expense").map((l) => ({ name: l.category, value: l.total }));
+  const margin = dre && dre.income > 0 ? (dre.net / dre.income) * 100 : 0;
 
   return (
     <div className="page">
@@ -54,30 +62,41 @@ export default function DreReportPage() {
         }
       />
 
-      <Card className="mb-6 flex flex-wrap items-end gap-3">
-        <div><label className="label">De</label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-        <div><label className="label">Ate</label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-        <Button onClick={() => load(from, to)}>Filtrar</Button>
-        <Button variant="ghost" onClick={() => { setFrom(""); setTo(""); load("", ""); }}>Mes atual</Button>
-      </Card>
+      <ReportToolbar from={from} to={to} onFrom={setFrom} onTo={setTo} onChange={load} />
 
       {loading ? (
         <div className="grid gap-4 md:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}</div>
       ) : dre ? (
         <>
-          <div className="mb-6 grid gap-4 md:grid-cols-4">
-            <Card><p className="text-sm text-zinc-500">Entradas</p><p className="mt-1 text-2xl font-semibold text-emerald-600">{currency(dre.income)}</p></Card>
-            <Card><p className="text-sm text-zinc-500">Saidas</p><p className="mt-1 text-2xl font-semibold text-red-600">{currency(dre.expense)}</p></Card>
-            <Card><p className="text-sm text-zinc-500">Resultado</p><p className={`mt-1 text-2xl font-semibold ${dre.net >= 0 ? "text-sky-700" : "text-red-600"}`}>{currency(dre.net)}</p></Card>
-            <Card>
-              <p className="text-sm text-zinc-500">vs. periodo anterior</p>
-              <p className={`mt-1 text-2xl font-semibold ${delta >= 0 ? "text-emerald-600" : "text-red-600"}`}>{delta >= 0 ? "+" : ""}{delta.toFixed(1)}%</p>
-              <p className="text-xs text-zinc-400">anterior: {currency(dre.comparison?.prev_net ?? 0)}</p>
-            </Card>
+          <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiCard label="Entradas" value={currency(dre.income)} icon={ArrowUpRight} tone="green" />
+            <KpiCard label="Saidas" value={currency(dre.expense)} icon={ArrowDownRight} tone="red" />
+            <KpiCard label="Resultado" value={currency(dre.net)} icon={Wallet} tone="sky" delta={delta} deltaLabel="vs. periodo anterior" />
+            <KpiCard label="Margem de sobra" value={`${margin.toFixed(1)}%`} tone="indigo" hint={`anterior: ${currency(dre.comparison?.prev_net ?? 0)}`} />
           </div>
 
+          <div className="mb-4 grid gap-4 lg:grid-cols-2">
+            <ReportSection title="Receitas por conta" subtitle="Ordenadas da maior para a menor" insight={income[0] ? `${income[0].name} lidera as entradas.` : undefined}>
+              <RankedBar data={income} total={dre.income} color={COLORS.income} emptyLabel="Sem entradas no periodo." />
+            </ReportSection>
+            <ReportSection title="Despesas por conta" subtitle="Ordenadas da maior para a menor" insight={expense[0] ? `${expense[0].name} lidera as saidas.` : undefined}>
+              <RankedBar data={expense} total={dre.expense} color={COLORS.expense} emptyLabel="Sem saidas no periodo." />
+            </ReportSection>
+          </div>
+
+          <ReportSection title="Resultado do periodo" subtitle="Entradas, saidas e o que sobra" className="mb-4">
+            <WaterfallChart
+              items={[
+                { name: "Entradas", value: dre.income, type: "positive" },
+                { name: "Saidas", value: -dre.expense, type: "negative" },
+                { name: "Resultado", value: dre.net, type: "total" },
+              ]}
+              height={200}
+            />
+          </ReportSection>
+
           <Card className="overflow-hidden p-0">
-            <h3 className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-700">DRE por categoria</h3>
+            <h3 className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">DRE por categoria</h3>
             <Table>
               <THead><TRow><TH>Conta contabil</TH><TH>Tipo</TH><TH className="text-right">Total</TH></TRow></THead>
               <TBody>

@@ -122,7 +122,7 @@ func TestFinancialTransactions_PeriodLock(t *testing.T) {
 		expectSavepointError(t, tx, "period_move_in", "periodo encerrado", func() error {
 			_, err := tx.Exec(testCtx, `
 				SELECT fin_tx_edit($1::uuid, $2, 'income', 100, 'pix', '', '', '', '', false,
-					'mover para dentro', '2025-07-15', $3, '', '', false)`,
+					'mover para dentro', '2025-07-15', $3, '', '', false, 1::smallint)`,
 				outsideID, fixCatA, fixAccountA)
 			return err
 		})
@@ -130,7 +130,7 @@ func TestFinancialTransactions_PeriodLock(t *testing.T) {
 		expectSavepointError(t, tx, "period_move_out", "periodo encerrado", func() error {
 			_, err := tx.Exec(testCtx, `
 				SELECT fin_tx_edit($1::uuid, $2, 'income', 100, 'pix', '', '', '', '', false,
-					'mover para fora', '2025-08-01', $3, '', '', false)`,
+					'mover para fora', '2025-08-01', $3, '', '', false, 1::smallint)`,
 				insideID, fixCatA, fixAccountA)
 			return err
 		})
@@ -174,7 +174,7 @@ func TestFinancialTransactions_AuditClosedLocksPeriod(t *testing.T) {
 		expectSavepointError(t, tx, "audit_move_out", "periodo encerrado", func() error {
 			_, err := tx.Exec(testCtx, `
 				SELECT fin_tx_edit($1::uuid, $2, 'income', 100, 'pix', '', '', '', '', false,
-					'mover para fora', '2025-10-01', $3, '', '', false)`,
+					'mover para fora', '2025-10-01', $3, '', '', false, 1::smallint)`,
 				insideID, fixCatA, fixAccountA)
 			return err
 		})

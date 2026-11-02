@@ -70,7 +70,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    registerSessionLost(logout);
+    registerSessionLost(() => {
+      try {
+        localStorage.setItem("chosen_session_expired", "1");
+      } catch {
+        /* storage indisponivel */
+      }
+      logout();
+    });
     restoreTokens();
     // Sem sessao (ex.: tela de login), nao chama /me - evita um 401 no console.
     if (!hasSession()) {

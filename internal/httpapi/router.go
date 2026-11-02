@@ -20,6 +20,8 @@ import (
 	"chosenerp/internal/finance"
 	"chosenerp/internal/governance"
 	"chosenerp/internal/groups"
+	"chosenerp/internal/help"
+	"chosenerp/internal/insights"
 	"chosenerp/internal/kids"
 	"chosenerp/internal/lgpd"
 	"chosenerp/internal/materials"
@@ -35,6 +37,7 @@ import (
 	"chosenerp/internal/rosters"
 	"chosenerp/internal/store"
 	"chosenerp/internal/suppliers"
+	"chosenerp/internal/support"
 	"chosenerp/internal/users"
 	"chosenerp/internal/visitors"
 )
@@ -77,6 +80,11 @@ type App struct {
 	Content *content.Repo
 	Bible   *bible.Service
 	AI      *ai.Client
+	// Central de ajuda: manual embutido, IA dedicada e chamados.
+	Help     *help.Book
+	HelpAI   *ai.Client
+	Support  *support.Repo
+	Insights *insights.Repo
 	// Limitador protege as rotas /api/v1/public/* (sem auth).
 	Limitador *limitadorPublico
 
@@ -125,6 +133,10 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 		Content:       &content.Repo{},
 		Bible:         bible.NewService(st, cfg.APIBibleKey, cfg.APIBibleBaseURL),
 		AI:            ai.NewClient(cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel),
+		Help:          help.Load(),
+		HelpAI:        helpAIClient(cfg),
+		Support:       &support.Repo{},
+		Insights:      &insights.Repo{},
 		Limitador:     newLimitadorPublico(),
 		Entitlements:  newTTLCache[*org.Entitlements](60 * time.Second),
 		Permissions:   newTTLCache[bool](60 * time.Second),
@@ -407,6 +419,9 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/reports/assembly/export", authed(app.perm("reports.read", app.handleExportAssembly)))
 	mux.Handle("GET /api/v1/reports/attendance", authed(app.perm("reports.read", app.handleAttendanceReport)))
 	mux.Handle("GET /api/v1/reports/attendance/export", authed(app.perm("reports.read", app.handleExportAttendance)))
+	// Insights (regras + narrativa opcional por IA)
+	mux.Handle("GET /api/v1/insights", authed(app.perm("reports.read", app.handleInsights)))
+	mux.Handle("POST /api/v1/insights/narrative", authed(app.perm("reports.read", app.handleInsightsNarrative)))
 
 	// Branches (selecao de filial em repasses) + configuracao do tenant
 	mux.Handle("GET /api/v1/branches", authed(app.permAny("members.read", "finance.read", "settings.read", "governance.read", "ministries.read", "reports.read", "content.read")(app.handleListBranches)))
@@ -604,6 +619,12 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("PATCH /api/v1/programacoes/{id}", authed(app.perm("members.write", app.handleUpdateProgramacao)))
 	mux.Handle("DELETE /api/v1/programacoes/{id}", authed(app.perm("members.write", app.handleDeleteProgramacao)))
 
+	// Agenda / scheduler: leitura unificada e ajustes na ocorrencia
+	mux.Handle("GET /api/v1/agenda", authed(app.permAny("members.read", "ministries.read")(app.handleListAgenda)))
+	mux.Handle("POST /api/v1/agenda/occurrences/{id}/move", authed(app.permAny("members.write", "ministries.write")(app.handleMoveAgendaOccurrence)))
+	mux.Handle("DELETE /api/v1/agenda/occurrences/{id}", authed(app.permAny("members.write", "ministries.write")(app.handleDeleteAgendaOccurrence)))
+	mux.Handle("PATCH /api/v1/agenda/occurrences/{id}", authed(app.permAny("members.write", "ministries.write")(app.handleSetAgendaStatus)))
+
 	// LGPD: consentimento, portabilidade e anonimizacao
 	mux.Handle("GET /api/v1/consent-terms", authed(app.perm("members.read", app.handleListConsentTerms)))
 	mux.Handle("POST /api/v1/consent-terms", authed(app.perm("members.write", app.handleCreateConsentTerm)))
@@ -673,6 +694,26 @@ func NewRouter(cfg *Config, st *store.Store, authSvc *auth.Service, membersRepo 
 	mux.Handle("GET /api/v1/public/card/{token}", app.publico(app.handlePublicCard))
 	mux.Handle("GET /api/v1/public/card/{token}/print", app.publico(app.handleMemberCardHTML))
 	mux.Handle("GET /api/v1/public/card/{token}/photo", app.publico(app.handlePublicCardPhoto))
+
+	// Central de ajuda (manual embutido + IA dedicada + feedback).
+	mux.Handle("GET /api/v1/help/articles", authed(http.HandlerFunc(app.handleHelpArticles)))
+	mux.Handle("GET /api/v1/help/categories", authed(http.HandlerFunc(app.handleHelpCategories)))
+	mux.Handle("GET /api/v1/help/context", authed(http.HandlerFunc(app.handleHelpContext)))
+	mux.Handle("GET /api/v1/help/articles/{slug}", authed(http.HandlerFunc(app.handleHelpArticle)))
+	mux.Handle("POST /api/v1/help/chat", authed(http.HandlerFunc(app.handleHelpChat)))
+	mux.Handle("POST /api/v1/help/feedback", authed(http.HandlerFunc(app.handleHelpFeedback)))
+
+	// Chamados de suporte (escopo do usuario; a Sede ve os da igreja).
+	mux.Handle("GET /api/v1/support/tickets", authed(http.HandlerFunc(app.handleListMyTickets)))
+	mux.Handle("POST /api/v1/support/tickets", authed(http.HandlerFunc(app.handleCreateTicket)))
+	mux.Handle("GET /api/v1/support/tickets/{id}", authed(app.uuidParams("id")(http.HandlerFunc(app.handleGetMyTicket))))
+	mux.Handle("POST /api/v1/support/tickets/{id}/messages", authed(app.uuidParams("id")(http.HandlerFunc(app.handleAddTicketMessage))))
+
+	// Inbox de suporte da plataforma.
+	mux.Handle("GET /api/v1/admin/support/tickets", authed(http.HandlerFunc(app.handleAdminListTickets)))
+	mux.Handle("GET /api/v1/admin/support/tickets/{id}", authed(app.uuidParams("id")(http.HandlerFunc(app.handleAdminGetTicket))))
+	mux.Handle("PATCH /api/v1/admin/support/tickets/{id}", authed(app.uuidParams("id")(http.HandlerFunc(app.handleAdminUpdateTicket))))
+	mux.Handle("POST /api/v1/admin/support/tickets/{id}/messages", authed(app.uuidParams("id")(http.HandlerFunc(app.handleAdminAddTicketMessage))))
 
 	return withCORS(app.withMetrics(mux))
 }

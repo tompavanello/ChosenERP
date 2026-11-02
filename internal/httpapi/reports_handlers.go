@@ -763,10 +763,11 @@ func (a *App) handleAssemblyReport(w http.ResponseWriter, r *http.Request) {
 	var bal finance.Balance
 	var months []finance.MonthlyPoint
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
-		var err error
-		if bal, err = a.Finance.SumBalance(r.Context(), tx, ""); err != nil {
+		dre, err := a.Finance.BuildDRE(r.Context(), tx, from, to)
+		if err != nil {
 			return err
 		}
+		bal = balanceFromDRE(dre)
 		months, err = a.Finance.MonthlySeries(r.Context(), tx, from, to)
 		return err
 	})
@@ -777,6 +778,28 @@ func (a *App) handleAssemblyReport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"from": from, "to": to, "balance": bal, "months": months,
 	})
+}
+
+// balanceFromDRE converte o DRE do periodo no formato de balancete usado pelo
+// demonstrativo de assembleia. Antes o handler somava o historico inteiro, o
+// que fazia o resumo da assembleia divergir das contas do periodo.
+func balanceFromDRE(d finance.DRE) finance.Balance {
+	b := finance.Balance{
+		Income:     d.Income,
+		Expense:    d.Expense,
+		Net:        d.Net,
+		ByCategory: make([]finance.BalanceItem, 0, len(d.Lines)),
+	}
+	for _, l := range d.Lines {
+		b.ByCategory = append(b.ByCategory, finance.BalanceItem{
+			CategoryID: l.CategoryID,
+			Code:       l.Code,
+			Category:   l.Category,
+			Type:       l.Type,
+			Total:      l.Total,
+		})
+	}
+	return b
 }
 
 func assemblySections(bal finance.Balance, months []finance.MonthlyPoint, from, to string) []exportSection {
@@ -828,10 +851,11 @@ func (a *App) handleExportAssembly(w http.ResponseWriter, r *http.Request) {
 	var bal finance.Balance
 	var months []finance.MonthlyPoint
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
-		var err error
-		if bal, err = a.Finance.SumBalance(r.Context(), tx, ""); err != nil {
+		dre, err := a.Finance.BuildDRE(r.Context(), tx, from, to)
+		if err != nil {
 			return err
 		}
+		bal = balanceFromDRE(dre)
 		months, err = a.Finance.MonthlySeries(r.Context(), tx, from, to)
 		return err
 	})
