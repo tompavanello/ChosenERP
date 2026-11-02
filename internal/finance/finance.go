@@ -30,23 +30,7 @@ var (
 	ErrScopeReconciled = errors.New("ha lancamento conciliado nessa posicao; desconcile antes de inserir")
 	// ErrGroupedReconcile indica que a conciliacao deve ser feita pelo grupo.
 	ErrGroupedReconcile = errors.New("lancamento agrupado: concilie pelo grupo")
-	// ErrTransactionIsReversal impede editar um lancamento marcado como estorno
-	// (o sinal invertido e imutavel; para corrigir, exclua e recrie).
-	ErrTransactionIsReversal = errors.New("lancamento marcado como estorno: nao pode ser alterado")
 )
-
-// assertTxnNotReversal impede editar um lancamento com sinal invertido. O flag
-// de estorno e imutavel depois de criado; a correcao e excluir e recriar.
-func assertTxnNotReversal(ctx context.Context, tx pgx.Tx, id string) error {
-	var sign int
-	if err := tx.QueryRow(ctx, `SELECT sign FROM financial_transactions WHERE id = $1::uuid`, id).Scan(&sign); err != nil {
-		return err
-	}
-	if sign < 0 {
-		return ErrTransactionIsReversal
-	}
-	return nil
-}
 
 // assertTxnNotGrouped impede estornar/excluir um membro de grupo (o vinculo
 // precisa ser desfeito antes).
@@ -754,6 +738,9 @@ type UpdateTxnInput struct {
 	DueDate    *string `json:"due_date"`
 	CostCenter *string `json:"cost_center"`
 	Paid       *bool   `json:"paid"`
+	// Estorno (opcional): -1 inverte o efeito do lancamento; 1 o mantem normal.
+	// Ausente preserva o sinal atual.
+	Sign *int `json:"sign"`
 }
 
 // Update edita um lancamento EM VIGOR, preservando id, entry_seq, recibo e
@@ -794,16 +781,23 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, tenantID, id string, in Up
 	if err := assertTxnNotTransfer(ctx, tx, id); err != nil {
 		return err
 	}
-	if err := assertTxnNotReversal(ctx, tx, id); err != nil {
+
+	// Confirma existencia/escopo (RLS), a filial, a conta e o sinal atuais antes
+	// de editar. O sinal so muda quando o cliente envia `sign` (1 ou -1).
+	var branchID, currentAccountID string
+	var currentSign int
+	if err := tx.QueryRow(ctx, `
+		SELECT branch_id::text, COALESCE(account_id::text,''), sign
+		FROM financial_transactions WHERE id = $1::uuid`, id).
+		Scan(&branchID, &currentAccountID, &currentSign); err != nil {
 		return err
 	}
-
-	// Confirma existencia/escopo (RLS), a filial e a conta atual antes de editar.
-	var branchID, currentAccountID string
-	if err := tx.QueryRow(ctx, `
-		SELECT branch_id::text, COALESCE(account_id::text,'')
-		FROM financial_transactions WHERE id = $1::uuid`, id).Scan(&branchID, &currentAccountID); err != nil {
-		return err
+	sign := currentSign
+	if in.Sign != nil {
+		sign = *in.Sign
+	}
+	if sign != 1 && sign != -1 {
+		return errors.New("sinal do lancamento invalido (use 1 ou -1)")
 	}
 	if err := assertDateOpen(ctx, tx, tenantID, branchID, when.UTC().Format(dateLayout)); err != nil {
 		return err
@@ -813,40 +807,43 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, tenantID, id string, in Up
 	}
 
 	if _, err := tx.Exec(ctx, `
-		SELECT fin_tx_edit($1::uuid, $2, $3, $4::numeric, $5, $6, $7, $8, $9, $10, $11, $12::timestamptz, $13, $14, $15, $16)`,
+		SELECT fin_tx_edit($1::uuid, $2, $3, $4::numeric, $5, $6, $7, $8, $9, $10, $11, $12::timestamptz, $13, $14, $15, $16, $17::smallint)`,
 		id, strOr(in.CategoryID), in.Type, in.Amount, strOr(in.PaymentMethod),
 		strOr(in.DonorMemberID), strOr(in.BenefactorID), strOr(in.DonorName), strOr(in.SupplierID),
 		in.IsAnonymous, strOr(in.Description), when, strOr(in.AccountID), strOr(in.DueDate),
-		strOr(in.CostCenter), in.Paid != nil && *in.Paid); err != nil {
+		strOr(in.CostCenter), in.Paid != nil && *in.Paid, sign); err != nil {
 		return err
 	}
 
-	// Rateio de eventos: substitui o conjunto anterior.
+	// Rateio de eventos: substitui o conjunto anterior. Estornos nao rateiam
+	// (mesma regra do Create).
 	if _, err := tx.Exec(ctx, `DELETE FROM financial_event_allocations WHERE transaction_id = $1::uuid`, id); err != nil {
 		return err
 	}
-	if len(in.EventAllocations) > 0 {
+	if sign > 0 && len(in.EventAllocations) > 0 {
 		if err := r.insertEventAllocations(ctx, tx, tenantID, branchID, id, in.EventAllocations); err != nil {
 			return err
 		}
 	}
 
-	// Split de repasses: apaga os antigos e reaplica (somente entradas).
+	// Split de repasses: apaga os antigos e reaplica (somente entradas normais;
+	// um estorno de entrada nao gera repasse).
 	if _, err := tx.Exec(ctx, `DELETE FROM transfers WHERE financial_transaction_id = $1::uuid`, id); err != nil {
 		return err
 	}
-	if in.Type == "income" {
+	if sign > 0 && in.Type == "income" {
 		if err := r.ApplySplit(ctx, tx, tenantID, branchID, id, in.Amount); err != nil {
 			return err
 		}
 	}
 
-	// Recibo: o corpo do hash mudou; atualiza o documento emitido (mesmo token).
+	// Recibo: mantem o documento coerente com o sinal (recibo comum x recibo de
+	// estorno). Quando o tipo do documento nao muda, preserva o token/link.
 	t, err := r.txnForReceipt(ctx, tx, id)
 	if err != nil {
 		return err
 	}
-	return r.updateReceipt(ctx, tx, tenantID, *t)
+	return r.syncTxnReceipt(ctx, tx, tenantID, branchID, sign, *t)
 }
 
 // txnForReceipt carrega os campos do lancamento usados na montagem do recibo.
@@ -1112,9 +1109,10 @@ func (r *Repo) CreateBatch(ctx context.Context, tx pgx.Tx, tenantID, branchID st
 	return res, nil
 }
 
-// List retorna lancamentos do escopo, com filtro opcional de tipo e de periodo
-// (from/to no formato AAAA-MM-DD, inclusivos). Datas vazias nao filtram.
-func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind, from, to string, limit, offset int) ([]Transaction, error) {
+// List retorna lancamentos do escopo, com filtro opcional de tipo, periodo
+// (from/to no formato AAAA-MM-DD, inclusivos) e conta bancaria. Valores vazios
+// nao filtram.
+func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind, from, to, accountID string, limit, offset int) ([]Transaction, error) {
 	rows, err := tx.Query(ctx, `
 		WITH recent AS (
 		    SELECT id
@@ -1124,6 +1122,7 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind, from, to string, limit
 		      -- de data em UTC usada na sequencia (entry_seq).
 		      AND ($2 = '' OR occurred_at >= ($2::date::timestamp AT TIME ZONE 'UTC'))
 		      AND ($3 = '' OR occurred_at < (($3::date + 1)::timestamp AT TIME ZONE 'UTC'))
+		      AND ($4 = '' OR account_id = NULLIF($4,'')::uuid)
 		    ORDER BY occurred_at DESC, created_at DESC, id DESC
 		)
 		SELECT t.id::text, t.branch_id::text, t.category_id::text, c.name,
@@ -1160,7 +1159,7 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, kind, from, to string, limit
 		LEFT JOIN financial_transaction_groups g ON g.id = t.group_id
 		LEFT JOIN account_transfers at ON at.id = t.account_transfer_id
 		ORDER BY t.occurred_at, t.entry_seq NULLS LAST, t.created_at, t.id
-		LIMIT $4 OFFSET $5`, kind, from, to, limit, offset)
+		LIMIT $5 OFFSET $6`, kind, from, to, accountID, limit, offset)
 	if err != nil {
 		return nil, err
 	}

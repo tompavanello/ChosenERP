@@ -265,8 +265,6 @@ func writeFinanceErr(w http.ResponseWriter, err error) {
 		writeErr(w, http.StatusConflict, err.Error())
 	case errors.Is(err, finance.ErrGroupDateMismatch):
 		writeErr(w, http.StatusConflict, err.Error())
-	case errors.Is(err, finance.ErrTransactionIsReversal):
-		writeErr(w, http.StatusConflict, err.Error())
 	case errors.Is(err, finance.ErrAccountTransferReconciled),
 		errors.Is(err, finance.ErrAccountTransferGrouped),
 		errors.Is(err, finance.ErrTransactionIsTransfer):
@@ -913,12 +911,13 @@ func (a *App) handleListTxn(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "periodo invalido: data inicial maior que a final")
 		return
 	}
+	accountID := strings.TrimSpace(q.Get("account_id"))
 	limit, offset := pageParams(r)
 	b := boundsFromClaims(claims)
 	var out []finance.Transaction
 	err = a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
 		var err error
-		out, err = a.Finance.List(r.Context(), tx, kind, from, to, limit, offset)
+		out, err = a.Finance.List(r.Context(), tx, kind, from, to, accountID, limit, offset)
 		return err
 	})
 	if err != nil {

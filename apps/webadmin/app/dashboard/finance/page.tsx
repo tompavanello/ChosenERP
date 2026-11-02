@@ -136,8 +136,9 @@ export default function FinancePage() {
   const [to, setTo] = useState(() => monthEndISO());
   const [filterType, setFilterType] = useState("");
   const [filterCat, setFilterCat] = useState("");
-  const [filterAcct, setFilterAcct] = useState("");
   const [filterRecon, setFilterRecon] = useState("");
+  // Conta de trabalho: define a lista, os cards e a conta dos lancamentos.
+  const [workAccountId, setWorkAccountId] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PER_PAGE);
@@ -193,6 +194,50 @@ export default function FinancePage() {
     setBalance(bal);
   }, []);
 
+  // Saldos por conta: usados nos cards quando ha uma conta de trabalho
+  // selecionada. Tambem alimentam a aba Contas Bancarias.
+  const loadAccountBalances = useCallback(async () => {
+    const bals = await getAccountBalances().catch(() => null);
+    setAccountBalances(bals);
+  }, []);
+
+  // Restaura a conta de trabalho lembrada (por navegador). Ignora valores
+  // corrompidos para nao enviar um id invalido ao filtro da API.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("chosen.finance.accountId");
+      if (!saved) return;
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(saved)) {
+        setWorkAccountId(saved);
+      } else {
+        window.localStorage.removeItem("chosen.finance.accountId");
+      }
+    } catch {
+      /* localStorage indisponivel */
+    }
+  }, []);
+
+  // Se a conta lembrada nao existe mais (ou ficou inativa), volta para "Todas".
+  useEffect(() => {
+    if (!workAccountId || accounts.length === 0) return;
+    if (!accounts.some((a) => a.id === workAccountId && a.is_active)) {
+      setWorkAccountId("");
+    }
+  }, [accounts, workAccountId]);
+
+  function changeWorkAccount(id: string) {
+    setWorkAccountId(id);
+    try {
+      if (id) window.localStorage.setItem("chosen.finance.accountId", id);
+      else window.localStorage.removeItem("chosen.finance.accountId");
+    } catch {
+      /* localStorage indisponivel */
+    }
+    setSelectedTx(new Set());
+    setExpandedRows(new Set());
+    setPage(1);
+  }
+
   // Lancamentos do periodo selecionado (filtro no servidor). Os grupos sao
   // carregados sem filtro para montar a linha unica mesmo quando o deposito
   // esta em outro dia do periodo exibido.
@@ -200,7 +245,7 @@ export default function FinancePage() {
     setLoading(true);
     try {
       const [tx, gr] = await Promise.all([
-        listTransactions("", from, to),
+        listTransactions("", from, to, workAccountId),
         listTransactionGroups().catch(() => ({ groups: [] })),
       ]);
       setTxns(Array.isArray(tx.transactions) ? tx.transactions : []);
@@ -212,7 +257,7 @@ export default function FinancePage() {
     } finally {
       setLoading(false);
     }
-  }, [from, to, toast]);
+  }, [from, to, workAccountId, toast]);
 
   useEffect(() => {
     loadBase().catch((e) => toast(e instanceof Error ? e.message : "Falha ao carregar dados", "error"));
@@ -326,7 +371,6 @@ export default function FinancePage() {
           (group
             ? members.some((m) => m.category_id === filterCat)
             : r.category_id === filterCat)) &&
-        (!filterAcct || r.account_id === filterAcct) &&
         (!filterRecon || (filterRecon === "reconciled" ? r.reconciled : !r.reconciled)) &&
         (!q ||
           r.description?.toLowerCase().includes(q) ||
@@ -340,9 +384,9 @@ export default function FinancePage() {
             )))
       );
     });
-  }, [ledgerRows, filterType, filterCat, filterAcct, filterRecon, query]);
+  }, [ledgerRows, filterType, filterCat, filterRecon, query]);
 
-  useEffect(() => setPage(1), [filterType, filterCat, filterAcct, filterRecon, query, from, to]);
+  useEffect(() => setPage(1), [filterType, filterCat, filterRecon, query, from, to]);
 
   const handleSort = (col: string) => {
     if (sortColumn === col) {
@@ -633,9 +677,7 @@ export default function FinancePage() {
                     {t.paid_at ? "Reabrir" : "Quitar"}
                   </Button>
                 )}
-                {(t.sign ?? 1) >= 0 && (
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(t)} aria-label="Editar" title="Editar"><Pencil className="h-3.5 w-3.5" /></Button>
-                )}
+                <Button variant="ghost" size="sm" onClick={() => openEdit(t)} aria-label="Editar" title="Editar"><Pencil className="h-3.5 w-3.5" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => removeTxn(t)} aria-label="Excluir" title="Excluir"><Trash2 className="h-3.5 w-3.5 text-red-500" /></Button>
               </>
             )}
@@ -651,8 +693,30 @@ export default function FinancePage() {
     if (outside) {
       toast(`Lancamento salvo em ${datePt(savedDate)}, fora do periodo exibido.`, "info");
     }
-    // Recarrega os lancamentos do periodo e os grupos (linhas unicas).
-    await Promise.all([loadTxns(), loadBalance()]);
+    // Recarrega os lancamentos do periodo, os grupos (linhas unicas) e os
+    // saldos por conta (cards de Entradas/Saidas/Saldo).
+    await Promise.all([loadTxns(), loadBalance(), loadAccountBalances()]);
+  }
+
+  function requireWorkAccount(): boolean {
+    if (workAccountId) return true;
+    setTab("lancamentos");
+    toast("Selecione a conta bancaria no topo da aba Lancamentos.", "error");
+    return false;
+  }
+
+  function openNewTransaction() {
+    if (!requireWorkAccount()) return;
+    setEditing(null);
+    setInsertTarget(null);
+    setShowNew(true);
+  }
+
+  function openImport() {
+    if (!requireWorkAccount()) return;
+    setImportResult(null);
+    setImportAccountId(workAccountId);
+    setShowImport(true);
   }
 
   function toggleRowExpanded(id: string) {
@@ -985,7 +1049,11 @@ export default function FinancePage() {
     }
     setImporting(true);
     try {
-      const res = await importTransactionsFile(importFile.data, importFile.filename, importStartRow - 1, importMap, importAccountId);
+      // Conta de trabalho: todas as linhas caem nela e a coluna de conta
+      // bancaria da planilha e ignorada.
+      const mapping = workAccountId ? { ...importMap } : importMap;
+      if (workAccountId) delete mapping.conta_bancaria;
+      const res = await importTransactionsFile(importFile.data, importFile.filename, importStartRow - 1, mapping, importAccountId);
       setImportResult(res);
       toast(`${res.imported} lancamento(s) importado(s).`);
       await handleTxnSaved();
@@ -1057,10 +1125,24 @@ export default function FinancePage() {
 
   const incomeCats = categories.filter((c) => c.type === "income");
   const expenseCats = categories.filter((c) => c.type === "expense");
+  const activeAccounts = accounts.filter((a) => a.is_active);
+  const workAccountName = workAccountId
+    ? accounts.find((a) => a.id === workAccountId)?.name
+    : undefined;
   const balanceByAccount = useMemo(
     () => new Map((accountBalances?.accounts ?? []).map((a) => [a.id, a])),
     [accountBalances],
   );
+  // Conta de trabalho: quando definida, os cards mostram os numeros dela.
+  const selectedAccount = workAccountId
+    ? accountBalances?.accounts.find((a) => a.id === workAccountId)
+    : undefined;
+  const cardIncome = selectedAccount ? selectedAccount.income : balance?.income;
+  const cardExpense = selectedAccount ? selectedAccount.expense : balance?.expense;
+  const cardNet = selectedAccount ? selectedAccount.balance : balance?.net;
+  const typeChips = selectedAccount
+    ? [{ account_type: selectedAccount.account_type, net: selectedAccount.balance }]
+    : (balance?.by_account_type ?? []);
   const hasInvestment = accounts.some((a) => a.account_type === "investment");
 
   function changeFrom(v: string) {
@@ -1086,15 +1168,16 @@ export default function FinancePage() {
         description="Dizimos, ofertas, despesas e plano de contas"
         actions={hasPerm("finance.write") ? (
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => { setImportResult(null); setShowImport(true); }}>
+            <Button variant="outline" onClick={openImport}>
               <Upload className="h-4 w-4" /> Importar
             </Button>
-            <Button onClick={() => { setEditing(null); setInsertTarget(null); setShowNew(true); }}><Plus className="h-4 w-4" /> Lancamento</Button>
+            <Button data-tour="finance-new" onClick={openNewTransaction}><Plus className="h-4 w-4" /> Lancamento</Button>
           </div>
         ) : undefined}
       />
 
       <Tabs
+        tourPrefix="finance-tab"
         tabs={[
           { key: "lancamentos", label: "Lancamentos", icon: <Wallet className="h-4 w-4" /> },
           { key: "agrupamentos", label: "Agrupamentos", icon: <Layers className="h-4 w-4" /> },
@@ -1109,13 +1192,68 @@ export default function FinancePage() {
 
       {tab === "lancamentos" && (
         <>
+          <Card className="mb-4 p-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950/40">
+                <Banknote className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Conta de trabalho</p>
+                <Select
+                  data-tour="finance-account"
+                  aria-label="Conta de trabalho"
+                  className="mt-1 h-8 w-full text-sm sm:w-80"
+                  value={workAccountId}
+                  onChange={(e) => changeWorkAccount(e.target.value)}
+                >
+                  <option value="">Todas as contas</option>
+                  {activeAccounts.map((a) => {
+                    const bal = balanceByAccount.get(a.id);
+                    return (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                        {bal ? ` - ${currency(bal.balance)}` : ""}
+                      </option>
+                    );
+                  })}
+                </Select>
+              </div>
+              <p className="text-xs text-zinc-500">
+                Define a conta da lista, dos cards e dos lancamentos.
+              </p>
+              {workAccountId && (
+                <Badge tone="sky" className="ml-auto">
+                  Saldo: {cardNet != null ? currency(cardNet) : "..."}
+                </Badge>
+              )}
+            </div>
+          </Card>
+
           <div className="mb-4 grid gap-4 md:grid-cols-3">
-            <StatCard label="Entradas" value={balance ? currency(balance.income) : "..."} icon={ArrowUpRight} tone="green" />
-            <StatCard label="Saidas" value={balance ? currency(balance.expense) : "..."} icon={ArrowDownRight} tone="red" />
-            <StatCard label="Saldo atual" value={balance ? currency(balance.net) : "..."} icon={Wallet} tone="sky" />
+            <StatCard
+              label="Entradas"
+              value={cardIncome != null ? currency(cardIncome) : "..."}
+              hint={workAccountId ? (workAccountName ?? "Conta selecionada") : "Todas as contas"}
+              icon={ArrowUpRight}
+              tone="green"
+            />
+            <StatCard
+              label="Saidas"
+              value={cardExpense != null ? currency(cardExpense) : "..."}
+              hint={workAccountId ? (workAccountName ?? "Conta selecionada") : "Todas as contas"}
+              icon={ArrowDownRight}
+              tone="red"
+            />
+            <StatCard
+              label="Saldo atual"
+              value={cardNet != null ? currency(cardNet) : "..."}
+              hint={workAccountId ? (workAccountName ?? "Conta selecionada") : "Todas as contas"}
+              icon={Wallet}
+              tone="sky"
+            />
           </div>
           <div className="mb-6 flex flex-wrap gap-2 text-xs">
-            {(balance?.by_account_type ?? []).map((b) => (
+            {typeChips.map((b) => (
               <span key={b.account_type} className="rounded border border-zinc-200 bg-white px-2.5 py-1 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
                 {ACCOUNT_TYPES[b.account_type] ?? b.account_type}: <b className="tabular-nums">{currency(b.net)}</b>
               </span>
@@ -1127,10 +1265,22 @@ export default function FinancePage() {
             <Card className="mb-6 p-4">
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <Wallet className="h-4 w-4 text-sky-600" />
-                <h3 className="text-sm font-semibold text-zinc-700">Lancamento rapido (em lote)</h3>
-                <span className="text-xs text-zinc-400">Digite varias linhas e lance tudo de uma vez</span>
+                <h3 className="text-sm font-semibold text-zinc-700">
+                  Lancamento rapido (em lote)
+                </h3>
+                <span className="text-xs text-zinc-400">
+                  {workAccountName
+                    ? `Na conta ${workAccountName} - digite varias linhas e lance tudo de uma vez`
+                    : "Selecione a conta de trabalho para lancar em lote"}
+                </span>
               </div>
-              <BulkEntry embedded onSaved={handleTxnSaved} />
+              {workAccountId ? (
+                <BulkEntry embedded accountId={workAccountId} accountLocked onSaved={handleTxnSaved} />
+              ) : (
+                <p className="rounded border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700">
+                  Selecione a conta bancaria no seletor acima para lancar em lote.
+                </p>
+              )}
             </Card>
           )}
 
@@ -1176,12 +1326,8 @@ export default function FinancePage() {
               <option value="">Todos</option><option value="income">Entradas</option><option value="expense">Saidas</option>
             </Select>
             <Select className="w-44" value={filterCat} onChange={(e) => setFilterCat(e.target.value)}>
-              <option value="">Todas as contas</option>
+              <option value="">Todas as contas contabeis</option>
               {categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
-            </Select>
-            <Select className="w-44" value={filterAcct} onChange={(e) => setFilterAcct(e.target.value)}>
-              <option value="">Todas contas</option>
-              {accounts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
             </Select>
             <Select className="w-40" value={filterRecon} onChange={(e) => setFilterRecon(e.target.value)}>
               <option value="">Conciliacao</option>
@@ -1639,6 +1785,7 @@ export default function FinancePage() {
             branch_id: insertTarget.transaction.branch_id,
           } : editing ? {
             type: editing.type,
+            reversal: (editing.sign ?? 1) < 0,
             amount: String(editing.amount),
             category_id: editing.category_id ?? "",
             account_id: editing.account_id ?? "",
@@ -1654,9 +1801,12 @@ export default function FinancePage() {
             due_date: editing.due_date ?? "",
             cost_center: editing.cost_center ?? "",
             paid: !!editing.paid_at,
+          } : workAccountId ? {
+            account_id: workAccountId,
           } : undefined}
           submitLabel={insertTarget ? "Inserir" : editing ? "Salvar alteracoes" : "Lancar"}
           entrySeqReadOnly={!!editing}
+          accountLocked={!!insertTarget || !!workAccountId}
         />
       </Drawer>
 
@@ -1746,7 +1896,17 @@ export default function FinancePage() {
       >
         <div className="space-y-3 text-sm">
           <p className="text-zinc-500">
-            Envie uma planilha <b>.xlsx</b> ou <b>.csv</b>. Escolha a <b>conta bancaria padrao</b>,
+            Envie uma planilha <b>.xlsx</b> ou <b>.csv</b>.{" "}
+            {workAccountId ? (
+              <>
+                Os lancamentos serao importados na conta <b>{workAccountName}</b> (a coluna de conta
+                bancaria da planilha e ignorada).
+              </>
+            ) : (
+              <>
+                Escolha a <b>conta bancaria padrao</b>,
+              </>
+            )}{" "}
             mapeie as colunas e a <b>linha inicial</b> dos dados e clique em Importar.
           </p>
           <div className="flex flex-wrap items-center gap-2">
@@ -1768,25 +1928,32 @@ export default function FinancePage() {
 
           <div className="max-w-xs">
             <label className="label">Conta bancaria padrao *</label>
-            <Select
-              className="h-8 text-sm"
-              value={importAccountId}
-              onChange={(e) => setImportAccountId(e.target.value)}
-              required
-            >
-              <option value="" disabled>Selecione a conta...</option>
-              {accounts.filter((a) => a.is_active).map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </Select>
-            {accounts.filter((a) => a.is_active).length === 0 && (
+            {workAccountId ? (
+              <div className="mt-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                {workAccountName ?? "Conta selecionada no topo"}
+              </div>
+            ) : (
+              <Select
+                className="h-8 text-sm"
+                value={importAccountId}
+                onChange={(e) => setImportAccountId(e.target.value)}
+                required
+              >
+                <option value="" disabled>Selecione a conta...</option>
+                {accounts.filter((a) => a.is_active).map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </Select>
+            )}
+            {!workAccountId && accounts.filter((a) => a.is_active).length === 0 && (
               <p className="mt-1 text-xs text-red-600">
                 Cadastre uma conta bancaria ativa em Contas Bancarias.
               </p>
             )}
             <p className="mt-1 text-xs text-zinc-400">
-              Usada quando a coluna &quot;Conta bancaria&quot; nao for mapeada. Quando mapeada, o nome da
-              planilha precisa existir e estar ativo.
+              {workAccountId
+                ? "Todos os lancamentos vao para a conta de trabalho selecionada no topo."
+                : "Usada quando a coluna \"Conta bancaria\" nao for mapeada. Quando mapeada, o nome da planilha precisa existir e estar ativo."}
             </p>
           </div>
 
@@ -1802,6 +1969,8 @@ export default function FinancePage() {
                         className="h-8 text-sm"
                         value={importMap[f.key] ?? -1}
                         onChange={(e) => setImportMap({ ...importMap, [f.key]: Number(e.target.value) })}
+                        disabled={!!workAccountId && f.key === "conta_bancaria"}
+                        title={workAccountId && f.key === "conta_bancaria" ? "Ignorada: vale a conta de trabalho selecionada no topo." : undefined}
                       >
                         <option value={-1}>- nao usar -</option>
                         {Array.from({ length: maxCols }, (_, i) => (

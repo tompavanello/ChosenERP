@@ -79,6 +79,8 @@ export interface TransactionFormProps {
   submitLabel?: string;
   /** Na edicao a posicao (Seq.) nao muda: o campo fica somente leitura. */
   entrySeqReadOnly?: boolean;
+  /** Conta bancaria definida pela tela: o campo fica somente leitura. */
+  accountLocked?: boolean;
 }
 
 /**
@@ -103,6 +105,7 @@ export function TransactionForm({
   onSaved,
   submitLabel = "Lancar",
   entrySeqReadOnly = false,
+  accountLocked = false,
 }: TransactionFormProps) {
   const { toast } = useToast();
   const { hasPerm } = useAuth();
@@ -166,6 +169,7 @@ export function TransactionForm({
   // Contas inativas continuam visiveis quando ja estao no lancamento (edicao),
   // mas nao podem ser escolhidas para novos lancamentos.
   const availableAccounts = accounts.filter((a) => a.is_active || a.id === form.account_id);
+  const lockedAccount = accountLocked ? accounts.find((a) => a.id === form.account_id) : undefined;
 
   // Validacao client-side minima: a conta contabil e a conta bancaria sao
   // obrigatorias.
@@ -237,7 +241,7 @@ export function TransactionForm({
         }
       }
       toast(
-        form.reversal && form.type === "expense"
+        form.reversal
           ? "Estorno registrado."
           : "Lancamento registrado com recibo.",
       );
@@ -256,7 +260,7 @@ export function TransactionForm({
   if (!open) return null;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4" data-tour="txn-form">
       <div className="mb-1 flex gap-1 border-b border-zinc-200 dark:border-zinc-800">
         <button
           type="button"
@@ -279,6 +283,7 @@ export function TransactionForm({
       <Section title="Valores">
         <Field label="Tipo" required>
           <Select
+            data-tour="txn-type"
             value={form.type}
             onChange={(e) => {
               set("type", e.target.value as "income" | "expense");
@@ -288,29 +293,28 @@ export function TransactionForm({
             <option value="expense">Saida</option>
           </Select>
         </Field>
-        {!entrySeqReadOnly && (
-          <Field label="Estorno" className="sm:col-span-2">
-            <label className="flex items-start gap-2 pt-1 text-sm text-zinc-600 dark:text-zinc-300">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
-                checked={form.reversal}
-                onChange={(e) => set("reversal", e.target.checked)}
-                disabled={saving}
-              />
-              <span>
-                <span className="font-medium">Inverter o sinal (estorno)</span>
-                <span className="block text-xs text-zinc-400">
-                  O valor continua positivo, mas o lancamento passa a abater a conta selecionada.
-                  Use em uma Entrada para reduzir a receita (devolucao de cheque, estorno de dizimo/oferta, chargeback)
-                  ou em uma Saida para reduzir a despesa.
-                </span>
+        <Field label="Estorno" className="sm:col-span-2">
+          <label className="flex items-start gap-2 pt-1 text-sm text-zinc-600 dark:text-zinc-300">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
+              checked={form.reversal}
+              onChange={(e) => set("reversal", e.target.checked)}
+              disabled={saving}
+            />
+            <span>
+              <span className="font-medium">Inverter o sinal (estorno)</span>
+              <span className="block text-xs text-zinc-400">
+                O valor continua positivo, mas o lancamento passa a abater a conta selecionada.
+                Use em uma Entrada para reduzir a receita (devolucao de cheque, estorno de dizimo/oferta, chargeback)
+                ou em uma Saida para reduzir a despesa.
               </span>
-            </label>
-          </Field>
-        )}
+            </span>
+          </label>
+        </Field>
         <Field label="Valor (R$)*">
           <CurrencyInput
+            data-tour="txn-amount"
             required
             value={form.amount}
             onChange={(v) => set("amount", v)}
@@ -351,6 +355,7 @@ export function TransactionForm({
       <Section title="Plano de contas">
         <Field label="Conta contabil *" required>
           <Select
+            data-tour="txn-category"
             value={form.category_id}
             onChange={(e) => set("category_id", e.target.value)}
             disabled={saving || categoriesForType.length === 0}
@@ -489,9 +494,25 @@ export function TransactionForm({
       )}
 
       <Section title="Conta bancaria">
-        {availableAccounts.length > 0 ? (
+        {accountLocked ? (
+          <Field
+            label="Conta *"
+            hint="Definida pela conta de trabalho selecionada no topo da tela."
+            className="sm:col-span-2"
+          >
+            <span
+              data-tour="txn-account"
+              className="block pt-1 text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
+              {lockedAccount
+                ? `${lockedAccount.name} - ${ACCOUNT_TYPES[lockedAccount.account_type] ?? lockedAccount.account_type}`
+                : "Selecione a conta bancaria no topo da tela."}
+            </span>
+          </Field>
+        ) : availableAccounts.length > 0 ? (
           <Field label="Conta *">
             <Select
+              data-tour="txn-account"
               value={form.account_id}
               onChange={(e) => set("account_id", e.target.value)}
               disabled={saving}
@@ -628,7 +649,7 @@ export function TransactionForm({
         >
           Cancelar
         </Button>
-        <Button type="submit" disabled={!canSubmit || saving}>{saving ? " registrado..." : submitLabel}</Button>
+        <Button type="submit" data-tour="txn-save" disabled={!canSubmit || saving}>{saving ? " registrado..." : submitLabel}</Button>
       </div>
     </form>
   );

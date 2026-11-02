@@ -89,11 +89,17 @@ export function BulkEntry({
   onSaved,
   onClose,
   embedded = false,
+  accountId = "",
+  accountLocked = false,
 }: {
   onSaved: () => void;
   onClose?: () => void;
   /** Embutido na propria tela (sem botao Fechar e sem a introducao). */
   embedded?: boolean;
+  /** Conta bancaria definida pela tela (lote inteiro). */
+  accountId?: string;
+  /** Trava a conta do lote e remove a escolha por linha. */
+  accountLocked?: boolean;
 }) {
   const { toast } = useToast();
   const { hasPerm } = useAuth();
@@ -107,8 +113,17 @@ export function BulkEntry({
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   // Padroes do lote: aplicados a toda linha que nao tiver valor proprio.
-  const [defaultAccountId, setDefaultAccountId] = useState("");
+  const [defaultAccountId, setDefaultAccountId] = useState(accountId);
   const [defaultDate, setDefaultDate] = useState(today());
+
+  // Conta definida pela tela: acompanha o seletor do topo. Em modo travado,
+  // limpa qualquer conta residual das linhas.
+  useEffect(() => {
+    setDefaultAccountId(accountId);
+    if (accountLocked) {
+      setRows((rs) => rs.map((r) => (r.account_id ? { ...r, account_id: "" } : r)));
+    }
+  }, [accountId, accountLocked]);
 
   useEffect(() => {
     listCategories()
@@ -189,9 +204,9 @@ export function BulkEntry({
 
   function complementCount(r: BulkRow): number {
     return [
-      r.account_id || defaultAccountId, r.payment_method,
-      r.benefactor_id, r.supplier_id, r.donor_member_id, r.donor_name,
-    ].filter(Boolean).length + (r.event_ids.length > 0 ? 1 : 0);
+      ...(accountLocked ? [] : [r.account_id || defaultAccountId]),
+      r.payment_method, r.benefactor_id, r.supplier_id, r.donor_member_id, r.donor_name,
+    ].filter(Boolean).length + (r.event_ids.length > 0 ? 1 : 0) + (r.reversal ? 1 : 0);
   }
 
   async function submit() {
@@ -200,8 +215,14 @@ export function BulkEntry({
       toast("Preencha ao menos uma linha (conta contabil e valor).", "error");
       return;
     }
-    if (!defaultAccountId) {
-      toast("Selecione a conta corrente padrao do lote.", "error");
+    const forcedAccountId = accountLocked ? accountId : defaultAccountId;
+    if (!forcedAccountId) {
+      toast(
+        accountLocked
+          ? "Selecione a conta bancaria no topo da tela."
+          : "Selecione a conta corrente padrao do lote.",
+        "error",
+      );
       return;
     }
     const payloads = touched.map((r) => ({
@@ -209,7 +230,7 @@ export function BulkEntry({
       sign: r.reversal ? -1 : 1,
       amount: Number(r.amount),
       category_id: r.category_id || undefined,
-      account_id: r.account_id || defaultAccountId,
+      account_id: accountLocked ? accountId : (r.account_id || defaultAccountId),
       payment_method: r.payment_method || undefined,
       description: r.description || undefined,
       occurred_at: r.occurred_at || defaultDate || undefined,
@@ -271,31 +292,45 @@ export function BulkEntry({
 
   const incomeCats = useMemo(() => categories.filter((c) => c.type === "income"), [categories]);
   const expenseCats = useMemo(() => categories.filter((c) => c.type === "expense"), [categories]);
+  const lockedAccount = accountLocked ? accounts.find((a) => a.id === accountId) : undefined;
 
   return (
     <div className="space-y-3">
       {!embedded && (
         <p className="text-sm text-zinc-500">
-          Cada linha e um lancamento. O tipo (entrada/saida) vem da conta contabil. Conta corrente e
-          data padrao valem para o lote inteiro; use o complemento para ajustar a linha. Marque
-          <strong> Estorno</strong> para inverter o sinal da linha.
+          Cada linha e um lancamento. O tipo (entrada/saida) vem da conta contabil.
+          {accountLocked
+            ? " A conta bancaria e a selecionada no topo e vale para o lote inteiro;"
+            : " Conta corrente e data padrao valem para o lote inteiro;"}{" "}
+          use o complemento para ajustar a linha, inclusive marcar <strong>Estorno</strong> para
+          inverter o sinal.
         </p>
       )}
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-full sm:w-64">
-          <span className="block text-[11px] font-medium uppercase tracking-wide text-zinc-500">Conta corrente padrao do lote *</span>
-          <Select
-            className="mt-1 h-8 text-xs"
-            value={defaultAccountId}
-            onChange={(e) => setDefaultAccountId(e.target.value)}
-            required
-          >
-            <option value="" disabled>Selecione a conta...</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>{a.name} - {ACCOUNT_TYPES[a.account_type] ?? a.account_type}</option>
-            ))}
-          </Select>
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+            {accountLocked ? "Conta do lote" : "Conta corrente padrao do lote *"}
+          </span>
+          {accountLocked ? (
+            <div className="mt-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+              {lockedAccount
+                ? `${lockedAccount.name} - ${ACCOUNT_TYPES[lockedAccount.account_type] ?? lockedAccount.account_type}`
+                : "Conta selecionada no topo da tela"}
+            </div>
+          ) : (
+            <Select
+              className="mt-1 h-8 text-xs"
+              value={defaultAccountId}
+              onChange={(e) => setDefaultAccountId(e.target.value)}
+              required
+            >
+              <option value="" disabled>Selecione a conta...</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>{a.name} - {ACCOUNT_TYPES[a.account_type] ?? a.account_type}</option>
+              ))}
+            </Select>
+          )}
         </div>
         <div className="w-full sm:w-44">
           <span className="block text-[11px] font-medium uppercase tracking-wide text-zinc-500">Data padrao do lote</span>
@@ -307,22 +342,23 @@ export function BulkEntry({
           />
         </div>
         <p className="pb-1.5 text-xs text-zinc-500">
-          Aplicadas a todas as linhas; se algum lancamento for diferente, ajuste na propria linha.
+          {accountLocked
+            ? "A conta nao muda por linha; ajuste-a no seletor do topo."
+            : "Aplicadas a todas as linhas; se algum lancamento for diferente, ajuste na propria linha."}
         </p>
       </div>
-      {accounts.length === 0 && (
+      {!accountLocked && accounts.length === 0 && (
         <p className="text-xs text-red-600">
           Nenhuma conta bancaria ativa cadastrada. Cadastre uma em Contas Bancarias antes de lancar.
         </p>
       )}
 
       <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-        <table className="w-full min-w-[1080px] text-[13px]">
+        <table className="w-full min-w-[1000px] text-[13px]">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-[10px] uppercase tracking-wider text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
             <tr>
               <th className="w-8 px-2 py-2 text-left">#</th>
               <th className="w-32 px-2 py-2 text-left">Valor</th>
-              <th className="w-20 px-2 py-2 text-center" title="Inverter o sinal do lancamento">Estorno</th>
               <th className="w-64 px-2 py-2 text-left">Conta contabil</th>
               <th className="px-2 py-2 text-left">Descricao</th>
               <th className="w-64 px-2 py-2 text-left">Identificado</th>
@@ -346,20 +382,6 @@ export function BulkEntry({
                         value={r.amount}
                         onChange={(v) => update(r.key, { amount: v })}
                       />
-                    </td>
-                    <td className="px-2 py-1 text-center">
-                      <label
-                        className="inline-flex cursor-pointer items-center gap-1"
-                        title="Inverter o sinal (estorno)"
-                      >
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-500"
-                          checked={r.reversal}
-                          onChange={(e) => update(r.key, { reversal: e.target.checked })}
-                        />
-                        {r.reversal && <span className="text-[10px] font-medium text-amber-600">estorno</span>}
-                      </label>
                     </td>
                     <td className="px-2 py-1">
                       <Select
@@ -496,7 +518,7 @@ export function BulkEntry({
 
                   {r.expanded && (
                     <tr key={`${r.key}-comp`} className="bg-zinc-50/70 dark:bg-zinc-900/40">
-                      <td colSpan={8} className="px-3 py-3">
+                      <td colSpan={7} className="px-3 py-3">
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                           <SubField label="Data efetiva">
                             <Input
@@ -518,17 +540,35 @@ export function BulkEntry({
                               ))}
                             </Select>
                           </SubField>
-                          <SubField label="Conta bancaria">
-                            <Select
-                              className="h-8 text-xs"
-                              value={r.account_id || defaultAccountId}
-                              onChange={(e) => update(r.key, { account_id: e.target.value })}
-                            >
-                              <option value="">-</option>
-                              {accounts.map((a) => (
-                                <option key={a.id} value={a.id}>{a.name} - {ACCOUNT_TYPES[a.account_type] ?? a.account_type}</option>
-                              ))}
-                            </Select>
+                          {!accountLocked && (
+                            <SubField label="Conta bancaria">
+                              <Select
+                                className="h-8 text-xs"
+                                value={r.account_id || defaultAccountId}
+                                onChange={(e) => update(r.key, { account_id: e.target.value })}
+                              >
+                                <option value="">-</option>
+                                {accounts.map((a) => (
+                                  <option key={a.id} value={a.id}>{a.name} - {ACCOUNT_TYPES[a.account_type] ?? a.account_type}</option>
+                                ))}
+                              </Select>
+                            </SubField>
+                          )}
+                          <SubField label="Estorno">
+                            <label className="flex items-start gap-2 pt-1 text-xs text-zinc-600 dark:text-zinc-300">
+                              <input
+                                type="checkbox"
+                                className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-500"
+                                checked={r.reversal}
+                                onChange={(e) => update(r.key, { reversal: e.target.checked })}
+                              />
+                              <span>
+                                <span className="font-medium">Inverter o sinal</span>
+                                <span className="block text-[10px] text-zinc-400">
+                                  Entrada reduz receita; saida reduz despesa.
+                                </span>
+                              </span>
+                            </label>
                           </SubField>
                           {eff === "income" && (
                             <SubField label="Benfeitor">

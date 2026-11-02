@@ -698,6 +698,16 @@ async function tryRefresh(): Promise<boolean> {
   return true;
 }
 
+// Login/selecao de igreja usam 401 para "credenciais invalidas"; nesse caso
+// NAO devemos tratar como sessao perdida (isso recarregaria a tela de login).
+function isAuthFlowPath(path: string) {
+  return (
+    path.startsWith("/api/v1/auth/login") ||
+    path.startsWith("/api/v1/auth/refresh") ||
+    path.startsWith("/api/v1/auth/select-tenant")
+  );
+}
+
 async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const doFetch = (): Promise<Response> =>
     fetch(path, {
@@ -711,10 +721,17 @@ async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
     });
 
   let res = await doFetch();
-  if (res.status === 401 && refreshToken) {
-    if (await tryRefresh()) {
+  if (res.status === 401 && !isAuthFlowPath(path)) {
+    // Sem refresh token (ou refresh invalido) a sessao acabou: limpa e manda
+    // para o login, em vez de deixar a tela repetindo 401s.
+    if (refreshToken && (await tryRefresh())) {
       res = await doFetch();
     } else {
+      try {
+        localStorage.setItem("chosen_session_expired", "1");
+      } catch {
+        /* storage indisponivel */
+      }
       clearTokens();
       onSessionLost?.();
     }
@@ -763,10 +780,15 @@ async function apiRaw(path: string, opts: RequestInit = {}): Promise<Response> {
     });
 
   let res = await doFetch();
-  if (res.status === 401 && refreshToken) {
-    if (await tryRefresh()) {
+  if (res.status === 401 && !isAuthFlowPath(path)) {
+    if (refreshToken && (await tryRefresh())) {
       res = await doFetch();
     } else {
+      try {
+        localStorage.setItem("chosen_session_expired", "1");
+      } catch {
+        /* storage indisponivel */
+      }
       clearTokens();
       onSessionLost?.();
     }
@@ -1410,11 +1432,12 @@ export const getAssemblyReport = (from: string, to: string) => {
   if (to) q.set("to", to);
   return api<AssemblyReport>(`/api/v1/reports/assembly?${q.toString()}`);
 };
-export const listTransactions = (type = "", from = "", to = "") => {
+export const listTransactions = (type = "", from = "", to = "", accountId = "") => {
   const q = new URLSearchParams();
   if (type) q.set("type", type);
   if (from) q.set("from", from);
   if (to) q.set("to", to);
+  if (accountId) q.set("account_id", accountId);
   const qs = q.toString();
   return api<{ transactions: Transaction[] }>(`/api/v1/finance/transactions${qs ? `?${qs}` : ""}`);
 };
@@ -3686,3 +3709,135 @@ export const getKidEvolution = (classId: string, params: { from?: string; to?: s
   const qs = q.toString();
   return api<KidEvolution>(`/api/v1/kids/classes/${classId}/evolution${qs ? `?${qs}` : ""}`);
 };
+
+// ---- Central de ajuda / suporte ----
+
+export interface HelpSummary {
+  slug: string;
+  app: "webadmin" | "member";
+  title: string;
+  category: string;
+  summary: string;
+  tags?: string[];
+  order: number;
+  tour?: string;
+  routes?: string[];
+  permissions?: string[];
+  feature?: string;
+}
+
+export interface HelpArticle extends HelpSummary {
+  body: string;
+}
+
+export interface HelpContext {
+  path: string;
+  guide?: HelpArticle;
+  articles: HelpSummary[];
+  tour?: string;
+}
+
+export interface HelpChatResponse {
+  answer: string;
+  sources: HelpSummary[];
+  escalate: boolean;
+}
+
+export interface HelpChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface SupportTicketMessage {
+  id: string;
+  ticket_id: string;
+  author_user_id?: string | null;
+  author_kind: "user" | "platform" | "ai";
+  author_name?: string | null;
+  body: string;
+  created_at: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  tenant_id: string;
+  branch_id?: string | null;
+  user_id: string;
+  user_name?: string | null;
+  user_email?: string | null;
+  kind: string;
+  subject: string;
+  description: string;
+  app: "webadmin" | "member";
+  page_path: string;
+  status: string;
+  priority: string;
+  context?: Record<string, unknown>;
+  ai_summary?: string | null;
+  assigned_to?: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at?: string | null;
+  messages?: SupportTicketMessage[];
+}
+
+function qs(params: Record<string, string | undefined>) {
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== "") sp.set(k, v);
+  }
+  const s = sp.toString();
+  return s ? `?${s}` : "";
+}
+
+export const getHelpArticles = (params: { app: string; q?: string; category?: string; path?: string }) =>
+  api<{ articles: HelpSummary[]; categories: string[]; ai_enabled: boolean }>(
+    `/api/v1/help/articles${qs(params)}`,
+  );
+
+export const getHelpContext = (path: string, app = "webadmin") =>
+  api<{ context: HelpContext; ai_enabled: boolean }>(
+    `/api/v1/help/context${qs({ path, app })}`,
+  );
+
+export const getHelpArticle = (slug: string, app = "webadmin") =>
+  api<HelpArticle>(`/api/v1/help/articles/${encodeURIComponent(slug)}${qs({ app })}`);
+
+export const askHelp = (body: { app: string; path: string; messages: HelpChatMessage[] }) =>
+  api<HelpChatResponse>("/api/v1/help/chat", { method: "POST", body: JSON.stringify(body) });
+
+export const sendHelpFeedback = (body: { app: string; slug: string; helpful: boolean; comment?: string }) =>
+  api<{ ok: boolean }>("/api/v1/help/feedback", { method: "POST", body: JSON.stringify(body) });
+
+export const listMyTickets = (app = "webadmin") =>
+  api<{ tickets: SupportTicket[] }>(`/api/v1/support/tickets${qs({ app })}`);
+
+export const createSupportTicket = (body: Record<string, unknown>) =>
+  api<SupportTicket>("/api/v1/support/tickets", { method: "POST", body: JSON.stringify(body) });
+
+export const getSupportTicket = (id: string) =>
+  api<SupportTicket>(`/api/v1/support/tickets/${id}`);
+
+export const addSupportTicketMessage = (id: string, body: string) =>
+  api<SupportTicketMessage>(`/api/v1/support/tickets/${id}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+
+export const adminListTickets = (status?: string) =>
+  api<{ tickets: SupportTicket[] }>(`/api/v1/admin/support/tickets${qs({ status })}`);
+
+export const adminGetTicket = (id: string) =>
+  api<SupportTicket>(`/api/v1/admin/support/tickets/${id}`);
+
+export const adminUpdateTicket = (id: string, body: Record<string, unknown>) =>
+  api<SupportTicket>(`/api/v1/admin/support/tickets/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+
+export const adminAddTicketMessage = (id: string, body: string) =>
+  api<SupportTicketMessage>(`/api/v1/admin/support/tickets/${id}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
