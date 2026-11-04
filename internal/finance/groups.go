@@ -437,7 +437,7 @@ func (r *Repo) DeleteGroup(ctx context.Context, tx pgx.Tx, id string) error {
 	var firstTxID string
 	if err := tx.QueryRow(ctx, `
 		SELECT id::text FROM financial_transactions
-		WHERE group_id = $1::uuid
+		WHERE group_id = $1::uuid AND voided_at IS NULL
 		ORDER BY occurred_at, entry_seq NULLS LAST, created_at, id
 		LIMIT 1`, id).Scan(&firstTxID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err

@@ -430,11 +430,11 @@ func (r *Repo) matchBankEntries(ctx context.Context, tx pgx.Tx, importID string)
 			WHERE t.tenant_id = $1::uuid AND t.branch_id = $2::uuid AND t.account_id = $3::uuid
 			  AND t.bank_direction = $4 AND t.voided_at IS NULL AND t.group_id IS NULL
 			  AND abs(t.amount - $5) < 0.005
-			  AND t.occurred_at::date BETWEEN $6::date - 3 AND $6::date + 3
+			  AND (t.occurred_at AT TIME ZONE 'UTC')::date BETWEEN $6::date - 3 AND $6::date + 3
 			  AND NOT EXISTS (
 			      SELECT 1 FROM bank_statement_entries be
 			      WHERE be.transaction_id = t.id AND be.status IN ('conciliado','lancamento_gerado'))
-			ORDER BY abs(t.occurred_at::date - $6::date), t.created_at
+			ORDER BY abs((t.occurred_at AT TIME ZONE 'UTC')::date - $6::date), t.created_at
 			LIMIT 1`, tenantID, branchID, accountID, p.direction, p.amount, p.posted).Scan(&txID)
 		if err == nil {
 			if _, err := tx.Exec(ctx, `
@@ -504,8 +504,14 @@ func (r *Repo) ListBankEntries(ctx context.Context, tx pgx.Tx, importID string) 
 		       e.memo, e.fitid, e.status, e.transaction_id::text, t.description,
 		       e.group_id::text, g.description,
 		       (SELECT count(*)::int FROM financial_attachments fa
-		         WHERE fa.transaction_id = e.transaction_id
-		            OR fa.group_id = COALESCE(e.group_id, t.group_id))
+		         WHERE (e.group_id IS NOT NULL AND (
+		                   fa.group_id = e.group_id
+		                   OR EXISTS (
+		                       SELECT 1 FROM financial_transactions mt
+		                       WHERE mt.id = fa.transaction_id
+		                         AND mt.group_id = e.group_id
+		                         AND mt.voided_at IS NULL)))
+		            OR (e.group_id IS NULL AND fa.transaction_id = e.transaction_id))
 		FROM bank_statement_entries e
 		LEFT JOIN financial_transactions t ON t.id = e.transaction_id
 		LEFT JOIN financial_transaction_groups g ON g.id = e.group_id
@@ -537,7 +543,7 @@ func (r *Repo) ListBankDivergences(ctx context.Context, tx pgx.Tx, importID stri
 		  ON t.tenant_id = i.tenant_id AND t.branch_id = i.branch_id
 		 AND t.account_id = i.account_id
 		 AND t.voided_at IS NULL
-		 AND t.occurred_at::date BETWEEN i.period_start AND i.period_end
+		 AND (t.occurred_at AT TIME ZONE 'UTC')::date BETWEEN i.period_start AND i.period_end
 		LEFT JOIN financial_categories c ON c.id = t.category_id
 		WHERE i.id = $1::uuid
 		  AND NOT EXISTS (

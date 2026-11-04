@@ -1393,26 +1393,18 @@ func (a *App) handleUploadAttachment(w http.ResponseWriter, r *http.Request) {
 			return e
 		}
 		var err error
-		// Verifica que a transacao pertence ao escopo antes de anexar.
-		var txExists bool
+		// A transacao e localizada pela RLS (tenant/filial/descendentes). Usamos
+		// a filial REAL dela no anexo - nunca claims.BranchID, que e vazio no
+		// escopo Sede ("Todas") e viraria um cast invalido de uuid.
+		var txBranch string
 		err = tx.QueryRow(r.Context(), `
-			SELECT EXISTS(SELECT 1 FROM financial_transactions
-			              WHERE id = $1::uuid AND tenant_id = $2 AND branch_id = $3)`,
-			transactionID, claims.TenantID, claims.BranchID).Scan(&txExists)
+			SELECT branch_id::text FROM financial_transactions
+			WHERE id = $1::uuid AND tenant_id = $2`,
+			transactionID, claims.TenantID).Scan(&txBranch)
 		if err != nil {
 			return err
 		}
-		if !txExists && claims.BranchID != "" {
-			// Tambem permite anexar de escopo Sede (consulta sem branch_id).
-			err = tx.QueryRow(r.Context(), `
-				SELECT EXISTS(SELECT 1 FROM financial_transactions
-			              WHERE id = $1::uuid AND tenant_id = $2)`,
-				transactionID, claims.TenantID).Scan(&txExists)
-		}
-		if err != nil || !txExists {
-			return pgx.ErrNoRows
-		}
-		att, err = a.Finance.CreateAttachment(r.Context(), tx, claims.TenantID, claims.BranchID, transactionID, in)
+		att, err = a.Finance.CreateAttachment(r.Context(), tx, claims.TenantID, txBranch, transactionID, in)
 		return err
 	})
 	if err != nil {

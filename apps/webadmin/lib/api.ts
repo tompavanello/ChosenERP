@@ -1432,12 +1432,14 @@ export const getAssemblyReport = (from: string, to: string) => {
   if (to) q.set("to", to);
   return api<AssemblyReport>(`/api/v1/reports/assembly?${q.toString()}`);
 };
-export const listTransactions = (type = "", from = "", to = "", accountId = "") => {
+export const listTransactions = (type = "", from = "", to = "", accountId = "", limit = 0) => {
   const q = new URLSearchParams();
   if (type) q.set("type", type);
   if (from) q.set("from", from);
   if (to) q.set("to", to);
   if (accountId) q.set("account_id", accountId);
+  // O backend usa 100 por padrao e aceita ate 500; listas de tela pedem o teto.
+  if (limit > 0) q.set("limit", String(limit));
   const qs = q.toString();
   return api<{ transactions: Transaction[] }>(`/api/v1/finance/transactions${qs ? `?${qs}` : ""}`);
 };

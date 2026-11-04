@@ -245,7 +245,7 @@ export default function FinancePage() {
     setLoading(true);
     try {
       const [tx, gr] = await Promise.all([
-        listTransactions("", from, to, workAccountId),
+        listTransactions("", from, to, workAccountId, 500),
         listTransactionGroups().catch(() => ({ groups: [] })),
       ]);
       setTxns(Array.isArray(tx.transactions) ? tx.transactions : []);
@@ -815,10 +815,12 @@ export default function FinancePage() {
   // e anexos). O backend recalcula a hash-chain e mantem o documento do recibo.
   async function amendTxn(data: Record<string, unknown>) {
     if (!editing) return;
-    await updateTransaction(editing.id, data);
+    const id = editing.id;
+    await updateTransaction(id, data);
     toast("Lancamento corrigido.");
     setEditing(null);
     await handleTxnSaved();
+    return id;
   }
 
   async function removeTxn(t: Transaction) {

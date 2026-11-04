@@ -151,10 +151,12 @@ export default function AccountStatementPage() {
 
   async function submitEdit(data: Record<string, unknown>) {
     if (!editing) return;
-    await updateTransaction(editing.id, data);
+    const id = editing.id;
+    await updateTransaction(id, data);
     toast("Lancamento corrigido.");
     setEditing(null);
     await load();
+    return id;
   }
 
   async function remove(l: AccountStatementLine) {

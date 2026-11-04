@@ -89,8 +89,8 @@ export function ReconciliationEntries() {
   const load = useCallback(async () => {
     try {
       const [r, g, a, rec] = await Promise.all([
-        listTransactions(),
-        listTransactionGroups().catch(() => ({ groups: [] as TransactionGroup[] })),
+        listTransactions("", from, to, accountId, 500),
+        listTransactionGroups({ from, to }).catch(() => ({ groups: [] as TransactionGroup[] })),
         listAccounts().catch(() => ({ accounts: [] })),
         listReconciliations().catch(() => ({ reconciliations: [] as FinancialReconciliation[] })),
       ]);
@@ -103,7 +103,7 @@ export function ReconciliationEntries() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [from, to, accountId, toast]);
 
   useEffect(() => { load(); }, [load]);
 

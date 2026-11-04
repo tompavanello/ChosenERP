@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Combobox } from "@/components/ui/combobox";
+import { MemberCombobox } from "@/components/finance/member-combobox";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
 import {
-  listCategories, listAccounts, listMembers, listBenefactors, listSuppliers, listEvents,
+  listCategories, listAccounts, listBenefactors, listSuppliers, listEvents,
   createTransactionsBatch, uploadAttachment,
-  type Category, type BankAccount, type Member, type Benefactor, type Supplier, type ChurchEvent,
+  type Category, type BankAccount, type Benefactor, type Supplier, type ChurchEvent,
   type ImportResult,
 } from "@/lib/api";
 import { ACCOUNT_TYPES, PAYMENT_METHODS } from "@/lib/constants";
@@ -106,7 +107,6 @@ export function BulkEntry({
   const [rows, setRows] = useState<BulkRow[]>(() => [emptyRow(), emptyRow(), emptyRow()]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
   const [benefactors, setBenefactors] = useState<Benefactor[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [events, setEvents] = useState<ChurchEvent[]>([]);
@@ -132,9 +132,6 @@ export function BulkEntry({
     listAccounts()
       .then((r) => setAccounts(r.accounts.filter((a) => a.is_active)))
       .catch(() => setAccounts([]));
-    listMembers()
-      .then((r) => setMembers(r.members))
-      .catch(() => setMembers([]));
     listBenefactors()
       .then((r) => setBenefactors(r.benefactors))
       .catch(() => setBenefactors([]));
@@ -432,12 +429,9 @@ export function BulkEntry({
                             Identificado
                           </label>
                           {!r.is_anonymous && (
-                            <Combobox
+                            <MemberCombobox
                               value={r.donor_member_id}
-                              placeholder="Buscar membro..."
-                              searchPlaceholder="Buscar membro..."
-                              emptyMessage="Nenhum membro encontrado"
-                              options={members.map((m) => ({ value: m.id, label: m.full_name }))}
+                              initialLabel={r.donor_name}
                               onChange={(v) => update(r.key, { donor_member_id: v, benefactor_id: v ? "" : r.benefactor_id, donor_name: v ? "" : r.donor_name })}
                               className="w-44"
                               openOnFocus

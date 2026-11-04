@@ -23,6 +23,10 @@ export interface ComboboxProps {
   showSearch?: boolean;
   /** Ao receber foco (Tab), abre a lista e joga o foco no campo de busca. */
   openOnFocus?: boolean;
+  /** Busca no servidor: recebe o termo digitado (vazio ao abrir). */
+  onSearch?: (term: string) => void;
+  /** Exibe "Buscando..." enquanto a busca externa esta em andamento. */
+  loading?: boolean;
 }
 
 export function Combobox({
@@ -37,6 +41,8 @@ export function Combobox({
   maxHeight = "max-h-60",
   showSearch = true,
   openOnFocus = false,
+  onSearch,
+  loading = false,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -47,13 +53,18 @@ export function Combobox({
 
   const selectedLabel = options.find((o) => o.value === (value ?? defaultValue))?.label ?? "";
 
-  const filtered = search
-    ? options.filter(
-        (o) =>
-          o.label.toLowerCase().includes(search.toLowerCase()) ||
-          o.value.toLowerCase().includes(search.toLowerCase())
-      )
-    : options;
+  // Com busca no servidor (onSearch), os options ja vem filtrados: nao aplicar
+  // o filtro local (ele esconderia resultados casados por CPF/telefone, cujo
+  // label nao contem o termo).
+  const filtered = onSearch
+    ? options
+    : search
+      ? options.filter(
+          (o) =>
+            o.label.toLowerCase().includes(search.toLowerCase()) ||
+            o.value.toLowerCase().includes(search.toLowerCase())
+        )
+      : options;
 
   function close() {
     setOpen(false);
@@ -65,6 +76,7 @@ export function Combobox({
     setOpen(true);
     setSearch(seed);
     setActiveIndex(-1);
+    onSearch?.(seed);
   }
 
   // Handle click outside
@@ -198,6 +210,7 @@ export function Combobox({
                   onChange={(e) => {
                     setSearch(e.target.value);
                     setActiveIndex(-1);
+                    onSearch?.(e.target.value);
                   }}
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -205,7 +218,9 @@ export function Combobox({
             </div>
           )}
           <div className={cn("overflow-y-auto", maxHeight)} role="listbox">
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div className="p-3 text-center text-xs text-zinc-400">Buscando...</div>
+            ) : filtered.length === 0 ? (
               <div className="p-3 text-center text-xs text-zinc-400">{emptyMessage}</div>
             ) : (
               filtered.map((option, idx) => (

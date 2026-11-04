@@ -117,7 +117,7 @@ export function useTransactions(type = "", from = "", to = "") {
   const key = `transactions:${type}:${from}:${to}`;
   return useSWR<{ transactions: Transaction[] }>(
     key,
-    () => listTransactions(type, from, to),
+    () => listTransactions(type, from, to, "", 500),
     { revalidateOnFocus: false, dedupingInterval: 30000 }
   );
 }

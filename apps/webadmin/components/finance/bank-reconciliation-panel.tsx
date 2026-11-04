@@ -12,6 +12,7 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { Input, Field, Select } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Combobox } from "@/components/ui/combobox";
+import { MemberCombobox } from "@/components/finance/member-combobox";
 import { Badge } from "@/components/ui/badge";
 import { Drawer, Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
@@ -21,10 +22,10 @@ import {
   generateBankEntry, deleteBankImport, listAccounts, listCategories,
   listTransactions, groupBankEntry, generatePendingBankEntries,
   getBankSequenceSuggestions, applyBankSequence,
-  listMembers, listBenefactors, listSuppliers, moveBankEntry, reorderBankEntries,
+  listBenefactors, listSuppliers, moveBankEntry, reorderBankEntries,
   type BankImport, type BankEntry, type BankDivergence, type BankAccount, type Category,
   type Transaction, type SequenceSuggestion, type NewGroupTransaction,
-  type Member, type Benefactor, type Supplier, type GeneratePendingBankItem,
+  type Benefactor, type Supplier, type GeneratePendingBankItem,
 } from "@/lib/api";
 import { currency, datePt } from "@/lib/format";
 import { ACCOUNT_TYPES, PAYMENT_METHODS } from "@/lib/constants";
@@ -156,7 +157,8 @@ export function BankReconciliationPanel() {
   const [pendingSel, setPendingSel] = useState<Set<string>>(new Set());
   const [pendingSaving, setPendingSaving] = useState(false);
   const [pendingRefsLoaded, setPendingRefsLoaded] = useState(false);
-  const [members, setMembers] = useState<Member[]>([]);
+  // Nome do membro selecionado (o id basta para gravar; o label e so exibicao).
+  const [memberLabels, setMemberLabels] = useState<Record<string, string>>({});
   const [benefactors, setBenefactors] = useState<Benefactor[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [movingEntry, setMovingEntry] = useState("");
@@ -304,8 +306,16 @@ export function BankReconciliationPanel() {
     setGroupLoading(true);
     ensurePendingRefs();
     try {
-      const r = await listTransactions();
       const accountID = selected.account_id ?? "";
+      // Janela em torno da data do deposito: o usuario pode precisar ajustar a
+      // data de um lancamento proximo para agrupar (mesma data e obrigatoria).
+      const posted = new Date(`${entry.posted_at.slice(0, 10)}T00:00:00Z`);
+      const from = new Date(posted);
+      from.setUTCDate(from.getUTCDate() - 7);
+      const to = new Date(posted);
+      to.setUTCDate(to.getUTCDate() + 7);
+      const iso = (d: Date) => d.toISOString().slice(0, 10);
+      const r = await listTransactions(entry.direction, iso(from), iso(to), accountID, 500);
       const candidates = (Array.isArray(r.transactions) ? r.transactions : [])
         .filter((t) =>
           !t.voided_at && !t.reconciled && !t.group_id && !t.account_transfer_id &&
@@ -395,12 +405,10 @@ export function BankReconciliationPanel() {
   async function ensurePendingRefs() {
     if (pendingRefsLoaded) return;
     try {
-      const [m, b, s] = await Promise.all([
-        listMembers().catch(() => ({ members: [] as Member[] })),
+      const [b, s] = await Promise.all([
         listBenefactors().catch(() => ({ benefactors: [] as Benefactor[] })),
         listSuppliers().catch(() => ({ suppliers: [] as Supplier[] })),
       ]);
-      setMembers(m.members);
       setBenefactors(b.benefactors);
       setSuppliers(s.suppliers);
       setPendingRefsLoaded(true);
@@ -613,7 +621,7 @@ export function BankReconciliationPanel() {
     [entries, hideMatched],
   );
   const pendingById = useMemo(() => new Map(pendingEntries.map((e) => [e.id, e])), [pendingEntries]);
-  const memberName = (id: string) => members.find((m) => m.id === id)?.full_name;
+  const memberName = (id: string) => memberLabels[id];
   const benefactorName = (id: string) => benefactors.find((b) => b.id === id)?.name;
   const supplierName = (id: string) => suppliers.find((s) => s.id === id)?.name;
 
@@ -1015,19 +1023,18 @@ export function BankReconciliationPanel() {
               {(genForm.reversal ? genEntry.direction === "expense" : genEntry.direction === "income") ? (
                 <>
                   <Field label="Membro doador">
-                    <Combobox
+                    <MemberCombobox
                       value={genForm.donor_member_id}
-                      placeholder="Buscar membro..."
-                      searchPlaceholder="Buscar membro..."
-                      emptyMessage="Nenhum membro encontrado"
-                      options={members.map((m) => ({ value: m.id, label: m.full_name }))}
-                      onChange={(v) => setGenForm({
-                        ...genForm,
-                        donor_member_id: v,
-                        benefactor_id: v ? "" : genForm.benefactor_id,
-                        donor_name: v ? "" : genForm.donor_name,
-                        is_anonymous: v ? false : genForm.is_anonymous,
-                      })}
+                      onChange={(v, label) => {
+                        if (v && label) setMemberLabels((prev) => ({ ...prev, [v]: label }));
+                        setGenForm({
+                          ...genForm,
+                          donor_member_id: v,
+                          benefactor_id: v ? "" : genForm.benefactor_id,
+                          donor_name: v ? "" : genForm.donor_name,
+                          is_anonymous: v ? false : genForm.is_anonymous,
+                        });
+                      }}
                       className="w-full"
                       openOnFocus
                     />
@@ -1230,18 +1237,18 @@ export function BankReconciliationPanel() {
                         {groupEntry.direction === "income" ? (
                           <>
                             <div className={r.donor_member_id ? "sm:col-span-8" : "sm:col-span-4"}>
-                              <Combobox
+                              <MemberCombobox
                                 value={r.donor_member_id}
                                 placeholder="Membro doador (opcional)"
-                                searchPlaceholder="Buscar membro..."
-                                emptyMessage="Nenhum membro encontrado"
-                                options={members.map((m) => ({ value: m.id, label: m.full_name }))}
-                                onChange={(v) => updateNewRow(r.key, {
-                                  donor_member_id: v,
-                                  benefactor_id: v ? "" : r.benefactor_id,
-                                  donor_name: v ? "" : r.donor_name,
-                                  is_anonymous: v ? false : r.is_anonymous,
-                                })}
+                                onChange={(v, label) => {
+                                  if (v && label) setMemberLabels((prev) => ({ ...prev, [v]: label }));
+                                  updateNewRow(r.key, {
+                                    donor_member_id: v,
+                                    benefactor_id: v ? "" : r.benefactor_id,
+                                    donor_name: v ? "" : r.donor_name,
+                                    is_anonymous: v ? false : r.is_anonymous,
+                                  });
+                                }}
                                 className="w-full"
                                 openOnFocus
                               />
@@ -1448,18 +1455,17 @@ export function BankReconciliationPanel() {
                                 {e.direction === "income" ? (
                                   <>
                                     <Field label="Membro doador">
-                                      <Combobox
+                                      <MemberCombobox
                                         value={d.donor_member_id}
-                                        placeholder="Buscar membro..."
-                                        searchPlaceholder="Buscar membro..."
-                                        emptyMessage="Nenhum membro encontrado"
-                                        options={members.map((m) => ({ value: m.id, label: m.full_name }))}
-                                        onChange={(v) => updatePendingDetail(e.id, {
-                                          donor_member_id: v,
-                                          benefactor_id: v ? "" : d.benefactor_id,
-                                          donor_name: v ? "" : d.donor_name,
-                                          is_anonymous: v ? false : d.is_anonymous,
-                                        })}
+                                        onChange={(v, label) => {
+                                          if (v && label) setMemberLabels((prev) => ({ ...prev, [v]: label }));
+                                          updatePendingDetail(e.id, {
+                                            donor_member_id: v,
+                                            benefactor_id: v ? "" : d.benefactor_id,
+                                            donor_name: v ? "" : d.donor_name,
+                                            is_anonymous: v ? false : d.is_anonymous,
+                                          });
+                                        }}
                                         className="w-full"
                                         openOnFocus
                                       />

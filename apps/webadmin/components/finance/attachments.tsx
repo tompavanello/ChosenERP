@@ -10,6 +10,7 @@ import {
   downloadFinancialAttachment,
   listAttachments,
   listGroupAttachments,
+  uploadAttachment,
   uploadGroupAttachment,
   type FinancialAttachment,
 } from "@/lib/api";
@@ -58,10 +59,14 @@ export function AttachmentList({ transactionId, groupId, canUpload = false, onUp
   useEffect(() => { load(); }, [load]);
 
   async function upload(file: File) {
-    if (!groupId) return;
+    if (!groupId && !transactionId) return;
     setUploading(true);
     try {
-      await uploadGroupAttachment(groupId, file);
+      if (groupId) {
+        await uploadGroupAttachment(groupId, file);
+      } else {
+        await uploadAttachment(transactionId!, file);
+      }
       toast("Anexo enviado.", "success");
       await load();
       onUploaded?.();
@@ -120,7 +125,7 @@ export function AttachmentList({ transactionId, groupId, canUpload = false, onUp
         </div>
       )}
 
-      {groupId && canUpload && (
+      {(groupId || transactionId) && canUpload && (
         <div>
           <input
             ref={inputRef}
@@ -139,7 +144,8 @@ export function AttachmentList({ transactionId, groupId, canUpload = false, onUp
             onClick={() => inputRef.current?.click()}
             disabled={uploading}
           >
-            <Upload className="h-4 w-4" /> {uploading ? "Enviando..." : "Anexar ao agrupamento"}
+            <Upload className="h-4 w-4" />{" "}
+            {uploading ? "Enviando..." : groupId ? "Anexar ao agrupamento" : "Anexar comprovante"}
           </Button>
         </div>
       )}

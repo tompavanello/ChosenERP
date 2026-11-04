@@ -93,7 +93,7 @@ const reconciliationJoin = `
 	    WHERE t.tenant_id = fr.tenant_id
 	      AND t.branch_id = fr.branch_id
 	      AND t.voided_at IS NULL
-	      AND t.occurred_at::date BETWEEN fr.period_start AND fr.period_end
+	      AND (t.occurred_at AT TIME ZONE 'UTC')::date BETWEEN fr.period_start AND fr.period_end
 	) cnt ON true`
 
 func scanReconciliation(row pgx.Row) (*Reconciliation, error) {
@@ -195,7 +195,7 @@ func (r *Repo) ListReconciliationItems(ctx context.Context, tx pgx.Tx, id string
 		  ON t.tenant_id = fr.tenant_id
 		 AND t.branch_id = fr.branch_id
 		 AND t.voided_at IS NULL
-		 AND t.occurred_at::date BETWEEN fr.period_start AND fr.period_end
+		 AND (t.occurred_at AT TIME ZONE 'UTC')::date BETWEEN fr.period_start AND fr.period_end
 		LEFT JOIN financial_categories c ON c.id = t.category_id
 		LEFT JOIN financial_accounts a ON a.id = t.account_id
 		LEFT JOIN financial_transaction_groups g ON g.id = t.group_id
@@ -238,7 +238,7 @@ func (r *Repo) Conciliate(ctx context.Context, tx pgx.Tx, id, actorID string) (*
 		  ON t.tenant_id = fr.tenant_id
 		 AND t.branch_id = fr.branch_id
 		 AND t.voided_at IS NULL
-		 AND t.occurred_at::date BETWEEN fr.period_start AND fr.period_end
+		 AND (t.occurred_at AT TIME ZONE 'UTC')::date BETWEEN fr.period_start AND fr.period_end
 		WHERE fr.id = $1::uuid AND t.reconciled_at IS NULL`, id).Scan(&pending); err != nil {
 		return nil, err
 	}

@@ -105,6 +105,44 @@ func assertTxnMutable(ctx context.Context, tx pgx.Tx, id string) error {
 	return nil
 }
 
+// validateTxnParty garante que o id referenciado (membro, benfeitor ou
+// fornecedor) pertence ao tenant do contexto. A FK e global e a RLS so filtra
+// a leitura; sem esta checagem um UUID de outra igreja poderia ser associado.
+func validateTxnParty(ctx context.Context, tx pgx.Tx, tenantID, table, label, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil
+	}
+	var exists bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM `+table+` WHERE id = $1::uuid AND tenant_id = $2::uuid)`,
+		id, tenantID).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("%s invalido", label)
+	}
+	return nil
+}
+
+func validateTxnParties(ctx context.Context, tx pgx.Tx, tenantID string, donor, benefactor, supplier *string) error {
+	checks := []struct {
+		table string
+		label string
+		id    *string
+	}{
+		{"members", "membro doador", donor},
+		{"benefactors", "benfeitor", benefactor},
+		{"suppliers", "fornecedor", supplier},
+	}
+	for _, c := range checks {
+		if err := validateTxnParty(ctx, tx, tenantID, c.table, c.label, strOr(c.id)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // validateTxnAccount confere a conta bancaria do lancamento. currentAccountID
 // permite manter uma conta inativa que ja estava vinculada ao registro (edicao).
 func validateTxnAccount(ctx context.Context, tx pgx.Tx, accountID, currentAccountID string) error {
@@ -531,6 +569,9 @@ func (r *Repo) Create(ctx context.Context, tx pgx.Tx, tenantID, branchID string,
 		(in.BenefactorID != nil && *in.BenefactorID != "") {
 		in.DonorName = nil
 	}
+	if err := validateTxnParties(ctx, tx, tenantID, in.DonorMemberID, in.BenefactorID, in.SupplierID); err != nil {
+		return nil, "", "", "", err
+	}
 
 	// A data efetiva vem do formulario (AAAA-MM-DD, DD/MM/AAAA ou RFC3339). Antes
 	// so RFC3339 era aceito e, ao falhar, caia silenciosamente em "agora" - por
@@ -770,6 +811,9 @@ func (r *Repo) Update(ctx context.Context, tx pgx.Tx, tenantID, id string, in Up
 	if (in.DonorMemberID != nil && *in.DonorMemberID != "") ||
 		(in.BenefactorID != nil && *in.BenefactorID != "") {
 		in.DonorName = nil
+	}
+	if err := validateTxnParties(ctx, tx, tenantID, in.DonorMemberID, in.BenefactorID, in.SupplierID); err != nil {
+		return err
 	}
 	when, err := parseOccurredAt(in.OccurredAt)
 	if err != nil {

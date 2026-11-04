@@ -10,9 +10,10 @@ import { Section } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/providers/auth-provider";
+import { MemberCombobox } from "@/components/finance/member-combobox";
 import {
-  listCategories, listAccounts, listMembers, listBenefactors, listSuppliers, createTransaction, uploadAttachment, listEvents,
-  type Category, type BankAccount, type Member, type Benefactor, type Supplier, type ChurchEvent,
+  listCategories, listAccounts, listBenefactors, listSuppliers, createTransaction, uploadAttachment, listEvents,
+  type Category, type BankAccount, type Benefactor, type Supplier, type ChurchEvent,
 } from "@/lib/api";
 import { PAYMENT_METHODS, ACCOUNT_TYPES } from "@/lib/constants";
 import { currency, datePt, todayISO } from "@/lib/format";
@@ -72,8 +73,9 @@ export interface TransactionFormProps {
   onClose: () => void;
   initialState?: Partial<TransactionFormState>;
   /** Se informado, o formulario chama onSubmit com os dados e deixa o
-   *  componente pai decidir o que fazer (refetch, invalidacao, etc.). */
-  onSubmit?: (data: Record<string, unknown>) => Promise<void>;
+   *  componente pai decidir o que fazer (refetch, invalidacao, etc.).
+   *  Pode devolver o id do lancamento para que o anexo escolhido seja enviado. */
+  onSubmit?: (data: Record<string, unknown>) => Promise<string | void>;
   /** Se nao informado, usa createTransaction e da reload via onSaved. */
   onSaved?: (data?: Record<string, unknown>) => void;
   submitLabel?: string;
@@ -119,7 +121,6 @@ export function TransactionForm({
   const [incomeCats, setIncomeCats] = useState<Category[]>([]);
   const [expenseCats, setExpenseCats] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
   const [benefactors, setBenefactors] = useState<Benefactor[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 
@@ -141,10 +142,7 @@ export function TransactionForm({
       .then((r) => { if (!cancelled) setAccounts(r.accounts); })
       .catch(() => { if (!cancelled) setAccounts([]); });
 
-    if (form.type === "income" || form.donor_member_id) {
-      listMembers()
-        .then((r) => { if (!cancelled) setMembers(r.members); })
-        .catch(() => { if (!cancelled) setMembers([]); });
+    if (form.type === "income") {
       listBenefactors()
         .then((r) => { if (!cancelled) setBenefactors(r.benefactors); })
         .catch(() => { if (!cancelled) setBenefactors([]); });
@@ -160,7 +158,7 @@ export function TransactionForm({
       .catch(() => { if (!cancelled) setSuppliers([]); });
 
     return () => { cancelled = true; };
-  }, [open, form.type, form.donor_member_id]);
+  }, [open, form.type]);
 
   const set = (k: keyof TransactionFormState, v: string | boolean) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -225,18 +223,24 @@ export function TransactionForm({
 
     setSaving(true);
     try {
+      // Anexo escolhido no proprio lancamento: sobe depois de criar/editar (o
+      // endpoint de anexo precisa do id da transacao). Falha no anexo nao
+      // desfaz o lancamento.
+      let targetID: string | undefined;
       if (onSubmit) {
-        await onSubmit(payload);
+        targetID = (await onSubmit(payload)) || undefined;
       } else {
         const res = await createTransaction(payload);
-        // Anexo escolhido no proprio lancamento: sobe depois de criar (o
-        // endpoint de anexo precisa do id da transacao). Falha no anexo nao
-        // desfaz o lancamento.
-        if (file && res.transaction?.id) {
+        targetID = res.transaction?.id;
+      }
+      if (file) {
+        if (!targetID) {
+          toast("Lancamento salvo, mas nao foi possivel anexar o documento.", "error");
+        } else {
           try {
-            await uploadAttachment(res.transaction.id, file);
+            await uploadAttachment(targetID, file);
           } catch {
-            toast("Lancamento registrado, mas o anexo falhou.", "error");
+            toast("Lancamento salvo, mas o anexo falhou.", "error");
           }
         }
       }
@@ -382,12 +386,9 @@ export function TransactionForm({
       {form.type === "income" && (
         <Section title="Doacao" hint="Associe a um membro, benfeitor ou identifique um doador avulso.">
           <Field label="Membro doador">
-            <Combobox
+            <MemberCombobox
               value={form.donor_member_id}
-              placeholder="Buscar membro..."
-              searchPlaceholder="Buscar membro..."
-              emptyMessage="Nenhum membro encontrado"
-              options={members.map((m) => ({ value: m.id, label: m.full_name }))}
+              initialLabel={form.donor_name}
               onChange={(v) => {
                 set("donor_member_id", v);
                 if (v) { set("benefactor_id", ""); set("donor_name", ""); }

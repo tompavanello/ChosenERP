@@ -256,7 +256,7 @@ func (r *Repo) syncItems(ctx context.Context, tx pgx.Tx, id string) error {
 		SELECT a.id, t.id
 		FROM financial_audits a
 		JOIN financial_transactions t
-		  ON t.occurred_at::date BETWEEN a.period_start AND a.period_end
+		  ON (t.occurred_at AT TIME ZONE 'UTC')::date BETWEEN a.period_start AND a.period_end
 		 AND t.voided_at IS NULL
 		 AND t.tenant_id = a.tenant_id
 		 AND t.branch_id = a.branch_id

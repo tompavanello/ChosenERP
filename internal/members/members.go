@@ -166,7 +166,10 @@ func (r *Repo) List(ctx context.Context, tx pgx.Tx, q string, limit, offset int)
 	rows, err := tx.Query(ctx, `
 		SELECT `+memberCols+`
 		FROM members m
-		WHERE ($1 = '' OR m.full_name ILIKE '%' || $1 || '%')
+		WHERE ($1 = ''
+		       OR m.full_name ILIKE '%' || $1 || '%'
+		       OR m.cpf ILIKE '%' || $1 || '%'
+		       OR m.phone ILIKE '%' || $1 || '%')
 		ORDER BY m.full_name
 		LIMIT $2 OFFSET $3`, q, limit, offset)
 	if err != nil {
