@@ -13,11 +13,13 @@ export type WaterfallItem = {
  */
 export function WaterfallChart({
   items,
+  start = 0,
   format = currencyCompact,
   height = 220,
   className,
 }: {
   items: WaterfallItem[];
+  start?: number;
   format?: (n: number) => string;
   height?: number;
   className?: string;
@@ -26,10 +28,14 @@ export function WaterfallChart({
     return <p className={cn("py-8 text-center text-sm text-zinc-400", className)}>Sem dados no periodo.</p>;
   }
 
-  let running = 0;
+  let running = start;
   const bars = items.map((it) => {
     const type = it.type ?? (it.value >= 0 ? "positive" : "negative");
-    if (type === "total") return { ...it, type, from: 0, to: running };
+    if (type === "total") {
+      const to = it.value;
+      running = to;
+      return { ...it, type, from: 0, to };
+    }
     const from = running;
     const to = running + it.value;
     running = to;

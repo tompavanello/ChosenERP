@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,12 +13,23 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// MonthlyPoint e um ponto da serie de balancete mensal.
+// MonthlyPoint e um ponto da serie de balancete mensal. Balance e o saldo real
+// acumulado ao fim do mes (saldo inicial das contas + movimentos, inclusive
+// transferencias entre contas).
 type MonthlyPoint struct {
 	Month   string  `json:"month"`
 	Income  float64 `json:"income"`
 	Expense float64 `json:"expense"`
 	Net     float64 `json:"net"`
+	Balance float64 `json:"balance"`
+}
+
+// MonthlySeriesResult e o balancete mensal do periodo, com os saldos reais de
+// abertura e fechamento.
+type MonthlySeriesResult struct {
+	Series         []MonthlyPoint `json:"series"`
+	OpeningBalance float64        `json:"opening_balance"`
+	ClosingBalance float64        `json:"closing_balance"`
 }
 
 // DRELine e uma linha do DRE (por categoria).
@@ -65,32 +77,92 @@ func resolvePeriod(from, to string) (string, string) {
 }
 
 // MonthlySeries retorna o balancete agregado por mes dentro do periodo.
-func (r *Repo) MonthlySeries(ctx context.Context, tx pgx.Tx, from, to string) ([]MonthlyPoint, error) {
+// accountID vazio considera todas as contas. O saldo real de cada mes inclui o
+// saldo inicial cadastrado das contas e todas as movimentacoes bancarias
+// (inclusive transferencias entre contas).
+func (r *Repo) MonthlySeries(ctx context.Context, tx pgx.Tx, from, to, accountID string) (MonthlySeriesResult, error) {
 	from, to = resolvePeriod(from, to)
-	rows, err := tx.Query(ctx, `
-		SELECT to_char(date_trunc('month', occurred_at), 'YYYY-MM') AS m,
-		       COALESCE(SUM(amount * sign) FILTER (WHERE type='income'),0),
-		       COALESCE(SUM(amount * sign) FILTER (WHERE type='expense'),0)
-		FROM financial_transactions
-		WHERE occurred_at >= NULLIF($1,'')::date
-		  AND occurred_at < (NULLIF($2,'')::date + 1)
-		  AND voided_at IS NULL
-		  AND account_transfer_id IS NULL
-		GROUP BY 1 ORDER BY 1`, from, to)
+	fromT, err := time.ParseInLocation(dateLayout, from, time.UTC)
 	if err != nil {
-		return nil, err
+		return MonthlySeriesResult{}, fmt.Errorf("data inicial invalida")
+	}
+	toT, err := time.ParseInLocation(dateLayout, to, time.UTC)
+	if err != nil {
+		return MonthlySeriesResult{}, fmt.Errorf("data final invalida")
+	}
+	if toT.Before(fromT) {
+		return MonthlySeriesResult{}, errors.New("a data inicial nao pode ser maior que a final")
+	}
+
+	out := MonthlySeriesResult{Series: []MonthlyPoint{}}
+
+	// Saldo real inicial: saldo cadastrado das contas + movimentos anteriores ao
+	// periodo. Transferencias entram pelo bank_direction (afetam a conta filtrada).
+	if err := tx.QueryRow(ctx, `
+		SELECT (
+		    COALESCE((SELECT SUM(a.initial_balance) FROM financial_accounts a
+		              WHERE NULLIF($1,'') IS NULL OR a.id = NULLIF($1,'')::uuid), 0)
+		  + COALESCE((SELECT SUM(CASE WHEN t.bank_direction = 'income' THEN t.amount ELSE -t.amount END)
+		              FROM financial_transactions t
+		              WHERE t.voided_at IS NULL
+		                AND t.occurred_at < $2::date
+		                AND (NULLIF($1,'') IS NULL OR t.account_id = NULLIF($1,'')::uuid)), 0)
+		)::float8`, accountID, fromT).Scan(&out.OpeningBalance); err != nil {
+		return MonthlySeriesResult{}, err
+	}
+
+	rows, err := tx.Query(ctx, `
+		SELECT to_char(date_trunc('month', t.occurred_at), 'YYYY-MM') AS m,
+		       COALESCE(SUM(t.amount * t.sign) FILTER (WHERE t.type = 'income' AND t.account_transfer_id IS NULL), 0)::float8,
+		       COALESCE(SUM(t.amount * t.sign) FILTER (WHERE t.type = 'expense' AND t.account_transfer_id IS NULL), 0)::float8,
+		       COALESCE(SUM(CASE WHEN t.bank_direction = 'income' THEN t.amount ELSE -t.amount END), 0)::float8
+		FROM financial_transactions t
+		WHERE t.occurred_at >= $1::date
+		  AND t.occurred_at < ($2::date + 1)
+		  AND t.voided_at IS NULL
+		  AND (NULLIF($3,'') IS NULL OR t.account_id = NULLIF($3,'')::uuid)
+		GROUP BY 1 ORDER BY 1`, fromT, toT, accountID)
+	if err != nil {
+		return MonthlySeriesResult{}, err
 	}
 	defer rows.Close()
-	out := []MonthlyPoint{}
+
+	type monthlyMovement struct {
+		income, expense, delta float64
+	}
+	byMonth := map[string]monthlyMovement{}
 	for rows.Next() {
-		var p MonthlyPoint
-		if err := rows.Scan(&p.Month, &p.Income, &p.Expense); err != nil {
-			return nil, err
+		var m string
+		var mv monthlyMovement
+		if err := rows.Scan(&m, &mv.income, &mv.expense, &mv.delta); err != nil {
+			return MonthlySeriesResult{}, err
+		}
+		byMonth[m] = mv
+	}
+	if err := rows.Err(); err != nil {
+		return MonthlySeriesResult{}, err
+	}
+
+	// Serie contigua do primeiro ao ultimo mes do periodo (meses sem movimento
+	// aparecem com o saldo acumulado).
+	running := out.OpeningBalance
+	firstMonth := time.Date(fromT.Year(), fromT.Month(), 1, 0, 0, 0, 0, time.UTC)
+	lastMonth := time.Date(toT.Year(), toT.Month(), 1, 0, 0, 0, 0, time.UTC)
+	for m := firstMonth; !m.After(lastMonth); m = m.AddDate(0, 1, 0) {
+		key := m.Format("2006-01")
+		mv := byMonth[key]
+		p := MonthlyPoint{
+			Month:   key,
+			Income:  mv.income,
+			Expense: mv.expense,
 		}
 		p.Net = p.Income - p.Expense
-		out = append(out, p)
+		running += mv.delta
+		p.Balance = running
+		out.Series = append(out.Series, p)
 	}
-	return out, rows.Err()
+	out.ClosingBalance = running
+	return out, nil
 }
 
 // BuildDRE monta o DRE do periodo com linhas por categoria e comparativo.
@@ -178,9 +250,9 @@ func BalanceteCSV(points []MonthlyPoint) (string, error) {
 	buf.WriteString("\xEF\xBB\xBF")
 	w := csv.NewWriter(&buf)
 	w.Comma = ';'
-	_ = w.Write([]string{"Mes", "Entradas", "Saidas", "Saldo"})
+	_ = w.Write([]string{"Mes", "Entradas", "Saidas", "Resultado", "Saldo real"})
 	for _, p := range points {
-		_ = w.Write([]string{p.Month, fmtFloat(p.Income), fmtFloat(p.Expense), fmtFloat(p.Net)})
+		_ = w.Write([]string{p.Month, fmtFloat(p.Income), fmtFloat(p.Expense), fmtFloat(p.Net), fmtFloat(p.Balance)})
 	}
 	w.Flush()
 	return buf.String(), w.Error()

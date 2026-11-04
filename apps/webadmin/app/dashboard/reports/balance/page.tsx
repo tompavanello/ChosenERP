@@ -5,9 +5,10 @@ import { ArrowDownRight, ArrowUpRight, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TRow, TH, TD } from "@/components/ui/table";
+import { Select } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
-import { getMonthlyBalance, type MonthlyPoint } from "@/lib/api";
+import { getMonthlyBalance, listAccounts, type BankAccount, type MonthlyPoint } from "@/lib/api";
 import { currency, monthLabel } from "@/lib/format";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import { ReportToolbar } from "@/components/reports/report-toolbar";
@@ -21,14 +22,20 @@ export default function BalanceReportPage() {
   const { toast } = useToast();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [accounts, setAccounts] = useState<BankAccount[]>([]);
+  const [accountId, setAccountId] = useState("");
   const [series, setSeries] = useState<MonthlyPoint[]>([]);
+  const [openingBalance, setOpeningBalance] = useState(0);
+  const [closingBalance, setClosingBalance] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async (f: string, t: string) => {
+  const load = useCallback(async (f: string, t: string, acc: string) => {
     setLoading(true);
     try {
-      const s = await getMonthlyBalance(f, t);
+      const s = await getMonthlyBalance(f, t, acc);
       setSeries(s.series);
+      setOpeningBalance(s.opening_balance);
+      setClosingBalance(s.closing_balance);
     } catch (e) {
       toast(e instanceof Error ? e.message : "Erro", "error");
     } finally {
@@ -37,26 +44,38 @@ export default function BalanceReportPage() {
   }, [toast]);
 
   useEffect(() => {
-    load("", "");
+    listAccounts()
+      .then((r) => setAccounts(r.accounts))
+      .catch(() => setAccounts([]));
+  }, []);
+
+  useEffect(() => {
+    load("", "", "");
   }, [load]);
 
-  const monthly = series.map((p) => ({ name: monthLabel(p.month), Saldo: p.net, Entradas: p.income, Saidas: p.expense }));
+  const monthly = series.map((p) => ({
+    name: monthLabel(p.month),
+    "Saldo real": p.balance,
+    Resultado: p.net,
+    Entradas: p.income,
+    Saidas: p.expense,
+  }));
   const params: Record<string, string> = {};
   if (from) params.from = from;
   if (to) params.to = to;
+  if (accountId) params.account_id = accountId;
   const totalIncome = series.reduce((a, p) => a + p.income, 0);
   const totalExpense = series.reduce((a, p) => a + p.expense, 0);
   const totalNet = totalIncome - totalExpense;
   const last = series[series.length - 1];
-  const prev = series[series.length - 2];
-  const deltaNet = prev && prev.net !== 0 ? ((last.net - prev.net) / Math.abs(prev.net)) * 100 : undefined;
   const margin = totalIncome > 0 ? (totalNet / totalIncome) * 100 : 0;
+  const transferAdjust = closingBalance - (openingBalance + totalNet);
 
   return (
     <div className="page">
       <PageHeader
         title="Balancete mensal"
-        description="Entradas, saidas e saldo por mes"
+        description="Entradas, saidas, resultado e saldo real por mes"
         actions={
           <ExportButtons
             path="/api/v1/reports/balance/export"
@@ -71,7 +90,28 @@ export default function BalanceReportPage() {
         to={to}
         onFrom={setFrom}
         onTo={setTo}
-        onChange={load}
+        onChange={(f, t) => load(f, t, accountId)}
+        extra={
+          <div>
+            <label className="label text-xs">Conta bancaria</label>
+            <Select
+              className="h-8 min-w-[180px] text-sm"
+              value={accountId}
+              onChange={(e) => {
+                const v = e.target.value;
+                setAccountId(v);
+                load(from, to, v);
+              }}
+            >
+              <option value="">Todas as contas</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        }
         actions={<span className="text-xs text-zinc-400">{series.length} mes(es)</span>}
       />
 
@@ -82,15 +122,37 @@ export default function BalanceReportPage() {
           <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <KpiCard label="Entradas no periodo" value={currency(totalIncome)} icon={ArrowUpRight} tone="green" spark={series.map((p) => p.income)} />
             <KpiCard label="Saidas no periodo" value={currency(totalExpense)} icon={ArrowDownRight} tone="red" spark={series.map((p) => p.expense)} />
-            <KpiCard label="Saldo do periodo" value={currency(totalNet)} icon={Wallet} tone="sky" delta={deltaNet} deltaLabel="ultimo mes vs. anterior" spark={series.map((p) => p.net)} />
-            <KpiCard label="Margem de sobra" value={`${margin.toFixed(1)}%`} tone="indigo" hint="resultado / entradas do periodo" />
+            <KpiCard
+              label="Resultado do periodo"
+              value={currency(totalNet)}
+              tone="sky"
+              hint={totalIncome > 0 ? `margem de sobra de ${margin.toFixed(1)}%` : undefined}
+              spark={series.map((p) => p.net)}
+            />
+            <KpiCard
+              label="Saldo real final"
+              value={currency(closingBalance)}
+              icon={Wallet}
+              tone="indigo"
+              delta={openingBalance !== 0 ? ((closingBalance - openingBalance) / Math.abs(openingBalance)) * 100 : undefined}
+              deltaLabel="no periodo"
+              hint="saldo em conta ao fim do periodo"
+              spark={series.map((p) => p.balance)}
+            />
           </div>
 
           <div className="mb-4 grid gap-4 lg:grid-cols-2">
-            <ReportSection title="Evolucao do saldo" subtitle="Resultado mes a mes no periodo" insight={last ? `Ultimo mes: ${currency(last.net)} de saldo.` : undefined}>
+            <ReportSection
+              title="Evolucao do saldo"
+              subtitle="Saldo real acumulado e resultado mes a mes"
+              insight={last ? `Saldo real ao fim de ${monthLabel(last.month)}: ${currency(last.balance)}.` : undefined}
+            >
               <TrendChart
                 data={monthly}
-                series={[{ key: "Saldo", label: "Saldo", color: COLORS.net, type: "area" }]}
+                series={[
+                  { key: "Saldo real", label: "Saldo real", color: COLORS.sky, type: "area" },
+                  { key: "Resultado", label: "Resultado", color: COLORS.net, type: "line" },
+                ]}
                 height={240}
                 format={currencyCompact}
               />
@@ -110,14 +172,18 @@ export default function BalanceReportPage() {
 
           <ReportSection
             title="Como o periodo fechou?"
-            subtitle="Fluxo: entradas, saidas e o resultado final"
+            subtitle="Do saldo inicial ao saldo real final"
             className="mb-4"
           >
             <WaterfallChart
               items={[
+                { name: "Saldo inicial", value: openingBalance, type: "total" },
                 { name: "Entradas", value: totalIncome, type: "positive" },
                 { name: "Saidas", value: -totalExpense, type: "negative" },
-                { name: "Resultado", value: totalNet, type: "total" },
+                ...(Math.abs(transferAdjust) >= 0.01
+                  ? [{ name: "Transferencias", value: transferAdjust, type: transferAdjust >= 0 ? "positive" as const : "negative" as const }]
+                  : []),
+                { name: "Saldo final", value: closingBalance, type: "total" },
               ]}
               height={200}
             />
@@ -126,7 +192,7 @@ export default function BalanceReportPage() {
           <Card className="overflow-hidden p-0">
             <h3 className="border-b border-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">Serie mensal</h3>
             <Table>
-              <THead><TRow><TH>Mes</TH><TH className="text-right">Entradas</TH><TH className="text-right">Saidas</TH><TH className="text-right">Saldo</TH></TRow></THead>
+              <THead><TRow><TH>Mes</TH><TH className="text-right">Entradas</TH><TH className="text-right">Saidas</TH><TH className="text-right">Resultado</TH><TH className="text-right">Saldo real</TH></TRow></THead>
               <TBody>
                 {series.map((p) => (
                   <TRow key={p.month}>
@@ -134,9 +200,10 @@ export default function BalanceReportPage() {
                     <TD className="text-right text-emerald-600">{currency(p.income)}</TD>
                     <TD className="text-right text-red-600">{currency(p.expense)}</TD>
                     <TD className={`text-right font-semibold ${p.net >= 0 ? "text-sky-700" : "text-red-600"}`}>{currency(p.net)}</TD>
+                    <TD className={`text-right font-semibold ${p.balance >= 0 ? "text-indigo-700 dark:text-indigo-400" : "text-red-600"}`}>{currency(p.balance)}</TD>
                   </TRow>
                 ))}
-                {series.length === 0 && <TRow><TD colSpan={4} className="py-8 text-center text-zinc-400">Sem lancamentos no periodo.</TD></TRow>}
+                {series.length === 0 && <TRow><TD colSpan={5} className="py-8 text-center text-zinc-400">Sem lancamentos no periodo.</TD></TRow>}
               </TBody>
             </Table>
           </Card>

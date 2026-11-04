@@ -403,6 +403,7 @@ export interface MonthlyPoint {
   income: number;
   expense: number;
   net: number;
+  balance: number;
 }
 export interface DRELine {
   category_id: string;
@@ -1647,11 +1648,14 @@ export async function downloadFinancialAttachment(fileUrl: string, fileName: str
 export const getBalance = () => api<Balance>("/api/v1/finance/balance");
 
 // ---- Relatorios ----
-export const getMonthlyBalance = (from = "", to = "") => {
+export const getMonthlyBalance = (from = "", to = "", accountId = "") => {
   const q = new URLSearchParams();
   if (from) q.set("from", from);
   if (to) q.set("to", to);
-  return api<{ series: MonthlyPoint[] }>(`/api/v1/reports/balance?${q}`);
+  if (accountId) q.set("account_id", accountId);
+  return api<{ series: MonthlyPoint[]; opening_balance: number; closing_balance: number }>(
+    `/api/v1/reports/balance?${q}`,
+  );
 };
 export const getDRE = (from = "", to = "") => {
   const q = new URLSearchParams();

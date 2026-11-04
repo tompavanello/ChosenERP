@@ -28,17 +28,17 @@ func (a *App) handleMonthlyBalance(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	b := boundsFromClaims(claims)
-	var points []finance.MonthlyPoint
+	var res finance.MonthlySeriesResult
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
 		var err error
-		points, err = a.Finance.MonthlySeries(r.Context(), tx, q.Get("from"), q.Get("to"))
+		res, err = a.Finance.MonthlySeries(r.Context(), tx, q.Get("from"), q.Get("to"), q.Get("account_id"))
 		return err
 	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"series": points})
+	writeJSON(w, http.StatusOK, res)
 }
 
 func (a *App) handleDRE(w http.ResponseWriter, r *http.Request) {
@@ -118,24 +118,32 @@ func (a *App) handleExportBalance(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	from, to := exportPeriod(q)
 	format := first(q["format"])
+	accountID := first(q["account_id"])
 	b := boundsFromClaims(claims)
-	var points []finance.MonthlyPoint
+	var res finance.MonthlySeriesResult
 	err := a.Store.WithTenant(r.Context(), b, func(tx pgx.Tx) error {
 		var err error
-		points, err = a.Finance.MonthlySeries(r.Context(), tx, from, to)
+		res, err = a.Finance.MonthlySeries(r.Context(), tx, from, to, accountID)
 		return err
 	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	rows := make([][]string, 0, len(points))
-	for _, p := range points {
-		rows = append(rows, []string{p.Month, money(p.Income), money(p.Expense), money(p.Net)})
+	rows := make([][]string, 0, len(res.Series))
+	for _, p := range res.Series {
+		rows = append(rows, []string{p.Month, money(p.Income), money(p.Expense), money(p.Net), money(p.Balance)})
+	}
+	resumo := [][]string{
+		{"Saldo inicial", money(res.OpeningBalance)},
+		{"Saldo final real", money(res.ClosingBalance)},
 	}
 	writeReport(w, "balancete-"+from+"-"+to, "Balancete mensal",
 		"Periodo: "+from+" a "+to, format,
-		[]exportSection{{Headers: []string{"Mes", "Entradas", "Saidas", "Saldo"}, Rows: rows}})
+		[]exportSection{
+			{Headers: []string{"Mes", "Entradas", "Saidas", "Resultado", "Saldo real"}, Rows: rows},
+			{Title: "Saldos do periodo", Headers: []string{"Indicador", "Valor"}, Rows: resumo},
+		})
 }
 
 func (a *App) handleExportDRE(w http.ResponseWriter, r *http.Request) {
@@ -771,8 +779,12 @@ func (a *App) handleAssemblyReport(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		bal = balanceFromDRE(dre)
-		months, err = a.Finance.MonthlySeries(r.Context(), tx, from, to)
-		return err
+		ms, err := a.Finance.MonthlySeries(r.Context(), tx, from, to, "")
+		if err != nil {
+			return err
+		}
+		months = ms.Series
+		return nil
 	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -859,8 +871,12 @@ func (a *App) handleExportAssembly(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		bal = balanceFromDRE(dre)
-		months, err = a.Finance.MonthlySeries(r.Context(), tx, from, to)
-		return err
+		ms, err := a.Finance.MonthlySeries(r.Context(), tx, from, to, "")
+		if err != nil {
+			return err
+		}
+		months = ms.Series
+		return nil
 	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
